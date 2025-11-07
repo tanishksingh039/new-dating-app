@@ -1,0 +1,118 @@
+{
+  "project_info": {
+    "project_number": "129134740665",
+    "project_id": "campusbound-f31d8",
+    "storage_bucket": "campusbound-f31d8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:129134740665:android:8df951393e6c562545c768",
+        "android_client_info": {
+          "package_name": "com.campusbound.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "129134740665-r8lcfjgvh9julhr4uvv876amjpt3auq4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDEAXx4TerdmB-F-aBwAFf2nh4ZcvoGjIw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "129134740665-r8lcfjgvh9julhr4uvv876amjpt3auq4.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "129134740665-8cr6ms036acb0env37lpjkg6vg8q3n8k.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.campusbound"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:129134740665:android:4c7073b386e1606345c768",
+        "android_client_info": {
+          "package_name": "com.example.campusbound"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "129134740665-r8lcfjgvh9julhr4uvv876amjpt3auq4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDEAXx4TerdmB-F-aBwAFf2nh4ZcvoGjIw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "129134740665-r8lcfjgvh9julhr4uvv876amjpt3auq4.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "129134740665-8cr6ms036acb0env37lpjkg6vg8q3n8k.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.campusbound"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:129134740665:android:e591ee25a4a8133845c768",
+        "android_client_info": {
+          "package_name": "com.example.frontend"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "129134740665-r8lcfjgvh9julhr4uvv876amjpt3auq4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDEAXx4TerdmB-F-aBwAFf2nh4ZcvoGjIw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "129134740665-r8lcfjgvh9julhr4uvv876amjpt3auq4.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "129134740665-8cr6ms036acb0env37lpjkg6vg8q3n8k.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.campusbound"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

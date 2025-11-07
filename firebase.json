@@ -1,0 +1,17 @@
+{
+  "flutter": {
+    "platforms": {
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "campusbound-f31d8",
+          "configurations": {
+            "android": "1:129134740665:android:8df951393e6c562545c768"
+          }
+        }
+      }
+    }
+  },
+  "storage": {
+    "rules": "storage.rule"
+  }
+}

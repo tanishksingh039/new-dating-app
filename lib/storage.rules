@@ -1,0 +1,36 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // ========================================
+    // USER PHOTOS
+    // ========================================
+    match /users/{userId}/photos/{photoFile} {
+      
+      // Anyone can read photos (for public discovery)
+      allow read: if true;
+      
+      // Only the user can upload/update their own photos
+      allow write: if request.auth != null 
+                   && request.auth.uid == userId
+                   && request.resource.size < 5 * 1024 * 1024  // Max 5MB
+                   && request.resource.contentType.matches('image/.*'); // Only images
+      
+      // Only the user can delete their own photos
+      allow delete: if request.auth != null 
+                    && request.auth.uid == userId;
+    }
+    
+    // ========================================
+    // CHAT MEDIA (if you add later)
+    // ========================================
+    match /chats/{chatId}/media/{mediaFile} {
+      
+      // Authenticated users can read chat media
+      allow read: if request.auth != null;
+      
+      // Authenticated users can upload chat media
+      allow write: if request.auth != null
+                   && request.resource.size < 10 * 1024 * 1024  // Max 10MB
+                   && (request.resource.contentType.matches
