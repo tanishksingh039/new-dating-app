@@ -208,11 +208,11 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                       const SizedBox(height: 20),
 
                       // Bio section
-                      if (widget.user.bio != null && widget.user.bio!.isNotEmpty) ...[
+                      if (widget.user.bio.isNotEmpty) ...[
                         _buildSectionTitle('About ${widget.user.name}'),
                         const SizedBox(height: 12),
                         Text(
-                          widget.user.bio!,
+                          widget.user.bio,
                           style: TextStyle(
                             fontSize: 16,
                             color: Colors.grey[800],
@@ -271,13 +271,13 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                                 ? Icons.female
                                 : Icons.transgender,
                         'Gender',
-                        widget.user.gender ?? 'Not specified',
+                        widget.user.gender.isEmpty ? 'Not specified' : widget.user.gender,
                       ),
-                      if (widget.user.lookingFor != null)
+                      if (widget.user.preferences['lookingFor'] != null)
                         _buildInfoRow(
                           Icons.favorite,
                           'Looking for',
-                          widget.user.lookingFor!,
+                          widget.user.preferences['lookingFor'].toString(),
                         ),
 
                       const SizedBox(height: 100), // Space for action buttons

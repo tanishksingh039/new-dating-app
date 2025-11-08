@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../firebase_services.dart';
 
 class ChatScreen extends StatefulWidget {
   final String currentUserId;
   final String otherUserId;
   final String otherUserName;
+  final String? otherUserPhoto;
 
   const ChatScreen({
     required this.currentUserId,
     required this.otherUserId,
     required this.otherUserName,
+    this.otherUserPhoto,
     Key? key,
   }) : super(key: key);
 
@@ -24,40 +27,43 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isTyping = false;
 
   @override
+  void initState() {
+    super.initState();
+    _markAsRead();
+  }
+
+  @override
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  // Generate chat ID
-  String get chatId {
-    final ids = [widget.currentUserId, widget.otherUserId]..sort();
-    return ids.join('_');
+  Future<void> _markAsRead() async {
+    try {
+      await FirebaseServices.markMessagesAsRead(
+        currentUserId: widget.currentUserId,
+        otherUserId: widget.otherUserId,
+      );
+    } catch (e) {
+      debugPrint('Error marking messages as read: $e');
+    }
   }
 
-  // Get messages reference
-  CollectionReference get messagesRef => FirebaseFirestore.instance
-      .collection('chats')
-      .doc(chatId)
-      .collection('messages');
-
-  // Send message
   Future<void> _sendMessage() async {
     final messageText = _messageController.text.trim();
     if (messageText.isEmpty) return;
 
     try {
-      await messagesRef.add({
-        'text': messageText,
-        'senderId': widget.currentUserId,
-        'timestamp': FieldValue.serverTimestamp(),
-      });
+      await FirebaseServices.sendMessage(
+        currentUserId: widget.currentUserId,
+        otherUserId: widget.otherUserId,
+        messageText: messageText,
+      );
 
       _messageController.clear();
       setState(() => _isTyping = false);
 
-      // Scroll to bottom
       Future.delayed(const Duration(milliseconds: 100), () {
         if (_scrollController.hasClients) {
           _scrollController.animateTo(
@@ -87,10 +93,12 @@ class _ChatScreenState extends State<ChatScreen> {
       appBar: _buildAppBar(),
       body: Column(
         children: [
-          // Messages List
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: messagesRef.orderBy('timestamp', descending: false).snapshots(),
+              stream: FirebaseServices.getMessages(
+                widget.currentUserId,
+                widget.otherUserId,
+              ),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
@@ -129,13 +137,10 @@ class _ChatScreenState extends State<ChatScreen> {
                   return _buildEmptyState();
                 }
 
-                // Auto scroll to bottom when new messages arrive
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (_scrollController.hasClients) {
-                    _scrollController.animateTo(
+                    _scrollController.jumpTo(
                       _scrollController.position.maxScrollExtent,
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeOut,
                     );
                   }
                 });
@@ -152,7 +157,6 @@ class _ChatScreenState extends State<ChatScreen> {
                     final isMe = message['senderId'] == widget.currentUserId;
                     final timestamp = message['timestamp'] as Timestamp?;
 
-                    // Show date separator if needed
                     bool showDateSeparator = false;
                     if (index == 0 ||
                         _shouldShowDateSeparator(
@@ -178,8 +182,6 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
           ),
-
-          // Message Input
           _buildMessageInput(),
         ],
       ),
@@ -203,26 +205,22 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           Hero(
             tag: 'avatar_${widget.otherUserId}',
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFFF6B9D), Color(0xFFC06C84)],
-                ),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2),
-              ),
-              child: Center(
-                child: Text(
-                  initials,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
+            child: CircleAvatar(
+              radius: 20,
+              backgroundImage: widget.otherUserPhoto != null
+                  ? NetworkImage(widget.otherUserPhoto!)
+                  : null,
+              backgroundColor: const Color(0xFFFF6B9D),
+              child: widget.otherUserPhoto == null
+                  ? Text(
+                      initials,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    )
+                  : null,
             ),
           ),
           const SizedBox(width: 12),
@@ -269,13 +267,17 @@ class _ChatScreenState extends State<ChatScreen> {
         IconButton(
           icon: const Icon(Icons.videocam_outlined, color: Color(0xFF2D3142)),
           onPressed: () {
-            // Implement video call
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Video call coming soon!')),
+            );
           },
         ),
         IconButton(
           icon: const Icon(Icons.call_outlined, color: Color(0xFF2D3142)),
           onPressed: () {
-            // Implement voice call
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Voice call coming soon!')),
+            );
           },
         ),
         const SizedBox(width: 8),
@@ -404,7 +406,9 @@ class _ChatScreenState extends State<ChatScreen> {
                         size: 24,
                       ),
                       onPressed: () {
-                        // Implement image picker
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Image sharing coming soon!')),
+                        );
                       },
                     ),
                   ],
@@ -531,7 +535,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   String _formatTime(Timestamp timestamp) {
     final date = timestamp.toDate();
-    final hour = date.hour > 12 ? date.hour - 12 : date.hour;
+    final hour = date.hour > 12 ? date.hour - 12 : (date.hour == 0 ? 12 : date.hour);
     final minute = date.minute.toString().padLeft(2, '0');
     final period = date.hour >= 12 ? 'PM' : 'AM';
     return '$hour:$minute $period';
@@ -553,5 +557,240 @@ class _ChatScreenState extends State<ChatScreen> {
       final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       return '${months[date.month - 1]} ${date.day}, ${date.year}';
     }
+  }
+}
+
+// Conversations list with actual data
+class ConversationsScreen extends StatelessWidget {
+  const ConversationsScreen({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+
+    if (currentUserId == null) {
+      return const Scaffold(
+        body: Center(child: Text('Please log in')),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FA),
+      appBar: AppBar(
+        title: const Text(
+          'Messages',
+          style: TextStyle(
+            color: Color(0xFF2D3142),
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search, color: Color(0xFF2D3142)),
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Search coming soon!')),
+              );
+            },
+          ),
+        ],
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('matches')
+            .where('users', arrayContains: currentUserId)
+            .orderBy('lastMessageTime', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(color: Color(0xFFFF6B9D)),
+            );
+          }
+
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+
+          final matches = snapshot.data?.docs ?? [];
+
+          if (matches.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.chat_bubble_outline_rounded,
+                    size: 80,
+                    color: Colors.grey.shade400,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No conversations yet',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Start matching to begin chatting!',
+                    style: TextStyle(color: Colors.grey.shade500),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return ListView.builder(
+            itemCount: matches.length,
+            itemBuilder: (context, index) {
+              final matchData = matches[index].data() as Map<String, dynamic>;
+              final users = matchData['users'] as List<dynamic>;
+              final otherUserId = users.firstWhere(
+                (id) => id != currentUserId,
+                orElse: () => '',
+              );
+
+              return FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(otherUserId)
+                    .get(),
+                builder: (context, userSnapshot) {
+                  if (!userSnapshot.hasData) {
+                    return const SizedBox.shrink();
+                  }
+
+                  final userData = userSnapshot.data!.data() as Map<String, dynamic>?;
+                  if (userData == null) return const SizedBox.shrink();
+
+                  final name = userData['name'] ?? 'Unknown';
+                  final photos = userData['photos'] as List<dynamic>?;
+                  final photoUrl = photos != null && photos.isNotEmpty
+                      ? photos[0] as String?
+                      : null;
+                  final lastMessage = matchData['lastMessage'] ?? '';
+                  final unreadCount = matchData['unreadCount_$currentUserId'] ?? 0;
+
+                  return _buildConversationTile(
+                    context,
+                    otherUserId,
+                    name,
+                    photoUrl,
+                    lastMessage,
+                    unreadCount,
+                    currentUserId,
+                  );
+                },
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildConversationTile(
+    BuildContext context,
+    String otherUserId,
+    String name,
+    String? photoUrl,
+    String lastMessage,
+    int unreadCount,
+    String currentUserId,
+  ) {
+    final initials = name.split(' ')
+        .map((word) => word.isNotEmpty ? word[0].toUpperCase() : '')
+        .take(2)
+        .join('');
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: Hero(
+          tag: 'avatar_$otherUserId',
+          child: CircleAvatar(
+            radius: 28,
+            backgroundImage: photoUrl != null ? NetworkImage(photoUrl) : null,
+            backgroundColor: const Color(0xFFFF6B9D),
+            child: photoUrl == null
+                ? Text(
+                    initials,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  )
+                : null,
+          ),
+        ),
+        title: Text(
+          name,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+            color: Color(0xFF2D3142),
+          ),
+        ),
+        subtitle: Text(
+          lastMessage.isNotEmpty ? lastMessage : 'Start chatting...',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: unreadCount > 0 ? Colors.black87 : Colors.grey.shade600,
+            fontWeight: unreadCount > 0 ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+        trailing: unreadCount > 0
+            ? Container(
+                padding: const EdgeInsets.all(8),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFFFF6B9D), Color(0xFFC06C84)],
+                  ),
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  unreadCount > 9 ? '9+' : unreadCount.toString(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+              )
+            : const Icon(Icons.chevron_right, color: Colors.grey),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ChatScreen(
+                currentUserId: currentUserId,
+                otherUserId: otherUserId,
+                otherUserName: name,
+                otherUserPhoto: photoUrl,
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 }

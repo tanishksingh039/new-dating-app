@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/app_colors.dart';
 
 class ActionButtons extends StatelessWidget {
   final VoidCallback onPass;
@@ -24,7 +25,7 @@ class ActionButtons extends StatelessWidget {
           // Rewind button (premium feature)
           _buildActionButton(
             icon: Icons.replay,
-            color: Colors.yellow[700]!,
+            color: AppColors.warmPeach,
             size: 50,
             onTap: () {
               // TODO: Implement rewind (premium feature)
@@ -41,7 +42,7 @@ class ActionButtons extends StatelessWidget {
           // Pass button
           _buildActionButton(
             icon: Icons.close,
-            color: Colors.red,
+            color: AppColors.softWarmPink,
             size: 60,
             onTap: isProcessing ? null : onPass,
           ),
@@ -49,7 +50,7 @@ class ActionButtons extends StatelessWidget {
           // Super like button
           _buildActionButton(
             icon: Icons.star,
-            color: Colors.blue,
+            color: AppColors.deepPurplePink,
             size: 55,
             onTap: isProcessing ? null : onSuperLike,
           ),
@@ -57,7 +58,7 @@ class ActionButtons extends StatelessWidget {
           // Like button
           _buildActionButton(
             icon: Icons.favorite,
-            color: Colors.green,
+            color: AppColors.primary,
             size: 60,
             onTap: isProcessing ? null : onLike,
           ),
@@ -65,7 +66,7 @@ class ActionButtons extends StatelessWidget {
           // Boost button (premium feature)
           _buildActionButton(
             icon: Icons.flash_on,
-            color: Colors.purple,
+            color: AppColors.shadowyPurple,
             size: 50,
             onTap: () {
               // TODO: Implement boost (premium feature)

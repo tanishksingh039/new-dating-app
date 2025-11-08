@@ -1,14 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/user_model.dart';
 import '../chat/chat_screen.dart';
 import 'package:confetti/confetti.dart';
 
 class MatchDialog extends StatefulWidget {
+  final String currentUserId;
   final UserModel matchedUser;
+  final String? currentUserPhotoUrl; // Optional: pass from parent
 
-  const MatchDialog({Key? key, required this.matchedUser}) : super(key: key);
+  const MatchDialog({
+    Key? key,
+    required this.currentUserId,
+    required this.matchedUser,
+    this.currentUserPhotoUrl,
+  }) : super(key: key);
 
   @override
   State<MatchDialog> createState() => _MatchDialogState();
@@ -19,6 +27,8 @@ class _MatchDialogState extends State<MatchDialog>
   late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
   late ConfettiController _confettiController;
+  String? _currentUserPhoto;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -40,9 +50,46 @@ class _MatchDialogState extends State<MatchDialog>
       duration: const Duration(seconds: 3),
     );
 
+    // Load current user photo
+    _loadCurrentUserPhoto();
+
     // Start animations
     _animationController.forward();
     _confettiController.play();
+  }
+
+  Future<void> _loadCurrentUserPhoto() async {
+    try {
+      // Use passed photo if available
+      if (widget.currentUserPhotoUrl != null) {
+        setState(() {
+          _currentUserPhoto = widget.currentUserPhotoUrl;
+          _isLoading = false;
+        });
+        return;
+      }
+
+      // Otherwise fetch from Firestore
+      final currentUserId = FirebaseAuth.instance.currentUser!.uid;
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserId)
+          .get();
+
+      if (userDoc.exists) {
+        final userData = userDoc.data();
+        final photos = userData?['photos'] as List<dynamic>?;
+        setState(() {
+          _currentUserPhoto = photos?.isNotEmpty == true ? photos![0] : null;
+          _isLoading = false;
+        });
+      } else {
+        setState(() => _isLoading = false);
+      }
+    } catch (e) {
+      debugPrint('Error loading current user photo: $e');
+      setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -55,9 +102,9 @@ class _MatchDialogState extends State<MatchDialog>
   @override
   Widget build(BuildContext context) {
     final currentUserId = FirebaseAuth.instance.currentUser!.uid;
-    final mainPhoto = widget.matchedUser.photos.isNotEmpty
+    final matchedUserPhoto = widget.matchedUser.photos.isNotEmpty
         ? widget.matchedUser.photos[0]
-        : '';
+        : null;
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -122,34 +169,36 @@ class _MatchDialogState extends State<MatchDialog>
                   const SizedBox(height: 30),
 
                   // Profile pictures
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Current user photo (placeholder)
-                      _buildProfileImage('', true),
+                  _isLoading
+                      ? const CircularProgressIndicator()
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            // Current user photo
+                            _buildProfileImage(_currentUserPhoto ?? '', true),
 
-                      const SizedBox(width: 30),
+                            const SizedBox(width: 30),
 
-                      // Heart icon
-                      Container(
-                        padding: const EdgeInsets.all(15),
-                        decoration: BoxDecoration(
-                          color: Colors.pink.withOpacity(0.2),
-                          shape: BoxShape.circle,
+                            // Heart icon
+                            Container(
+                              padding: const EdgeInsets.all(15),
+                              decoration: BoxDecoration(
+                                color: Colors.pink.withOpacity(0.2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.favorite,
+                                color: Colors.pink,
+                                size: 30,
+                              ),
+                            ),
+
+                            const SizedBox(width: 30),
+
+                            // Matched user photo
+                            _buildProfileImage(matchedUserPhoto ?? '', false),
+                          ],
                         ),
-                        child: const Icon(
-                          Icons.favorite,
-                          color: Colors.pink,
-                          size: 30,
-                        ),
-                      ),
-
-                      const SizedBox(width: 30),
-
-                      // Matched user photo
-                      _buildProfileImage(mainPhoto, false),
-                    ],
-                  ),
 
                   const SizedBox(height: 30),
 
@@ -166,6 +215,7 @@ class _MatchDialogState extends State<MatchDialog>
                               currentUserId: currentUserId,
                               otherUserId: widget.matchedUser.uid,
                               otherUserName: widget.matchedUser.name,
+                              otherUserPhoto: matchedUserPhoto,
                             ),
                           ),
                         );
@@ -234,7 +284,9 @@ class _MatchDialogState extends State<MatchDialog>
                 fit: BoxFit.cover,
                 placeholder: (context, url) => Container(
                   color: Colors.grey[300],
-                  child: const Center(child: CircularProgressIndicator()),
+                  child: const Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
                 ),
                 errorWidget: (context, url, error) => Container(
                   color: Colors.grey[300],

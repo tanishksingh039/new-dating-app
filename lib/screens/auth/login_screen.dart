@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import '../../../firebase_services.dart';
+import 'package:animate_do/animate_do.dart';
+import '../../firebase_services.dart';
+import '../../widgets/app_logo.dart';
+import '../../constants/app_colors.dart';
+import '../../services/location_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,6 +19,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
   final TextEditingController _phoneController = TextEditingController();
+  final LocationService _locationService = LocationService();
   bool _isLoading = false;
   String _countryCode = "+91";
 
@@ -34,7 +39,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final user = _auth.currentUser;
     if (user != null) {
       _log('User already signed in: ${user.email}');
-      await FirebaseServices.updateLastLogin(user.uid);
+      await FirebaseServices.updateLastActive(user.uid);
     }
   }
 
@@ -43,6 +48,24 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       _log('Starting Google Sign-In...');
+
+      // Check location before allowing login
+      _log('Checking user location...');
+      final locationResult = await _locationService.checkLoginLocation();
+      
+      if (!locationResult.isAllowed) {
+        _log('Location check failed: ${locationResult.errorMessage}');
+        if (mounted) {
+          setState(() => _isLoading = false);
+          _showLocationErrorDialog(
+            locationResult.errorMessage ?? 'Location check failed',
+            locationResult.distanceInKm,
+          );
+        }
+        return;
+      }
+      
+      _log('Location check passed. Distance: ${locationResult.distanceInKm?.toStringAsFixed(2)} km');
 
       await _googleSignIn.signOut();
       _log('Signed out from previous Google session');
@@ -183,6 +206,86 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  void _showLocationErrorDialog(String message, double? distanceInKm) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.location_off, color: Colors.red, size: 28),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Location Required',
+                style: TextStyle(fontSize: 20),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              message,
+              style: const TextStyle(fontSize: 16, height: 1.5),
+            ),
+            if (distanceInKm != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.red.shade700, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'You must be within 2 km of GHS to access this app.',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.red.shade900,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              await _locationService.openLocationSettings();
+            },
+            icon: const Icon(Icons.settings),
+            label: const Text('Open Settings'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> signInWithPhone() async {
     if (_phoneController.text.trim().isEmpty) {
       _showErrorSnackBar("Enter a valid phone number");
@@ -190,6 +293,34 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     setState(() => _isLoading = true);
+
+    try {
+      // Check location before allowing login
+      _log('Checking user location...');
+      final locationResult = await _locationService.checkLoginLocation();
+      
+      if (!locationResult.isAllowed) {
+        _log('Location check failed: ${locationResult.errorMessage}');
+        if (mounted) {
+          setState(() => _isLoading = false);
+          _showLocationErrorDialog(
+            locationResult.errorMessage ?? 'Location check failed',
+            locationResult.distanceInKm,
+          );
+        }
+        return;
+      }
+      
+      _log('Location check passed. Distance: ${locationResult.distanceInKm?.toStringAsFixed(2)} km');
+    } catch (e) {
+      _log('Location check error: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _showErrorSnackBar('Unable to verify location. Please enable location services.');
+      }
+      return;
+    }
+
     final phone = '$_countryCode${_phoneController.text.trim()}';
 
     _log('Starting phone verification for: $phone');
@@ -283,15 +414,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF667eea),
-              Color(0xFF764ba2),
-              Color(0xFFf093fb),
-            ],
-          ),
+          gradient: AppColors.primaryGradient,
         ),
         child: SafeArea(
           child: Center(
@@ -300,259 +423,295 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
+                  // Animated logo with bounce
+                  Bounce(
+                    delay: const Duration(milliseconds: 200),
+                    child: ZoomIn(
+                      duration: const Duration(milliseconds: 1000),
+                      child: Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 20,
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.favorite_rounded,
-                      size: 60,
-                      color: Colors.white,
+                        child: const ClipOval(
+                          child: AppLogo(
+                            width: 80,
+                            height: 80,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 40),
 
-                  const Text(
-                    'Welcome Back',
-                    style: TextStyle(
-                      fontSize: 36,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      letterSpacing: 0.5,
+                  // Animated title
+                  FadeInDown(
+                    delay: const Duration(milliseconds: 400),
+                    duration: const Duration(milliseconds: 800),
+                    child: ElasticIn(
+                      delay: const Duration(milliseconds: 600),
+                      child: const Text(
+                        'Welcome Back',
+                        style: TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: 0.5,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
                     ),
-                    textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    'Find your perfect match',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.white.withOpacity(0.9),
-                      letterSpacing: 0.3,
+                  
+                  // Animated subtitle
+                  FadeInUp(
+                    delay: const Duration(milliseconds: 600),
+                    duration: const Duration(milliseconds: 800),
+                    child: Text(
+                      'Find your perfect match',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.white.withOpacity(0.9),
+                        letterSpacing: 0.3,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
-                    textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 50),
 
-                  Container(
-                    padding: const EdgeInsets.all(28),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.15),
-                          blurRadius: 30,
-                          offset: const Offset(0, 15),
+                  // Animated form container
+                  FadeInUp(
+                    delay: const Duration(milliseconds: 800),
+                    duration: const Duration(milliseconds: 1000),
+                    child: SlideInLeft(
+                      delay: const Duration(milliseconds: 900),
+                      child: Container(
+                        padding: const EdgeInsets.all(28),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.15),
+                              blurRadius: 30,
+                              offset: const Offset(0, 15),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        TextField(
-                          controller: _phoneController,
-                          keyboardType: TextInputType.phone,
-                          enabled: !_isLoading,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: const Color(0xFFF5F7FA),
-                            prefixText: "$_countryCode ",
-                            prefixStyle: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF667eea),
-                            ),
-                            prefixIcon: Container(
-                              margin: const EdgeInsets.all(12),
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF667eea).withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(
-                                Icons.phone_android_rounded,
-                                color: Color(0xFF667eea),
-                                size: 20,
-                              ),
-                            ),
-                            labelText: "Phone Number",
-                            labelStyle: TextStyle(
-                              color: Colors.grey.shade600,
-                              fontSize: 14,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: BorderSide.none,
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: BorderSide.none,
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(
-                                color: Color(0xFF667eea),
-                                width: 2,
-                              ),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 18,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-
-                        SizedBox(
-                          width: double.infinity,
-                          height: 56,
-                          child: ElevatedButton(
-                            onPressed: _isLoading ? null : signInWithPhone,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF667eea),
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              shadowColor: Colors.transparent,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              disabledBackgroundColor:
-                                  const Color(0xFF667eea).withOpacity(0.6),
-                            ),
-                            child: _isLoading
-                                ? const SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2.5,
-                                    ),
-                                  )
-                                : const Text(
-                                    "Continue with Phone",
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      letterSpacing: 0.3,
-                                    ),
-                                  ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 28),
-
-                        Row(
+                        child: Column(
                           children: [
-                            Expanded(
-                              child: Divider(
-                                color: Colors.grey.shade300,
-                                thickness: 1,
+                            TextField(
+                              controller: _phoneController,
+                              keyboardType: TextInputType.phone,
+                              enabled: !_isLoading,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
                               ),
-                            ),
-                            Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 16),
-                              child: Text(
-                                "OR",
-                                style: TextStyle(
-                                  color: Colors.grey.shade600,
-                                  fontSize: 13,
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: const Color(0xFFF5F7FA),
+                                prefixText: "$_countryCode ",
+                                prefixStyle: const TextStyle(
+                                  fontSize: 16,
                                   fontWeight: FontWeight.w600,
-                                  letterSpacing: 1,
+                                  color: AppColors.primary,
+                                ),
+                                prefixIcon: Container(
+                                  margin: const EdgeInsets.all(12),
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(
+                                    Icons.phone_android_rounded,
+                                    color: AppColors.primary,
+                                    size: 20,
+                                  ),
+                                ),
+                                labelText: "Phone Number",
+                                labelStyle: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: 14,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide.none,
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide.none,
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: const BorderSide(
+                                    color: AppColors.primary,
+                                    width: 2,
+                                  ),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 18,
                                 ),
                               ),
                             ),
-                            Expanded(
-                              child: Divider(
-                                color: Colors.grey.shade300,
-                                thickness: 1,
+                            const SizedBox(height: 24),
+
+                            SizedBox(
+                              width: double.infinity,
+                              height: 56,
+                              child: ElevatedButton(
+                                onPressed: _isLoading ? null : signInWithPhone,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  shadowColor: Colors.transparent,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  disabledBackgroundColor:
+                                      AppColors.primary.withOpacity(0.6),
+                                ),
+                                child: _isLoading
+                                    ? const SizedBox(
+                                        width: 24,
+                                        height: 24,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2.5,
+                                        ),
+                                      )
+                                    : const Text(
+                                        "Continue with Phone",
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                          letterSpacing: 0.3,
+                                        ),
+                                      ),
+                              ),
+                            ),
+
+                            const SizedBox(height: 28),
+
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Divider(
+                                    color: Colors.grey.shade300,
+                                    thickness: 1,
+                                  ),
+                                ),
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 16),
+                                  child: Text(
+                                    "OR",
+                                    style: TextStyle(
+                                      color: Colors.grey.shade600,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      letterSpacing: 1,
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Divider(
+                                    color: Colors.grey.shade300,
+                                    thickness: 1,
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 28),
+
+                            SizedBox(
+                              width: double.infinity,
+                              height: 56,
+                              child: OutlinedButton(
+                                onPressed: _isLoading ? null : signInWithGoogle,
+                                style: OutlinedButton.styleFrom(
+                                  side: BorderSide(
+                                    color: Colors.grey.shade300,
+                                    width: 1.5,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  backgroundColor: Colors.white,
+                                ),
+                                child: _isLoading
+                                    ? const SizedBox(
+                                        width: 24,
+                                        height: 24,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.5,
+                                        ),
+                                      )
+                                    : Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Image.network(
+                                            'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
+                                            height: 24,
+                                            width: 24,
+                                            errorBuilder:
+                                                (context, error, stackTrace) =>
+                                                    const Icon(
+                                              Icons.g_mobiledata,
+                                              size: 28,
+                                              color: Colors.red,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Text(
+                                            "Continue with Google",
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.grey.shade800,
+                                              letterSpacing: 0.3,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                               ),
                             ),
                           ],
                         ),
-
-                        const SizedBox(height: 28),
-
-                        SizedBox(
-                          width: double.infinity,
-                          height: 56,
-                          child: OutlinedButton(
-                            onPressed: _isLoading ? null : signInWithGoogle,
-                            style: OutlinedButton.styleFrom(
-                              side: BorderSide(
-                                color: Colors.grey.shade300,
-                                width: 1.5,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              backgroundColor: Colors.white,
-                            ),
-                            child: _isLoading
-                                ? const SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.5,
-                                    ),
-                                  )
-                                : Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Image.network(
-                                        'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
-                                        height: 24,
-                                        width: 24,
-                                        errorBuilder:
-                                            (context, error, stackTrace) =>
-                                                const Icon(
-                                          Icons.g_mobiledata,
-                                          size: 28,
-                                          color: Colors.red,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Text(
-                                        "Continue with Google",
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.grey.shade800,
-                                          letterSpacing: 0.3,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
 
                   const SizedBox(height: 30),
 
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Text(
-                      'By continuing, you agree to our Terms of Service and Privacy Policy',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.8),
-                        fontSize: 12,
-                        height: 1.4,
+                  // Animated terms text
+                  FadeIn(
+                    delay: const Duration(milliseconds: 1200),
+                    duration: const Duration(milliseconds: 800),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Text(
+                        'By continuing, you agree to our Terms of Service and Privacy Policy',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.8),
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
                       ),
                     ),
                   ),

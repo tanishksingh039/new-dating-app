@@ -163,10 +163,10 @@ class ProfileCard extends StatelessWidget {
                     ),
 
                     // Bio preview
-                    if (user.bio != null && user.bio!.isNotEmpty) ...[
+                    if (user.bio.isNotEmpty) ...[
                       const SizedBox(height: 12),
                       Text(
-                        user.bio!,
+                        user.bio,
                         style: TextStyle(
                           color: Colors.white.withOpacity(0.9),
                           fontSize: 15,
