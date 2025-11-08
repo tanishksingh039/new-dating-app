@@ -54,6 +54,8 @@ dependencies:
   animate_do: ^3.3.4
   lottie: ^3.1.0
   shimmer: ^3.0.0
+  google_mlkit_face_detection: ^0.10.0
+  camera: ^0.10.5+5
 
 dev_dependencies:
   flutter_test:

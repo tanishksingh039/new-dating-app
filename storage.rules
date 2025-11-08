@@ -23,6 +23,23 @@ service firebase.storage {
     }
     
     // ========================================
+    // VERIFICATION PHOTOS
+    // ========================================
+    match /verification_photos/{photoFile} {
+      
+      // Only authenticated users can read verification photos
+      allow read: if request.auth != null;
+      
+      // Authenticated users can upload their own verification photos
+      allow write: if request.auth != null
+                   && request.resource.size < 5 * 1024 * 1024  // Max 5MB
+                   && request.resource.contentType.matches('image/.*'); // Only images
+      
+      // Users can delete their own verification photos
+      allow delete: if request.auth != null;
+    }
+    
+    // ========================================
     // CHAT MEDIA (if you add later)
     // ========================================
     match /chats/{chatId}/media/{mediaFile} {
@@ -33,4 +50,7 @@ service firebase.storage {
       // Authenticated users can upload chat media
       allow write: if request.auth != null
                    && request.resource.size < 10 * 1024 * 1024  // Max 10MB
-                   && (request.resource.contentType.matches
+                   && request.resource.contentType.matches('image/.*');
+    }
+  }
+}

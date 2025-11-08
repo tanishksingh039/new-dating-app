@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../discovery/swipeable_discovery_screen.dart';
 import '../matches/matches_screen.dart';
 import '../likes/likes_screen.dart';
 import '../chat/chat_screen.dart';
 import '../profile/profile_screen.dart';
+import '../rewards/rewards_leaderboard_screen.dart';
 import '../../constants/app_colors.dart';
+import '../../models/user_model.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -15,14 +19,53 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
+  bool _isFemale = false;
+  bool _isLoading = true;
 
-  final List<Widget> _screens = [
-    const SwipeableDiscoveryScreen(),
-    const LikesScreen(),
-    const MatchesScreen(),
-    const ConversationsScreen(),
-    const ProfileScreen(),
-  ];
+  List<Widget> _screens = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _checkUserGender();
+  }
+
+  Future<void> _checkUserGender() async {
+    try {
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      if (userId != null) {
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .get();
+        if (doc.exists) {
+          final user = UserModel.fromMap(doc.data()!);
+          setState(() {
+            _isFemale = user.gender.toLowerCase() == 'female';
+            _screens = _isFemale
+                ? [
+                    const SwipeableDiscoveryScreen(),
+                    const LikesScreen(),
+                    const MatchesScreen(),
+                    const ConversationsScreen(),
+                    const RewardsLeaderboardScreen(),
+                    const ProfileScreen(),
+                  ]
+                : [
+                    const SwipeableDiscoveryScreen(),
+                    const LikesScreen(),
+                    const MatchesScreen(),
+                    const ConversationsScreen(),
+                    const ProfileScreen(),
+                  ];
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+    }
+  }
 
   void _onItemTapped(int index) {
     setState(() {
@@ -32,6 +75,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       body: IndexedStack(
         index: _selectedIndex,
@@ -64,33 +113,66 @@ class _HomeScreenState extends State<HomeScreen> {
           unselectedLabelStyle: const TextStyle(
             fontSize: 12,
           ),
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.explore_outlined),
-              activeIcon: Icon(Icons.explore),
-              label: 'Discover',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.favorite_border),
-              activeIcon: Icon(Icons.favorite),
-              label: 'Likes',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.people_outline),
-              activeIcon: Icon(Icons.people),
-              label: 'Matches',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.chat_bubble_outline),
-              activeIcon: Icon(Icons.chat_bubble),
-              label: 'Chat',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline),
-              activeIcon: Icon(Icons.person),
-              label: 'Profile',
-            ),
-          ],
+          items: _isFemale
+              ? const [
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.explore_outlined),
+                    activeIcon: Icon(Icons.explore),
+                    label: 'Discover',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.favorite_border),
+                    activeIcon: Icon(Icons.favorite),
+                    label: 'Likes',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.people_outline),
+                    activeIcon: Icon(Icons.people),
+                    label: 'Matches',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.chat_bubble_outline),
+                    activeIcon: Icon(Icons.chat_bubble),
+                    label: 'Chat',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.emoji_events_outlined),
+                    activeIcon: Icon(Icons.emoji_events),
+                    label: 'Rewards',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.person_outline),
+                    activeIcon: Icon(Icons.person),
+                    label: 'Profile',
+                  ),
+                ]
+              : const [
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.explore_outlined),
+                    activeIcon: Icon(Icons.explore),
+                    label: 'Discover',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.favorite_border),
+                    activeIcon: Icon(Icons.favorite),
+                    label: 'Likes',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.people_outline),
+                    activeIcon: Icon(Icons.people),
+                    label: 'Matches',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.chat_bubble_outline),
+                    activeIcon: Icon(Icons.chat_bubble),
+                    label: 'Chat',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.person_outline),
+                    activeIcon: Icon(Icons.person),
+                    label: 'Profile',
+                  ),
+                ],
         ),
       ),
     );

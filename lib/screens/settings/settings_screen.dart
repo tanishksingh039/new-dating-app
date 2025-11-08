@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'account_settings_screen.dart';
 import 'privacy_settings_screen.dart';
 import 'notification_settings_screen.dart';
+import '../verification/liveness_verification_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -192,6 +193,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _buildSection(
                   'Account',
                   [
+                    _buildSettingTile(
+                      Icons.verified_user,
+                      'Verify Profile',
+                      'Verify with liveness detection (anti-spoofing)',
+                      () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const LivenessVerificationScreen(),
+                          ),
+                        );
+                      },
+                      iconColor: Colors.blue,
+                    ),
                     _buildSettingTile(
                       Icons.person,
                       'Account Settings',
