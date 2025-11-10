@@ -253,25 +253,38 @@ class FirebaseServices {
   }
 
   /// Send message to chat
-  static Future<void> sendMessage({
-    required String currentUserId,
-    required String otherUserId,
-    required String messageText,
+  static Future<void> sendMessage(
+    String currentUserId,
+    String otherUserId,
+    String messageText, {
+    String? imageUrl,
+    String? audioUrl,
   }) async {
     try {
       final chatId = _getChatId(currentUserId, otherUserId);
       final timestamp = FieldValue.serverTimestamp();
+      
+      // Build message data
+      final Map<String, dynamic> messageData = {
+        'text': messageText,
+        'senderId': currentUserId,
+        'timestamp': timestamp,
+      };
+      
+      if (imageUrl != null) {
+        messageData['imageUrl'] = imageUrl;
+      }
+      
+      if (audioUrl != null) {
+        messageData['audioUrl'] = audioUrl;
+      }
       
       // Add message to chat
       await _firestore
           .collection('chats')
           .doc(chatId)
           .collection('messages')
-          .add({
-        'text': messageText,
-        'senderId': currentUserId,
-        'timestamp': timestamp,
-      });
+          .add(messageData);
 
       // Update match document with last message info
       await _updateMatchLastMessage(

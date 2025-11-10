@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../utils/constants.dart';
 import '../../../widgets/custom_button.dart';
 import '../../../firebase_services.dart';
+import '../../constants/app_colors.dart';
 
 class PreferencesScreen extends StatefulWidget {
   const PreferencesScreen({super.key});
@@ -99,7 +100,7 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          gradient: AppConstants.primaryGradient,
+          gradient: AppColors.primaryGradient,
         ),
         child: SafeArea(
           child: Column(
@@ -208,7 +209,7 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
-                                color: AppConstants.primaryPurple,
+                                color: AppColors.primary,
                               ),
                             ),
                             RangeSlider(
@@ -216,7 +217,7 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
                               min: 18,
                               max: 80,
                               divisions: 62,
-                              activeColor: AppConstants.primaryPurple,
+                              activeColor: AppColors.primary,
                               inactiveColor: AppConstants.backgroundColor,
                               onChanged: (RangeValues values) {
                                 setState(() {
@@ -238,7 +239,7 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
-                                color: AppConstants.primaryPurple,
+                                color: AppColors.primary,
                               ),
                             ),
                             Slider(
@@ -246,7 +247,7 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
                               min: 1,
                               max: 100,
                               divisions: 99,
-                              activeColor: AppConstants.primaryPurple,
+                              activeColor: AppColors.primary,
                               inactiveColor: AppConstants.backgroundColor,
                               onChanged: (double value) {
                                 setState(() {
@@ -331,12 +332,12 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppConstants.primaryPurple.withOpacity(0.1)
+              ? AppColors.primary.withOpacity(0.1)
               : AppConstants.backgroundColor,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected
-                ? AppConstants.primaryPurple
+                ? AppColors.primary
                 : Colors.transparent,
             width: 2,
           ),
@@ -358,7 +359,7 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                       color: isSelected
-                          ? AppConstants.primaryPurple
+                          ? AppColors.primary
                           : AppConstants.textDark,
                     ),
                   ),
@@ -376,7 +377,7 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
             if (isSelected)
               const Icon(
                 Icons.check_circle,
-                color: AppConstants.primaryPurple,
+                color: AppColors.primary,
                 size: 24,
               ),
           ],
@@ -398,12 +399,12 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
         padding: const EdgeInsets.symmetric(vertical: 20),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppConstants.primaryPurple.withOpacity(0.1)
+              ? AppColors.primary.withOpacity(0.1)
               : AppConstants.backgroundColor,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected
-                ? AppConstants.primaryPurple
+                ? AppColors.primary
                 : Colors.transparent,
             width: 2,
           ),
@@ -421,7 +422,7 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
                 fontSize: 14,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                 color: isSelected
-                    ? AppConstants.primaryPurple
+                    ? AppColors.primary
                     : AppConstants.textGrey,
               ),
             ),
@@ -431,3 +432,4 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
     );
   }
 }
+

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:animate_do/animate_do.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import '../../models/rewards_model.dart';
 import '../../services/rewards_service.dart';
 import 'rewards_history_screen.dart';
@@ -24,12 +26,80 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
   List<RewardIncentive> _incentives = [];
   bool _isLoading = true;
   late TabController _tabController;
+  
+  // Real-time stats stream
+  Stream<UserRewardsStats?>? _userStatsStream;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _loadCachedStats(); // Load cached stats first for instant display
+    _userStatsStream = _rewardsService.getUserStatsStream(currentUserId);
     _loadData();
+    
+    // Refresh stats every 5 seconds to catch updates
+    _startAutoRefresh();
+  }
+
+  void _startAutoRefresh() {
+    Future.delayed(const Duration(seconds: 5), () {
+      if (mounted) {
+        // Recreate stream to force refresh
+        setState(() {
+          _userStatsStream = _rewardsService.getUserStatsStream(currentUserId);
+        });
+        _startAutoRefresh(); // Continue refreshing
+      }
+    });
+  }
+
+  // Load cached stats from local storage for instant display
+  Future<void> _loadCachedStats() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedData = prefs.getString('user_stats_$currentUserId');
+      if (cachedData != null) {
+        final Map<String, dynamic> statsMap = json.decode(cachedData);
+        setState(() {
+          _userStats = UserRewardsStats.fromJson(statsMap);
+        });
+      } else {
+        // If no cache, create initial stats immediately
+        await _createInitialStats();
+      }
+    } catch (e) {
+      debugPrint('Error loading cached stats: $e');
+      // Try to create initial stats on error
+      await _createInitialStats();
+    }
+  }
+
+  // Create initial stats for new users
+  Future<void> _createInitialStats() async {
+    try {
+      final stats = await _rewardsService.getUserStats(currentUserId);
+      if (stats != null && mounted) {
+        setState(() {
+          _userStats = stats;
+        });
+        _saveCachedStats(stats);
+      }
+    } catch (e) {
+      debugPrint('Error creating initial stats: $e');
+    }
+  }
+
+  // Save stats to cache
+  Future<void> _saveCachedStats(UserRewardsStats stats) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonData = stats.toJson();
+      final encodedData = json.encode(jsonData);
+      await prefs.setString('user_stats_$currentUserId', encodedData);
+    } catch (e) {
+      debugPrint('Error saving cached stats: $e');
+    }
   }
 
   @override
@@ -64,31 +134,42 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : CustomScrollView(
-              slivers: [
-                _buildAppBar(),
-                SliverToBoxAdapter(
-                  child: Column(
-                    children: [
-                      _buildScoreCard(),
-                      const SizedBox(height: 10),
-                      _buildTabBar(),
-                    ],
-                  ),
-                ),
-                SliverFillRemaining(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildDashboardTab(),
-                      _buildLeaderboardTab(),
-                    ],
-                  ),
-                ),
-              ],
+      body: RefreshIndicator(
+        onRefresh: () async {
+          // Force refresh stats
+          final stats = await _rewardsService.getUserStats(currentUserId);
+          if (stats != null && mounted) {
+            setState(() {
+              _userStats = stats;
+            });
+            _saveCachedStats(stats);
+          }
+          await _loadData();
+        },
+        child: CustomScrollView(
+          slivers: [
+            _buildAppBar(),
+            SliverToBoxAdapter(
+              child: Column(
+                children: [
+                  _buildScoreCard(),
+                  const SizedBox(height: 10),
+                  _buildTabBar(),
+                ],
+              ),
             ),
+            SliverFillRemaining(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildDashboardTab(),
+                  _buildLeaderboardTab(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -159,8 +240,62 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
   }
 
   Widget _buildScoreCard() {
-    if (_userStats == null) return const SizedBox();
+    return StreamBuilder<UserRewardsStats?>(
+      stream: _userStatsStream,
+      builder: (context, snapshot) {
+        debugPrint('📊 StreamBuilder rebuild - hasData: ${snapshot.hasData}, data: ${snapshot.data?.monthlyScore}');
+        
+        // Show cached data immediately if available, or loading state
+        final stats = snapshot.data ?? _userStats;
+        
+        if (stats != null) {
+          debugPrint('📊 Displaying stats - Monthly: ${stats.monthlyScore}, Total: ${stats.totalScore}');
+        }
+        
+        // If still no stats after 3 seconds, show default values
+        if (stats == null) {
+          // Show default stats instead of loading spinner
+          final defaultStats = UserRewardsStats(
+            userId: currentUserId,
+            totalScore: 0,
+            weeklyScore: 0,
+            monthlyScore: 0,
+            messagesSent: 0,
+            repliesGiven: 0,
+            imagesSent: 0,
+            positiveFeedbackRatio: 0.0,
+            currentStreak: 0,
+            longestStreak: 0,
+            weeklyRank: 0,
+            monthlyRank: 0,
+            lastUpdated: DateTime.now(),
+          );
+          
+          // Use default stats to show UI
+          return _buildScoreCardContent(defaultStats);
+        }
+        
+        // Update cached stats and save to local storage
+        if (snapshot.hasData && _userStats != snapshot.data) {
+          Future.microtask(() {
+            if (mounted) {
+              setState(() {
+                _userStats = snapshot.data;
+              });
+              // Save to cache for next time
+              if (snapshot.data != null) {
+                _saveCachedStats(snapshot.data!);
+              }
+            }
+          });
+        }
+        
+        return _buildScoreCardContent(stats);
+      },
+    );
+  }
 
+  Widget _buildScoreCardContent(UserRewardsStats stats) {
     return FadeInDown(
       child: Container(
         margin: const EdgeInsets.all(16),
@@ -195,7 +330,7 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${_userStats!.monthlyScore}',
+                      '${stats.monthlyScore}',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 36,
@@ -226,7 +361,7 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '#${_userStats!.monthlyRank > 0 ? _userStats!.monthlyRank : '--'}',
+                        '#${stats.monthlyRank > 0 ? stats.monthlyRank : '--'}',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 16,
@@ -251,17 +386,17 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
               children: [
                 _buildMiniStat(
                   Icons.local_fire_department,
-                  '${_userStats!.currentStreak}',
+                  '${stats.currentStreak}',
                   'Day Streak',
                 ),
                 _buildMiniStat(
                   Icons.trending_up,
-                  '${_userStats!.weeklyScore}',
+                  '${stats.weeklyScore}',
                   'This Week',
                 ),
                 _buildMiniStat(
                   Icons.star,
-                  '${(_userStats!.positiveFeedbackRatio * 100).toInt()}%',
+                  '${(stats.positiveFeedbackRatio * 100).toInt()}%',
                   'Positive',
                 ),
               ],
@@ -296,6 +431,87 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
     );
   }
 
+  Widget _buildStatsPlaceholder() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                width: 100,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          ...List.generate(
+            6,
+            (index) => Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Container(
+                      height: 16,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    width: 50,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTabBar() {
     return Container(
       color: Colors.white,
@@ -325,9 +541,16 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
   }
 
   Widget _buildMyStats() {
-    if (_userStats == null) return const SizedBox();
-
-    return FadeInUp(
+    return StreamBuilder<UserRewardsStats?>(
+      stream: _userStatsStream,
+      builder: (context, snapshot) {
+        // Show skeleton/placeholder while loading
+        final stats = snapshot.data;
+        if (stats == null) {
+          return _buildStatsPlaceholder();
+        }
+        
+        return FadeInUp(
       delay: const Duration(milliseconds: 200),
       child: Container(
         padding: const EdgeInsets.all(20),
@@ -373,42 +596,44 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
             _buildStatRow(
               Icons.message,
               'Messages Sent',
-              '${_userStats!.messagesSent}',
+              '${stats.messagesSent}',
               Colors.blue,
             ),
             _buildStatRow(
               Icons.reply,
               'Replies Given',
-              '${_userStats!.repliesGiven}',
+              '${stats.repliesGiven}',
               Colors.green,
             ),
             _buildStatRow(
               Icons.image,
               'Images Sent',
-              '${_userStats!.imagesSent}',
+              '${stats.imagesSent}',
               Colors.orange,
             ),
             _buildStatRow(
               Icons.thumb_up,
               'Positive Feedback',
-              '${(_userStats!.positiveFeedbackRatio * 100).toInt()}%',
+              '${(stats.positiveFeedbackRatio * 100).toInt()}%',
               Colors.pink,
             ),
             _buildStatRow(
               Icons.local_fire_department,
               'Current Streak',
-              '${_userStats!.currentStreak} days',
+              '${stats.currentStreak} days',
               Colors.red,
             ),
             _buildStatRow(
               Icons.military_tech,
               'Longest Streak',
-              '${_userStats!.longestStreak} days',
+              '${stats.longestStreak} days',
               Colors.amber,
             ),
           ],
         ),
       ),
+    );
+      },
     );
   }
 
@@ -492,18 +717,32 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
               ],
             ),
             const SizedBox(height: 16),
-            if (_incentives.isEmpty)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(20),
-                  child: Text(
-                    'No active rewards at the moment',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ),
-              )
-            else
-              ..._incentives.map((incentive) => _buildIncentiveCard(incentive)),
+            _isLoading
+                ? const Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Center(
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  )
+                : _incentives.isEmpty
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(20),
+                          child: Text(
+                            'No active rewards at the moment',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        ),
+                      )
+                    : Column(
+                        children: _incentives
+                            .map((incentive) => _buildIncentiveCard(incentive))
+                            .toList(),
+                      ),
           ],
         ),
       ),
@@ -677,7 +916,7 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
                     ),
                     const SizedBox(width: 12),
                     const Text(
-                      'Top 10 This Month',
+                      'Top 20 This Month',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -686,18 +925,32 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
                   ],
                 ),
                 const SizedBox(height: 20),
-                if (_leaderboard.isEmpty)
-                  const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(20),
-                      child: Text(
-                        'No leaderboard data yet',
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    ),
-                  )
-                else
-                  ..._leaderboard.map((entry) => _buildLeaderboardEntry(entry)),
+                _isLoading
+                    ? const Padding(
+                        padding: EdgeInsets.all(20),
+                        child: Center(
+                          child: SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                      )
+                    : _leaderboard.isEmpty
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(20),
+                              child: Text(
+                                'No leaderboard data yet',
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                            ),
+                          )
+                        : Column(
+                            children: _leaderboard
+                                .map((entry) => _buildLeaderboardEntry(entry))
+                                .toList(),
+                          ),
               ],
             ),
           ),
@@ -815,25 +1068,32 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
           ),
           const SizedBox(width: 12),
           // Score
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '${entry.score}',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: isCurrentUser ? Colors.purple : Colors.black,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: isCurrentUser ? Colors.purple.shade100 : Colors.grey[200],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '${entry.score}',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: isCurrentUser ? Colors.purple : Colors.black,
+                  ),
                 ),
-              ),
-              Text(
-                'points',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey[600],
+                Text(
+                  'points',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.grey[600],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),

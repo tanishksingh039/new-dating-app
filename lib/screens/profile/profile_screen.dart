@@ -401,10 +401,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             'Get Verified',
             _currentUser?.isVerified == true ? 'Verified ✓' : 'Verify your profile',
             () {
-              // TODO: Implement verification
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Verification coming soon!')),
-              );
+              // Navigate to liveness verification in settings
+              Navigator.pushNamed(context, '/settings/verification');
             },
           ),
           if (_currentUser?.isPremium != true)

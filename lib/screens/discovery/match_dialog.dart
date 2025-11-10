@@ -136,124 +136,136 @@ class _MatchDialogState extends State<MatchDialog>
           ScaleTransition(
             scale: _scaleAnimation,
             child: Container(
-              padding: const EdgeInsets.all(20),
+              margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.85,
+                maxHeight: MediaQuery.of(context).size.height * 0.7,
+              ),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(25),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // It's a Match text
-                  const Text(
-                    "It's a Match! 🎉",
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.pink,
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // Subtitle
-                  Text(
-                    'You and ${widget.matchedUser.name} have liked each other',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey[700],
-                    ),
-                  ),
-
-                  const SizedBox(height: 30),
-
-                  // Profile pictures
-                  _isLoading
-                      ? const CircularProgressIndicator()
-                      : Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            // Current user photo
-                            _buildProfileImage(_currentUserPhoto ?? '', true),
-
-                            const SizedBox(width: 30),
-
-                            // Heart icon
-                            Container(
-                              padding: const EdgeInsets.all(15),
-                              decoration: BoxDecoration(
-                                color: Colors.pink.withOpacity(0.2),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.favorite,
-                                color: Colors.pink,
-                                size: 30,
-                              ),
-                            ),
-
-                            const SizedBox(width: 30),
-
-                            // Matched user photo
-                            _buildProfileImage(matchedUserPhoto ?? '', false),
-                          ],
-                        ),
-
-                  const SizedBox(height: 30),
-
-                  // Send message button
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(context); // Close dialog
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => ChatScreen(
-                              currentUserId: currentUserId,
-                              otherUserId: widget.matchedUser.uid,
-                              otherUserName: widget.matchedUser.name,
-                              otherUserPhoto: matchedUserPhoto,
-                            ),
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.pink,
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                      ),
-                      child: const Text(
-                        'Send Message',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // Keep swiping button
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    child: Text(
-                      'Keep Swiping',
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // It's a Match text
+                    const Text(
+                      "It's a Match! 🎉",
                       style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey[600],
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.pink,
                       ),
                     ),
-                  ),
-                ],
+
+                    const SizedBox(height: 12),
+
+                    // Subtitle
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Text(
+                        'You and ${widget.matchedUser.name} have liked each other',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[700],
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // Profile pictures
+                    _isLoading
+                        ? const CircularProgressIndicator()
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              // Current user photo
+                              _buildProfileImage(_currentUserPhoto ?? '', true),
+
+                              const SizedBox(width: 16),
+
+                              // Heart icon
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Colors.pink.withOpacity(0.2),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.favorite,
+                                  color: Colors.pink,
+                                  size: 20,
+                                ),
+                              ),
+
+                              const SizedBox(width: 16),
+
+                              // Matched user photo
+                              _buildProfileImage(matchedUserPhoto ?? '', false),
+                            ],
+                          ),
+
+                    const SizedBox(height: 20),
+
+                    // Send message button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(context); // Close dialog
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ChatScreen(
+                                currentUserId: currentUserId,
+                                otherUserId: widget.matchedUser.uid,
+                                otherUserName: widget.matchedUser.name,
+                                otherUserPhoto: matchedUserPhoto,
+                              ),
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.pink,
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                        ),
+                        child: const Text(
+                          'Send Message',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    // Keep swiping button
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                      },
+                      child: Text(
+                        'Keep Swiping',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -264,16 +276,16 @@ class _MatchDialogState extends State<MatchDialog>
 
   Widget _buildProfileImage(String imageUrl, bool isCurrentUser) {
     return Container(
-      width: 100,
-      height: 100,
+      width: 80,
+      height: 80,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.pink, width: 3),
+        border: Border.all(color: Colors.pink, width: 2.5),
         boxShadow: [
           BoxShadow(
             color: Colors.pink.withOpacity(0.3),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),

@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../utils/constants.dart';
 import '../../../widgets/custom_button.dart';
 import '../../../firebase_services.dart';
+import '../../constants/app_colors.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -46,7 +47,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: AppConstants.primaryPurple,
+              primary: AppColors.primary,
               onPrimary: Colors.white,
               onSurface: AppConstants.textDark,
             ),
@@ -144,7 +145,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          gradient: AppConstants.primaryGradient,
+          gradient: AppColors.primaryGradient,
         ),
         child: SafeArea(
           child: Column(
@@ -217,7 +218,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                   ),
                                   prefixIcon: const Icon(
                                     Icons.person_outline,
-                                    color: AppConstants.primaryPurple,
+                                    color: AppColors.primary,
                                   ),
                                 ),
                                 validator: AppConstants.validateName,
@@ -243,7 +244,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                     children: [
                                       const Icon(
                                         Icons.cake_outlined,
-                                        color: AppConstants.primaryPurple,
+                                        color: AppColors.primary,
                                       ),
                                       const SizedBox(width: 12),
                                       Expanded(
@@ -267,7 +268,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                             vertical: 6,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: AppConstants.primaryPurple
+                                            color: AppColors.primary
                                                 .withOpacity(0.1),
                                             borderRadius:
                                                 BorderRadius.circular(20),
@@ -277,7 +278,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                             style: const TextStyle(
                                               fontSize: 14,
                                               fontWeight: FontWeight.w600,
-                                              color: AppConstants.primaryPurple,
+                                              color: AppColors.primary,
                                             ),
                                           ),
                                         ),
@@ -382,12 +383,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppConstants.primaryPurple.withOpacity(0.1)
+              ? AppColors.primary.withOpacity(0.1)
               : AppConstants.backgroundColor,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected
-                ? AppConstants.primaryPurple
+                ? AppColors.primary
                 : Colors.transparent,
             width: 2,
           ),
@@ -405,7 +406,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 fontSize: 14,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                 color:
-                    isSelected ? AppConstants.primaryPurple : AppConstants.textGrey,
+                    isSelected ? AppColors.primary : AppConstants.textGrey,
               ),
             ),
           ],

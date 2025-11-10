@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../utils/constants.dart';
 import '../../../widgets/custom_button.dart';
 import '../../../firebase_services.dart';
+import '../../constants/app_colors.dart';
 
 class InterestsScreen extends StatefulWidget {
   const InterestsScreen({super.key});
@@ -94,7 +95,7 @@ class _InterestsScreenState extends State<InterestsScreen> {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          gradient: AppConstants.primaryGradient,
+          gradient: AppColors.primaryGradient,
         ),
         child: SafeArea(
           child: Column(
@@ -239,12 +240,12 @@ class _InterestsScreenState extends State<InterestsScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppConstants.primaryPurple
+              ? AppColors.primary
               : AppConstants.backgroundColor,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isSelected
-                ? AppConstants.primaryPurple
+                ? AppColors.primary
                 : Colors.transparent,
             width: 2,
           ),
@@ -271,3 +272,4 @@ class _InterestsScreenState extends State<InterestsScreen> {
     );
   }
 }
+

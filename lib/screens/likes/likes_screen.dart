@@ -583,58 +583,23 @@ class _LikesScreenState extends State<LikesScreen>
   }
 
   void _showUserProfile(UserModel user) {
-    // You can navigate to ProfileDetailScreen here
-    // For now, just showing a simple dialog
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircleAvatar(
-                radius: 50,
-                backgroundImage: user.photos.isNotEmpty
-                    ? NetworkImage(user.photos[0])
-                    : null,
-                backgroundColor: const Color(0xFFFF6B9D),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                user.name,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              if (user.bio.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  user.bio,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey.shade600),
-                ),
-              ],
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF6B9D),
-                  minimumSize: const Size(double.infinity, 45),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(25),
-                  ),
-                ),
-                child: const Text('Close'),
-              ),
-            ],
-          ),
-        ),
-      ),
+    Navigator.pushNamed(
+      context,
+      '/profile-detail',
+      arguments: {
+        'user': user,
+        'onLike': () async {
+          await _likeBack(user);
+          Navigator.pop(context);
+        },
+        'onPass': () {
+          Navigator.pop(context);
+        },
+        'onSuperLike': () async {
+          await _likeBack(user);
+          Navigator.pop(context);
+        },
+      },
     );
   }
 }

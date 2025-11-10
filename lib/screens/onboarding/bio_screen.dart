@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../utils/constants.dart';
 import '../../../widgets/custom_button.dart';
 import '../../../firebase_services.dart';
+import '../../constants/app_colors.dart';
 
 class BioScreen extends StatefulWidget {
   const BioScreen({super.key});
@@ -90,7 +91,7 @@ class _BioScreenState extends State<BioScreen> {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          gradient: AppConstants.primaryGradient,
+          gradient: AppColors.primaryGradient,
         ),
         child: SafeArea(
           child: Column(

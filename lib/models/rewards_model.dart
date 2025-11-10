@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 class UserRewardsStats {
   final String userId;
@@ -65,6 +66,44 @@ class UserRewardsStats {
       'monthlyRank': monthlyRank,
       'lastUpdated': Timestamp.fromDate(lastUpdated),
     };
+  }
+
+  // For JSON encoding (used in SharedPreferences cache)
+  Map<String, dynamic> toJson() {
+    return {
+      'userId': userId,
+      'totalScore': totalScore,
+      'weeklyScore': weeklyScore,
+      'monthlyScore': monthlyScore,
+      'messagesSent': messagesSent,
+      'repliesGiven': repliesGiven,
+      'imagesSent': imagesSent,
+      'positiveFeedbackRatio': positiveFeedbackRatio,
+      'currentStreak': currentStreak,
+      'longestStreak': longestStreak,
+      'weeklyRank': weeklyRank,
+      'monthlyRank': monthlyRank,
+      'lastUpdated': lastUpdated.toIso8601String(), // Convert to string for JSON
+    };
+  }
+
+  // From JSON (used when loading from SharedPreferences cache)
+  factory UserRewardsStats.fromJson(Map<String, dynamic> json) {
+    return UserRewardsStats(
+      userId: json['userId'] ?? '',
+      totalScore: json['totalScore'] ?? 0,
+      weeklyScore: json['weeklyScore'] ?? 0,
+      monthlyScore: json['monthlyScore'] ?? 0,
+      messagesSent: json['messagesSent'] ?? 0,
+      repliesGiven: json['repliesGiven'] ?? 0,
+      imagesSent: json['imagesSent'] ?? 0,
+      positiveFeedbackRatio: (json['positiveFeedbackRatio'] ?? 0.0).toDouble(),
+      currentStreak: json['currentStreak'] ?? 0,
+      longestStreak: json['longestStreak'] ?? 0,
+      weeklyRank: json['weeklyRank'] ?? 0,
+      monthlyRank: json['monthlyRank'] ?? 0,
+      lastUpdated: DateTime.parse(json['lastUpdated'] ?? DateTime.now().toIso8601String()),
+    );
   }
 }
 
@@ -200,10 +239,14 @@ class RewardHistory {
 class ScoringRules {
   static const int messageSentPoints = 5;
   static const int replyGivenPoints = 10;
-  static const int imageSentPoints = 15;
+  static const int imageSentPoints = 30; // Updated: 30 points for sending image
   static const int positiveFeedbackPoints = 20;
-  static const int dailyStreakBonus = 25;
+  static const int dailyStreakBonus = 25; // Bonus for chatting daily with multiple people
   static const int weeklyStreakBonus = 100;
+  
+  // Streak bonus multipliers based on number of unique conversations per day
+  static const int streakBonusPerConversation = 5; // 5 points per unique person chatted with
+  static const int maxDailyConversationBonus = 50; // Max 50 points from conversations (10 people)
   
   static const int top1Reward = 1000;
   static const int top3Reward = 500;

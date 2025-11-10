@@ -7,6 +7,7 @@ import 'dart:io';
 import '../../../utils/constants.dart';
 import '../../../widgets/custom_button.dart';
 import '../../../firebase_services.dart';
+import '../../constants/app_colors.dart';
 
 class PhotoUploadScreen extends StatefulWidget {
   const PhotoUploadScreen({super.key});
@@ -87,7 +88,7 @@ class _PhotoUploadScreenState extends State<PhotoUploadScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.camera_alt, color: AppConstants.primaryPurple),
+              leading: const Icon(Icons.camera_alt, color: AppColors.primary),
               title: const Text('Take Photo'),
               onTap: () {
                 Navigator.pop(context);
@@ -95,7 +96,7 @@ class _PhotoUploadScreenState extends State<PhotoUploadScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.photo_library, color: AppConstants.primaryPurple),
+              leading: const Icon(Icons.photo_library, color: AppColors.primary),
               title: const Text('Choose from Gallery'),
               onTap: () {
                 Navigator.pop(context);
@@ -203,7 +204,7 @@ class _PhotoUploadScreenState extends State<PhotoUploadScreen> {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          gradient: AppConstants.primaryGradient,
+          gradient: AppColors.primaryGradient,
         ),
         child: SafeArea(
           child: Column(
@@ -281,7 +282,7 @@ class _PhotoUploadScreenState extends State<PhotoUploadScreen> {
                                 value: _uploadProgress,
                                 backgroundColor: AppConstants.backgroundColor,
                                 valueColor: const AlwaysStoppedAnimation(
-                                  AppConstants.primaryPurple,
+                                  AppColors.primary,
                                 ),
                               ),
                               const SizedBox(height: 8),
@@ -402,7 +403,7 @@ class _PhotoUploadScreenState extends State<PhotoUploadScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: AppConstants.primaryPurple,
+                color: AppColors.primary,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Text(
@@ -473,3 +474,4 @@ class _PhotoUploadScreenState extends State<PhotoUploadScreen> {
     );
   }
 }
+

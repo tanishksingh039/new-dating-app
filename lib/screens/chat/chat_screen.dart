@@ -1,7 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:io';
+import 'package:record/record.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:audioplayers/audioplayers.dart';
 import '../../firebase_services.dart';
+import '../../services/rewards_service.dart';
+import '../../models/user_model.dart';
 
 class ChatScreen extends StatefulWidget {
   final String currentUserId;
@@ -24,12 +32,168 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final ImagePicker _imagePicker = ImagePicker();
+  final RewardsService _rewardsService = RewardsService();
+  final AudioRecorder _audioRecorder = AudioRecorder();
   bool _isTyping = false;
+  bool _isUploading = false;
+  bool _isRecording = false;
+  bool _isCurrentUserFemale = false;
+  bool _isOtherUserMale = false;
+  bool _isCurrentUserVerified = false;
+  DateTime? _otherUserLastActive;
+  bool _otherUserShowOnlineStatus = true;
 
   @override
   void initState() {
     super.initState();
     _markAsRead();
+    _checkUserGender();
+  }
+
+  // Check if current user is female and other user is male
+  Future<void> _checkUserGender() async {
+    try {
+      // Check current user gender
+      final currentUserDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.currentUserId)
+          .get();
+      
+      // Check other user gender
+      final otherUserDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.otherUserId)
+          .get();
+      
+      if (currentUserDoc.exists && otherUserDoc.exists) {
+        final currentUserData = currentUserDoc.data();
+        final otherUserData = otherUserDoc.data();
+        
+        final currentGender = currentUserData?['gender'];
+        final otherGender = otherUserData?['gender'];
+        final isVerified = currentUserData?['isVerified'] ?? false;
+        
+        // Get other user's online status data
+        final otherUserLastActive = (otherUserData?['lastActive'] as Timestamp?)?.toDate();
+        final otherUserPrivacy = otherUserData?['privacySettings'] as Map<String, dynamic>? ?? {};
+        final showOnlineStatus = otherUserPrivacy['showOnlineStatus'] ?? true;
+        
+        debugPrint('Current user gender: $currentGender');
+        debugPrint('Other user gender: $otherGender');
+        debugPrint('Current user verified: $isVerified');
+        debugPrint('Other user last active: $otherUserLastActive');
+        debugPrint('Other user show online status: $showOnlineStatus');
+        
+        setState(() {
+          // Check for both 'Female' and 'female' (case-insensitive)
+          _isCurrentUserFemale = currentGender?.toString().toLowerCase() == 'female';
+          _isOtherUserMale = otherGender?.toString().toLowerCase() == 'male';
+          _isCurrentUserVerified = isVerified;
+          _otherUserLastActive = otherUserLastActive;
+          _otherUserShowOnlineStatus = showOnlineStatus;
+        });
+        
+        debugPrint('Is current user female: $_isCurrentUserFemale');
+        debugPrint('Is other user male: $_isOtherUserMale');
+        debugPrint('Is current user verified: $_isCurrentUserVerified');
+        debugPrint('Can earn points: ${_isCurrentUserFemale && _isOtherUserMale && _isCurrentUserVerified}');
+      } else {
+        debugPrint('User document(s) do not exist');
+      }
+    } catch (e) {
+      debugPrint('Error checking user gender: $e');
+    }
+  }
+
+  // Show verification required dialog
+  void _showVerificationDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(Icons.verified_user, color: Colors.blue, size: 28),
+            SizedBox(width: 12),
+            Text('Verification Required'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'You need to verify your account to earn points!',
+              style: TextStyle(fontSize: 16),
+            ),
+            SizedBox(height: 12),
+            Text(
+              'Benefits of verification:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 8),
+            _buildBenefit('✅ Earn points for messages'),
+            _buildBenefit('✅ Earn 30 points per image'),
+            _buildBenefit('✅ Appear on leaderboard'),
+            _buildBenefit('✅ Build trust with matches'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Later', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // Navigate to liveness verification in settings
+              Navigator.pushNamed(context, '/settings/verification');
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: Text('Verify Now', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBenefit(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Text(text, style: TextStyle(fontSize: 14)),
+    );
+  }
+
+  // Check if other user is online (active within last 5 minutes)
+  bool _isOtherUserOnline() {
+    if (_otherUserLastActive == null) return false;
+    final now = DateTime.now();
+    final difference = now.difference(_otherUserLastActive!);
+    return difference.inMinutes < 5;
+  }
+
+  // Get last seen text for other user
+  String _getOtherUserLastSeen() {
+    if (_otherUserLastActive == null) return '';
+    
+    final now = DateTime.now();
+    final difference = now.difference(_otherUserLastActive!);
+    
+    if (difference.inMinutes < 1) {
+      return 'Active just now';
+    } else if (difference.inMinutes < 60) {
+      return 'Active ${difference.inMinutes}m ago';
+    } else if (difference.inHours < 24) {
+      return 'Active ${difference.inHours}h ago';
+    } else if (difference.inDays < 7) {
+      return 'Active ${difference.inDays}d ago';
+    } else {
+      return 'Active long ago';
+    }
   }
 
   @override
@@ -56,13 +220,26 @@ class _ChatScreenState extends State<ChatScreen> {
 
     try {
       await FirebaseServices.sendMessage(
-        currentUserId: widget.currentUserId,
-        otherUserId: widget.otherUserId,
-        messageText: messageText,
+        widget.currentUserId,
+        widget.otherUserId,
+        messageText,
       );
 
       _messageController.clear();
       setState(() => _isTyping = false);
+
+      // Award points only if female, verified, and sending to male
+      if (_isCurrentUserFemale && _isOtherUserMale) {
+        if (_isCurrentUserVerified) {
+          await _rewardsService.awardMessagePoints(widget.currentUserId);
+          await _rewardsService.trackDailyConversation(widget.currentUserId, widget.otherUserId);
+          debugPrint('✅ Points awarded: Verified Female → Male message');
+        } else {
+          debugPrint('⚠️ No points: User not verified');
+        }
+      } else {
+        debugPrint('⏭️ No points: Not female→male conversation');
+      }
 
       Future.delayed(const Duration(milliseconds: 100), () {
         if (_scrollController.hasClients) {
@@ -83,6 +260,306 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         );
       }
+    }
+  }
+
+  // Pick and send image (only for female users)
+  Future<void> _pickAndSendImage() async {
+    debugPrint('Image button clicked. Is female: $_isCurrentUserFemale');
+    
+    if (!_isCurrentUserFemale) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Image sharing is only available for female users. Current status: $_isCurrentUserFemale'),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1920,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
+
+      if (image != null) {
+        await _uploadAndSendImage(File(image.path));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error picking image: $e'),
+            backgroundColor: Colors.red.shade400,
+          ),
+        );
+      }
+    }
+  }
+
+  // Upload image to Firebase Storage and send message
+  Future<void> _uploadAndSendImage(File imageFile) async {
+    setState(() => _isUploading = true);
+
+    try {
+      // Upload to Firebase Storage
+      final String fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final Reference storageRef = FirebaseStorage.instance
+          .ref()
+          .child('chat_images')
+          .child(widget.currentUserId)
+          .child(fileName);
+
+      final UploadTask uploadTask = storageRef.putFile(imageFile);
+      final TaskSnapshot snapshot = await uploadTask;
+      final String downloadUrl = await snapshot.ref.getDownloadURL();
+
+      // Get chat ID
+      final chatId = _getChatId(widget.currentUserId, widget.otherUserId);
+
+      // Send message with image
+      await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(chatId)
+          .collection('messages')
+          .add({
+        'senderId': widget.currentUserId,
+        'receiverId': widget.otherUserId,
+        'text': '',
+        'imageUrl': downloadUrl,
+        'timestamp': FieldValue.serverTimestamp(),
+        'read': false,
+      });
+
+      // Update last message in chat
+      await FirebaseFirestore.instance.collection('chats').doc(chatId).set({
+        'users': [widget.currentUserId, widget.otherUserId],
+        'lastMessage': '📷 Photo',
+        'lastMessageTime': FieldValue.serverTimestamp(),
+        'lastMessageSenderId': widget.currentUserId,
+      }, SetOptions(merge: true));
+
+      // Award 30 points only if female, verified, and sending to male
+      if (_isCurrentUserFemale && _isOtherUserMale) {
+        if (_isCurrentUserVerified) {
+          debugPrint('💰 About to award image points (Verified Female → Male)...');
+          try {
+            await _rewardsService.awardImagePoints(widget.currentUserId);
+            debugPrint('💰 Image points awarded successfully');
+            
+            await _rewardsService.trackDailyConversation(widget.currentUserId, widget.otherUserId);
+            debugPrint('💰 Daily conversation tracked');
+
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Image sent! +30 points earned ✅'),
+                  backgroundColor: Colors.green,
+                  behavior: SnackBarBehavior.floating,
+                  duration: Duration(seconds: 3),
+                ),
+              );
+            }
+          } catch (e) {
+            debugPrint('❌ Error awarding points: $e');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Image sent but error awarding points: $e'),
+                  backgroundColor: Colors.orange,
+                  behavior: SnackBarBehavior.floating,
+                  duration: const Duration(seconds: 5),
+                ),
+              );
+            }
+          }
+        } else {
+          debugPrint('⚠️ No points for image: User not verified');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Image sent! Verify your account to earn 30 points'),
+                backgroundColor: Colors.orange,
+                behavior: SnackBarBehavior.floating,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+        }
+      } else {
+        debugPrint('⏭️ No points for image: Not female→male conversation');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Image sent successfully'),
+              backgroundColor: Colors.blue,
+              behavior: SnackBarBehavior.floating,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+
+      // Scroll to bottom
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error uploading image: $e'),
+            backgroundColor: Colors.red.shade400,
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isUploading = false);
+    }
+  }
+
+  // Start audio recording
+  Future<void> _startRecording() async {
+    try {
+      if (await _audioRecorder.hasPermission()) {
+        final Directory appDocDir = await getApplicationDocumentsDirectory();
+        final String filePath = '${appDocDir.path}/audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        
+        await _audioRecorder.start(const RecordConfig(), path: filePath);
+        setState(() => _isRecording = true);
+        debugPrint('🎤 Recording started: $filePath');
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Microphone permission denied')),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Error starting recording: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error starting recording: $e')),
+        );
+      }
+    }
+  }
+
+  // Stop recording and send audio
+  Future<void> _stopRecordingAndSend() async {
+    try {
+      final String? audioPath = await _audioRecorder.stop();
+      setState(() => _isRecording = false);
+      
+      if (audioPath != null) {
+        debugPrint('🎤 Recording stopped: $audioPath');
+        await _sendAudioMessage(audioPath);
+      }
+    } catch (e) {
+      debugPrint('❌ Error stopping recording: $e');
+      setState(() => _isRecording = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error stopping recording: $e')),
+        );
+      }
+    }
+  }
+
+  // Cancel recording
+  Future<void> _cancelRecording() async {
+    try {
+      await _audioRecorder.stop();
+      setState(() => _isRecording = false);
+      debugPrint('🎤 Recording cancelled');
+    } catch (e) {
+      debugPrint('❌ Error cancelling recording: $e');
+    }
+  }
+
+  // Send audio message
+  Future<void> _sendAudioMessage(String audioPath) async {
+    setState(() => _isUploading = true);
+    
+    String storagePath = '';
+    try {
+      final File audioFile = File(audioPath);
+      final String fileName = 'audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      storagePath = 'chat_audio/${widget.currentUserId}/$fileName';
+      
+      debugPrint('📤 Uploading audio: $storagePath');
+      debugPrint('📤 User ID: ${widget.currentUserId}');
+      
+      // Upload to Firebase Storage with metadata
+      final ref = FirebaseStorage.instance.ref().child(storagePath);
+      final metadata = SettableMetadata(
+        contentType: 'audio/m4a',
+        customMetadata: {'uploadedBy': widget.currentUserId},
+      );
+      await ref.putFile(audioFile, metadata);
+      final String audioUrl = await ref.getDownloadURL();
+      
+      debugPrint('✅ Audio uploaded: $audioUrl');
+      
+      // Send message with audio URL
+      await FirebaseServices.sendMessage(
+        widget.currentUserId,
+        widget.otherUserId,
+        '',
+        audioUrl: audioUrl,
+      );
+      
+      // Delete local file
+      await audioFile.delete();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Audio sent successfully! 🎤'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      
+      // Scroll to bottom
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    } catch (e) {
+      debugPrint('❌ Error sending audio: $e');
+      debugPrint('❌ Error type: ${e.runtimeType}');
+      debugPrint('❌ Storage path attempted: $storagePath');
+      debugPrint('❌ Current user ID: ${widget.currentUserId}');
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error sending audio: ${e.toString().split(':').last}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isUploading = false);
     }
   }
 
@@ -171,9 +648,11 @@ class _ChatScreenState extends State<ChatScreen> {
                         if (showDateSeparator)
                           _buildDateSeparator(timestamp),
                         _buildMessageBubble(
-                          message['text'],
+                          message['text'] ?? '',
                           isMe,
                           timestamp,
+                          imageUrl: message['imageUrl'],
+                          audioUrl: message['audioUrl'],
                         ),
                       ],
                     );
@@ -237,27 +716,29 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
-                Row(
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: Colors.green,
-                        shape: BoxShape.circle,
+                // Online status - only show if user allows it
+                if (_otherUserShowOnlineStatus && _otherUserLastActive != null)
+                  Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: _isOtherUserOnline() ? Colors.green : Colors.grey,
+                          shape: BoxShape.circle,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 6),
-                    const Text(
-                      'Online',
-                      style: TextStyle(
-                        color: Colors.green,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
+                      const SizedBox(width: 6),
+                      Text(
+                        _isOtherUserOnline() ? 'Online' : _getOtherUserLastSeen(),
+                        style: TextStyle(
+                          color: _isOtherUserOnline() ? Colors.green : Colors.grey,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
               ],
             ),
           ),
@@ -285,7 +766,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildMessageBubble(String text, bool isMe, Timestamp? timestamp) {
+  Widget _buildMessageBubble(String text, bool isMe, Timestamp? timestamp, {String? imageUrl, String? audioUrl}) {
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -298,10 +779,9 @@ class _ChatScreenState extends State<ChatScreen> {
               isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
-              ),
+              padding: (imageUrl != null || audioUrl != null)
+                  ? const EdgeInsets.all(4)
+                  : const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 gradient: isMe
                     ? const LinearGradient(
@@ -323,14 +803,50 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ],
               ),
-              child: Text(
-                text,
-                style: TextStyle(
-                  color: isMe ? Colors.white : const Color(0xFF2D3142),
-                  fontSize: 15,
-                  height: 1.4,
-                ),
-              ),
+              child: audioUrl != null
+                  ? _buildAudioPlayer(audioUrl, isMe)
+                  : imageUrl != null
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Image.network(
+                            imageUrl,
+                            width: 200,
+                            height: 200,
+                            fit: BoxFit.cover,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Container(
+                                width: 200,
+                                height: 200,
+                                color: Colors.grey[300],
+                                child: Center(
+                                  child: CircularProgressIndicator(
+                                    value: loadingProgress.expectedTotalBytes != null
+                                        ? loadingProgress.cumulativeBytesLoaded /
+                                            loadingProgress.expectedTotalBytes!
+                                        : null,
+                                  ),
+                                ),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                width: 200,
+                                height: 200,
+                                color: Colors.grey[300],
+                                child: const Icon(Icons.error),
+                              );
+                            },
+                          ),
+                        )
+                      : Text(
+                          text,
+                          style: TextStyle(
+                            color: isMe ? Colors.white : const Color(0xFF2D3142),
+                            fontSize: 15,
+                            height: 1.4,
+                          ),
+                        ),
             ),
             if (timestamp != null)
               Padding(
@@ -392,32 +908,113 @@ class _ChatScreenState extends State<ChatScreen> {
                         maxLines: null,
                         textCapitalization: TextCapitalization.sentences,
                         onChanged: (value) {
-                          setState(() {
-                            _isTyping = value.trim().isNotEmpty;
-                          });
+                          final isTyping = value.trim().isNotEmpty;
+                          // Only update state if typing status actually changed
+                          if (_isTyping != isTyping) {
+                            setState(() {
+                              _isTyping = isTyping;
+                            });
+                          }
                         },
                         onSubmitted: (_) => _sendMessage(),
                       ),
                     ),
                     IconButton(
-                      icon: Icon(
-                        Icons.image_outlined,
-                        color: Colors.grey.shade600,
-                        size: 24,
-                      ),
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Image sharing coming soon!')),
-                        );
-                      },
+                      icon: _isUploading
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Icon(
+                              Icons.image_outlined,
+                              color: _isCurrentUserFemale 
+                                  ? const Color(0xFFFF6B9D)
+                                  : Colors.grey.shade400,
+                              size: 24,
+                            ),
+                      onPressed: _isUploading ? null : _pickAndSendImage,
                     ),
                   ],
                 ),
               ),
             ),
             const SizedBox(width: 8),
-            GestureDetector(
+            // Microphone or Send button
+            _isRecording
+                ? Row(
+                    children: [
+                      // Cancel button
+                      GestureDetector(
+                        onTap: _cancelRecording,
+                        child: Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade400,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.close,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Recording indicator
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 12,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Recording...',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Send button
+                      GestureDetector(
+                        onTap: _stopRecordingAndSend,
+                        child: Container(
+                          width: 48,
+                          height: 48,
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Color(0xFFFF6B9D), Color(0xFFFFA07A)],
+                            ),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.send,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : GestureDetector(
               onTap: _isTyping ? _sendMessage : null,
+              onLongPress: !_isTyping && !_isUploading ? _startRecording : null,
               child: Container(
                 width: 48,
                 height: 48,
@@ -557,6 +1154,49 @@ class _ChatScreenState extends State<ChatScreen> {
       final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       return '${months[date.month - 1]} ${date.day}, ${date.year}';
     }
+  }
+
+  // Generate chat ID from two user IDs (sorted alphabetically)
+  String _getChatId(String userId1, String userId2) {
+    final ids = [userId1, userId2]..sort();
+    return ids.join('_');
+  }
+
+  // Build audio player widget
+  Widget _buildAudioPlayer(String audioUrl, bool isMe) {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: Icon(
+              Icons.play_arrow,
+              color: isMe ? Colors.white : const Color(0xFFFF6B9D),
+              size: 32,
+            ),
+            onPressed: () async {
+              final player = AudioPlayer();
+              await player.play(UrlSource(audioUrl));
+            },
+          ),
+          const SizedBox(width: 8),
+          Icon(
+            Icons.graphic_eq,
+            color: isMe ? Colors.white70 : Colors.grey,
+            size: 24,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Voice message',
+            style: TextStyle(
+              color: isMe ? Colors.white : const Color(0xFF2D3142),
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

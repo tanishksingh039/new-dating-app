@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import '../models/rewards_model.dart';
 import '../models/user_model.dart';
 
@@ -46,13 +47,27 @@ class RewardsService {
     }
   }
 
-  // Get monthly leaderboard (top 10)
+  // Get real-time user stats stream
+  Stream<UserRewardsStats?> getUserStatsStream(String userId) {
+    return _firestore
+        .collection('rewards_stats')
+        .doc(userId)
+        .snapshots()
+        .map((snapshot) {
+      if (snapshot.exists) {
+        return UserRewardsStats.fromMap(snapshot.data()!);
+      }
+      return null;
+    });
+  }
+
+  // Get monthly leaderboard (top 20)
   Future<List<LeaderboardEntry>> getMonthlyLeaderboard() async {
     try {
       final snapshot = await _firestore
           .collection('rewards_stats')
           .orderBy('monthlyScore', descending: true)
-          .limit(10)
+          .limit(20)
           .get();
 
       List<LeaderboardEntry> leaderboard = [];
@@ -88,13 +103,13 @@ class RewardsService {
     }
   }
 
-  // Get weekly leaderboard
+  // Get weekly leaderboard (top 20)
   Future<List<LeaderboardEntry>> getWeeklyLeaderboard() async {
     try {
       final snapshot = await _firestore
           .collection('rewards_stats')
           .orderBy('weeklyScore', descending: true)
-          .limit(10)
+          .limit(20)
           .get();
 
       List<LeaderboardEntry> leaderboard = [];
@@ -177,7 +192,15 @@ class RewardsService {
 
   // Award points for image sent
   Future<void> awardImagePoints(String userId) async {
-    await _updateScore(userId, ScoringRules.imageSentPoints, 'imagesSent');
+    try {
+      debugPrint('🎯 Awarding image points to user: $userId');
+      debugPrint('📊 Points to award: ${ScoringRules.imageSentPoints}');
+      await _updateScore(userId, ScoringRules.imageSentPoints, 'imagesSent');
+      debugPrint('✅ Image points awarded successfully!');
+    } catch (e) {
+      debugPrint('❌ Error awarding image points: $e');
+      rethrow;
+    }
   }
 
   // Award points for positive feedback
@@ -188,12 +211,16 @@ class RewardsService {
   // Update score helper
   Future<void> _updateScore(String userId, int points, String? statField) async {
     try {
+      debugPrint('📝 Starting score update for user: $userId');
+      debugPrint('📝 Points: $points, Field: $statField');
+      
       final docRef = _firestore.collection('rewards_stats').doc(userId);
       
       await _firestore.runTransaction((transaction) async {
         final snapshot = await transaction.get(docRef);
         
         if (!snapshot.exists) {
+          debugPrint('🆕 Creating new stats document');
           // Create new stats
           final newStats = UserRewardsStats(
             userId: userId,
@@ -211,12 +238,17 @@ class RewardsService {
             lastUpdated: DateTime.now(),
           );
           transaction.set(docRef, newStats.toMap());
+          debugPrint('✅ New stats created: ${newStats.toMap()}');
         } else {
+          debugPrint('📊 Updating existing stats');
           final data = snapshot.data()!;
+          final oldTotal = data['totalScore'] ?? 0;
+          final oldMonthly = data['monthlyScore'] ?? 0;
+          
           final updates = {
-            'totalScore': (data['totalScore'] ?? 0) + points,
+            'totalScore': oldTotal + points,
             'weeklyScore': (data['weeklyScore'] ?? 0) + points,
-            'monthlyScore': (data['monthlyScore'] ?? 0) + points,
+            'monthlyScore': oldMonthly + points,
             'lastUpdated': Timestamp.now(),
           };
           
@@ -224,14 +256,23 @@ class RewardsService {
             updates[statField] = (data[statField] ?? 0) + 1;
           }
           
+          debugPrint('📈 Old total: $oldTotal, New total: ${oldTotal + points}');
+          debugPrint('📈 Old monthly: $oldMonthly, New monthly: ${oldMonthly + points}');
+          debugPrint('📝 Updates: $updates');
+          
           transaction.update(docRef, updates);
+          debugPrint('✅ Stats updated successfully');
         }
       });
       
+      debugPrint('🎉 Transaction completed successfully');
+      
       // Check for milestones and send notifications
       await _checkMilestones(userId);
-    } catch (e) {
-      print('Error updating score: $e');
+    } catch (e, stackTrace) {
+      debugPrint('❌ ERROR updating score: $e');
+      debugPrint('❌ Stack trace: $stackTrace');
+      rethrow;
     }
   }
 
@@ -289,6 +330,57 @@ class RewardsService {
       });
     } catch (e) {
       print('Error sending notification: $e');
+    }
+  }
+
+  // Track daily conversation with unique person
+  Future<void> trackDailyConversation(String userId, String otherUserId) async {
+    try {
+      final today = DateTime.now();
+      final dateKey = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      
+      final conversationRef = _firestore
+          .collection('daily_conversations')
+          .doc(userId)
+          .collection('dates')
+          .doc(dateKey);
+      
+      final conversationDoc = await conversationRef.get();
+      
+      if (!conversationDoc.exists) {
+        // First conversation of the day
+        await conversationRef.set({
+          'conversations': [otherUserId],
+          'date': Timestamp.now(),
+        });
+        await _awardConversationBonus(userId, 1);
+      } else {
+        final data = conversationDoc.data()!;
+        final conversations = List<String>.from(data['conversations'] ?? []);
+        
+        // Check if this is a new unique conversation
+        if (!conversations.contains(otherUserId)) {
+          conversations.add(otherUserId);
+          await conversationRef.update({'conversations': conversations});
+          
+          // Award bonus (max 10 unique conversations per day)
+          if (conversations.length <= 10) {
+            await _awardConversationBonus(userId, conversations.length);
+          }
+        }
+      }
+    } catch (e) {
+      print('Error tracking conversation: $e');
+    }
+  }
+
+  // Award conversation bonus points
+  Future<void> _awardConversationBonus(String userId, int conversationCount) async {
+    try {
+      final points = ScoringRules.streakBonusPerConversation;
+      await _updateScore(userId, points, null);
+    } catch (e) {
+      print('Error awarding conversation bonus: $e');
     }
   }
 

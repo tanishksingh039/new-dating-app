@@ -41,6 +41,9 @@ import 'screens/settings/account_settings_screen.dart';
 import 'screens/settings/privacy_settings_screen.dart';
 import 'screens/settings/notification_settings_screen.dart';
 
+// Screens - Verification
+import 'screens/verification/liveness_verification_screen.dart';
+
 // Models
 import 'models/user_model.dart';
 
@@ -135,6 +138,9 @@ class MyApp extends StatelessWidget {
         '/settings/account': (_) => const AccountSettingsScreen(),
         '/settings/privacy': (_) => const PrivacySettingsScreen(),
         '/settings/notifications': (_) => const NotificationSettingsScreen(),
+        
+        // Verification Routes
+        '/settings/verification': (_) => const LivenessVerificationScreen(),
       },
       onGenerateRoute: (settings) {
         // Handle chat screen with arguments
