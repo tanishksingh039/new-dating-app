@@ -4,6 +4,8 @@ import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:crypto/crypto.dart';
+import '../config/razorpay_config.dart';
 
 /// Service to handle Razorpay payment integration
 class PaymentService {
@@ -11,12 +13,9 @@ class PaymentService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // TODO: Replace with your actual backend URL
-  // For Firebase Cloud Functions: https://us-central1-YOUR_PROJECT_ID.cloudfunctions.net
-  static const String backendBaseUrl = 'YOUR_BACKEND_URL';
-  
-  // TODO: Replace with your Razorpay Test Key ID (from Razorpay Dashboard)
-  static const String razorpayKeyId = 'YOUR_RAZORPAY_KEY_ID';
+  // Razorpay credentials are now managed in RazorpayConfig
+  // Premium subscription price
+  static const int premiumPriceInPaise = 9900; // ₹99.00
 
   /// Initialize Razorpay with event handlers
   void init({
@@ -30,15 +29,13 @@ class PaymentService {
     _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, onExternalWallet);
   }
 
-  /// Start a payment flow
+  /// Start a payment flow (Test Mode - No Backend Required)
   /// 
-  /// [amountInPaise] - Amount in paise (e.g., 49900 for ₹499.00)
+  /// [amountInPaise] - Amount in paise (e.g., 9900 for ₹99.00)
   /// [description] - Description of the payment
-  /// [receipt] - Your internal reference/receipt ID
   Future<void> startPayment({
     required int amountInPaise,
     required String description,
-    String? receipt,
   }) async {
     try {
       final user = _auth.currentUser;
@@ -50,66 +47,45 @@ class PaymentService {
       final userDoc = await _firestore.collection('users').doc(user.uid).get();
       final userData = userDoc.data();
       
-      final userEmail = userData?['email'] ?? user.email ?? '';
       final userName = userData?['name'] ?? 'User';
-      final userContact = userData?['phone'] ?? '';
+      final userContact = userData?['phoneNumber'] ?? '';
 
-      // Generate receipt if not provided
-      final finalReceipt = receipt ?? 'rcpt_${DateTime.now().millisecondsSinceEpoch}';
-
-      // Create order on backend
-      final orderRes = await http.post(
-        Uri.parse('$backendBaseUrl/createOrder'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'amountInPaise': amountInPaise,
-          'currency': 'INR',
-          'receipt': finalReceipt,
-          'userId': user.uid,
-        }),
-      );
-
-      if (orderRes.statusCode != 200) {
-        throw Exception('Failed to create order: ${orderRes.body}');
-      }
-
-      final order = jsonDecode(orderRes.body);
-      final orderId = order['id'];
-
-      // Save order to Firestore for tracking
-      await _firestore.collection('payment_orders').doc(orderId).set({
-        'orderId': orderId,
+      // Generate unique receipt ID
+      final receipt = 'rcpt_${DateTime.now().millisecondsSinceEpoch}';
+      
+      // For test mode, we don't need backend order creation
+      // Razorpay will work in test mode without order_id
+      
+      // Save payment attempt to Firestore for tracking
+      final paymentRef = _firestore.collection('payment_orders').doc();
+      await paymentRef.set({
         'userId': user.uid,
         'amount': amountInPaise,
         'currency': 'INR',
-        'receipt': finalReceipt,
+        'receipt': receipt,
         'description': description,
-        'status': 'created',
+        'status': 'initiated',
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // Open Razorpay checkout
+      // Open Razorpay checkout (Test Mode)
       final options = {
-        'key': razorpayKeyId,
+        'key': RazorpayConfig.keyId,
         'amount': amountInPaise,
-        'currency': 'INR',
-        'name': 'CampusBound',
+        'currency': RazorpayConfig.currency,
+        'name': RazorpayConfig.appName,
         'description': description,
-        'order_id': orderId,
+        'receipt': receipt,
         'prefill': {
           'contact': userContact,
-          'email': userEmail,
           'name': userName,
         },
         'theme': {
-          'color': '#FF6B9D',
+          'color': RazorpayConfig.themeColor,
         },
-        'modal': {
-          'ondismiss': () {
-            if (kDebugMode) {
-              print('Payment dismissed by user');
-            }
-          }
+        'notes': {
+          'userId': user.uid,
+          'paymentRefId': paymentRef.id,
         }
       };
 
@@ -121,48 +97,139 @@ class PaymentService {
       rethrow;
     }
   }
+  
+  /// Start Premium Subscription Payment (₹99)
+  Future<void> startPremiumPayment() async {
+    await startPayment(
+      amountInPaise: premiumPriceInPaise,
+      description: 'Premium Subscription - Unlock all features',
+    );
+  }
 
-  /// Verify payment signature on backend
+  /// Verify payment signature
+  /// This ensures the payment response is authentic and from Razorpay
+  bool verifyPaymentSignature({
+    required String orderId,
+    required String paymentId,
+    required String signature,
+  }) {
+    try {
+      // Create the signature verification string
+      final data = '$orderId|$paymentId';
+      
+      // Generate HMAC SHA256 signature
+      final key = utf8.encode(RazorpayConfig.keySecret);
+      final bytes = utf8.encode(data);
+      final hmac = Hmac(sha256, key);
+      final digest = hmac.convert(bytes);
+      final generatedSignature = digest.toString();
+      
+      // Compare signatures
+      return generatedSignature == signature;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error verifying signature: $e');
+      }
+      return false;
+    }
+  }
+
+  /// Handle successful payment with signature verification
+  Future<void> handlePaymentSuccess({
+    required String paymentId,
+    String? orderId,
+    String? signature,
+  }) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return;
+
+      // Verify signature if available (for production)
+      bool isVerified = true;
+      if (orderId != null && signature != null) {
+        isVerified = verifyPaymentSignature(
+          orderId: orderId,
+          paymentId: paymentId,
+          signature: signature,
+        );
+        
+        if (!isVerified) {
+          if (kDebugMode) {
+            print('Payment signature verification failed');
+          }
+          throw Exception('Payment verification failed');
+        }
+      }
+
+      // Update user's premium status
+      await _firestore.collection('users').doc(user.uid).update({
+        'isPremium': true,
+        'premiumActivatedAt': FieldValue.serverTimestamp(),
+        'lastPaymentId': paymentId,
+      });
+
+      // Log successful payment
+      await _firestore.collection('payment_orders').add({
+        'userId': user.uid,
+        'paymentId': paymentId,
+        'orderId': orderId,
+        'signature': signature,
+        'amount': premiumPriceInPaise,
+        'status': 'success',
+        'verified': isVerified,
+        'completedAt': FieldValue.serverTimestamp(),
+      });
+
+      if (kDebugMode) {
+        print('Payment successful: $paymentId');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error handling payment success: $e');
+      }
+      rethrow;
+    }
+  }
+
+  /// Verify payment (for backend verification)
   Future<bool> verifyPayment({
     required String orderId,
     required String paymentId,
     required String signature,
   }) async {
-    try {
-      final verifyRes = await http.post(
-        Uri.parse('$backendBaseUrl/verifyPayment'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'razorpay_order_id': orderId,
-          'razorpay_payment_id': paymentId,
-          'razorpay_signature': signature,
-        }),
+    // For test mode, verify locally
+    if (RazorpayConfig.isTestMode) {
+      return verifyPaymentSignature(
+        orderId: orderId,
+        paymentId: paymentId,
+        signature: signature,
       );
-
-      if (verifyRes.statusCode != 200) {
-        return false;
-      }
-
-      final body = jsonDecode(verifyRes.body);
-      final isValid = body['valid'] == true;
-
-      if (isValid) {
-        // Update order status in Firestore
-        await _firestore.collection('payment_orders').doc(orderId).update({
-          'status': 'success',
-          'paymentId': paymentId,
-          'signature': signature,
-          'completedAt': FieldValue.serverTimestamp(),
-        });
-
-        // Update user's premium status or credits
-        final user = _auth.currentUser;
-        if (user != null) {
-          await _updateUserAfterPayment(user.uid, orderId);
-        }
-      }
-
-      return isValid;
+    }
+    
+    // For production, you should verify on your backend
+    // This is a placeholder for backend verification
+    try {
+      // TODO: Replace with your backend API endpoint
+      // final response = await http.post(
+      //   Uri.parse('YOUR_BACKEND_URL/verify-payment'),
+      //   body: json.encode({
+      //     'orderId': orderId,
+      //     'paymentId': paymentId,
+      //     'signature': signature,
+      //   }),
+      //   headers: {'Content-Type': 'application/json'},
+      // );
+      // 
+      // if (response.statusCode == 200) {
+      //   final data = json.decode(response.body);
+      //   return data['verified'] == true;
+      // }
+      
+      return verifyPaymentSignature(
+        orderId: orderId,
+        paymentId: paymentId,
+        signature: signature,
+      );
     } catch (e) {
       if (kDebugMode) {
         print('Error verifying payment: $e');
@@ -171,39 +238,6 @@ class PaymentService {
     }
   }
 
-  /// Update user's premium status or credits after successful payment
-  Future<void> _updateUserAfterPayment(String userId, String orderId) async {
-    try {
-      final orderDoc = await _firestore.collection('payment_orders').doc(orderId).get();
-      final orderData = orderDoc.data();
-      
-      if (orderData != null) {
-        final amount = orderData['amount'] as int;
-        final description = orderData['description'] as String;
-
-        // Example: Add premium status or credits based on amount
-        if (description.contains('Premium')) {
-          await _firestore.collection('users').doc(userId).update({
-            'isPremium': true,
-            'premiumExpiresAt': Timestamp.fromDate(
-              DateTime.now().add(const Duration(days: 30)),
-            ),
-            'lastPaymentAt': FieldValue.serverTimestamp(),
-          });
-        } else if (description.contains('Credits')) {
-          // Add credits logic
-          await _firestore.collection('users').doc(userId).update({
-            'credits': FieldValue.increment(amount ~/ 100), // Example: 1 credit per rupee
-            'lastPaymentAt': FieldValue.serverTimestamp(),
-          });
-        }
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error updating user after payment: $e');
-      }
-    }
-  }
 
   /// Mark payment as failed in Firestore
   Future<void> markPaymentFailed({

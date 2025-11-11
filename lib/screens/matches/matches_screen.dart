@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../models/user_model.dart';
 import '../../services/match_service.dart';
 import '../chat/chat_screen.dart';
+import '../../widgets/premium_lock_overlay.dart';
 
 class MatchesScreen extends StatefulWidget {
   const MatchesScreen({Key? key}) : super(key: key);
@@ -17,11 +19,34 @@ class _MatchesScreenState extends State<MatchesScreen> {
   final MatchService _matchService = MatchService();
   List<UserModel> _matches = [];
   bool _loading = true;
+  bool _isPremium = false;
 
   @override
   void initState() {
     super.initState();
+    _checkPremiumStatus();
     _loadMatches();
+  }
+
+  Future<void> _checkPremiumStatus() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      
+      if (doc.exists) {
+        final userData = doc.data();
+        setState(() {
+          _isPremium = userData?['isPremium'] ?? false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error checking premium status: $e');
+    }
   }
 
   Future<void> _loadMatches() async {
@@ -44,6 +69,19 @@ class _MatchesScreenState extends State<MatchesScreen> {
         _matches = [];
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _refreshMatches() async {
+    await _loadMatches();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Matches refreshed!'),
+          duration: Duration(seconds: 1),
+          backgroundColor: Color(0xFFFF6B9D),
+        ),
+      );
     }
   }
 
@@ -85,7 +123,11 @@ class _MatchesScreenState extends State<MatchesScreen> {
           ),
         ],
       ),
-      body: _buildBody(),
+      body: RefreshIndicator(
+        onRefresh: _refreshMatches,
+        color: const Color(0xFFFF6B9D),
+        child: _buildBody(),
+      ),
     );
   }
 
@@ -93,6 +135,14 @@ class _MatchesScreenState extends State<MatchesScreen> {
     if (_loading) {
       return const Center(
         child: CircularProgressIndicator(color: Color(0xFFFF6B9D)),
+      );
+    }
+
+    // Show lock overlay for free users
+    if (!_isPremium) {
+      return const PremiumLockOverlay(
+        featureName: 'Matches',
+        icon: Icons.people,
       );
     }
 

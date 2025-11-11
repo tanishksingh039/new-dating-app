@@ -5,10 +5,14 @@ import '../../models/user_model.dart';
 import '../../models/discovery_filters.dart';
 import '../../services/discovery_service.dart';
 import '../../services/match_service.dart';
+import '../../services/swipe_limit_service.dart';
 import '../../widgets/profile_card.dart';
 import '../../widgets/action_buttons.dart';
 import '../../widgets/animated_card.dart'; // Import TinderSwipeCard
+import '../../widgets/swipe_limit_indicator.dart';
+import '../../widgets/purchase_swipes_dialog.dart';
 import '../../constants/app_colors.dart';
+import '../../mixins/screenshot_protection_mixin.dart';
 import 'match_dialog.dart';
 import 'filters_dialog.dart';
 
@@ -19,9 +23,11 @@ class SwipeableDiscoveryScreen extends StatefulWidget {
   State<SwipeableDiscoveryScreen> createState() => _SwipeableDiscoveryScreenState();
 }
 
-class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen> {
+class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen> 
+    with ScreenshotProtectionMixin {
   final DiscoveryService _discoveryService = DiscoveryService();
   final MatchService _matchService = MatchService();
+  final SwipeLimitService _swipeLimitService = SwipeLimitService();
   
   List<UserModel> _profiles = [];
   List<UserModel> _allProfiles = []; // Store all loaded profiles for looping
@@ -31,6 +37,7 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen> {
   DiscoveryFilters _filters = DiscoveryFilters();
   Set<String> _swipedProfileIds = {}; // Track swiped profiles in current session
   bool _isCurrentUserVerified = false;
+  bool _isPremium = false;
 
   @override
   void initState() {
@@ -40,7 +47,7 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen> {
     _loadProfiles();
   }
 
-  // Check if current user is verified
+  // Check if current user is verified and premium status
   Future<void> _checkUserVerification() async {
     if (_currentUserId == null) return;
     
@@ -53,12 +60,15 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen> {
       if (userDoc.exists) {
         final userData = userDoc.data();
         final isVerified = userData?['isVerified'] ?? false;
+        final isPremium = userData?['isPremium'] ?? false;
         
         setState(() {
           _isCurrentUserVerified = isVerified;
+          _isPremium = isPremium;
         });
         
         debugPrint('User verified status: $_isCurrentUserVerified');
+        debugPrint('User premium status: $_isPremium');
       }
     } catch (e) {
       debugPrint('Error checking verification: $e');
@@ -120,6 +130,14 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  // Show purchase swipes dialog for non-premium users
+  void _showPurchaseSwipesDialog() async {
+    showDialog(
+      context: context,
+      builder: (context) => PurchaseSwipesDialog(isPremium: _isPremium),
     );
   }
 
@@ -284,6 +302,25 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen> {
     }
   }
 
+  Future<void> _refreshProfiles() async {
+    setState(() {
+      _allProfiles.clear();
+      _swipedProfileIds.clear();
+      _currentIndex = 0;
+    });
+    await _loadProfiles();
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profiles refreshed!'),
+          duration: Duration(seconds: 1),
+          backgroundColor: AppColors.primary,
+        ),
+      );
+    }
+  }
+
   Future<void> _openFiltersDialog() async {
     final result = await showDialog<DiscoveryFilters>(
       context: context,
@@ -303,13 +340,33 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen> {
   Future<void> _handleSwipe(String action) async {
     if (_currentUserId == null || _currentIndex >= _profiles.length) return;
     
+    // Check swipe limit BEFORE swiping
+    final canSwipe = await _swipeLimitService.canSwipe();
+    if (!canSwipe) {
+      // Show purchase dialog for non-premium users
+      if (!_isPremium) {
+        _showPurchaseSwipesDialog();
+      }
+      return;
+    }
+    
     final currentProfile = _profiles[_currentIndex];
+    
+    // Use a swipe
+    final swipeUsed = await _swipeLimitService.useSwipe();
+    if (!swipeUsed) {
+      // Swipe limit reached, show purchase dialog
+      if (!_isPremium) {
+        _showPurchaseSwipesDialog();
+      }
+      return;
+    }
     
     // Track swiped profile
     _swipedProfileIds.add(currentProfile.uid);
 
-    // Show verification popup on like (left swipe) if not verified
-    if (action == 'like' && !_isCurrentUserVerified) {
+    // Show verification popup on like (right swipe) if not verified AND non-premium
+    if (action == 'like' && !_isCurrentUserVerified && !_isPremium) {
       Future.delayed(const Duration(milliseconds: 300), () {
         if (mounted) {
           _showVerificationDialog();
@@ -404,6 +461,9 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen> {
           ),
         ),
         actions: [
+          // Swipe limit indicator
+          SwipeLimitIndicator(),
+          const SizedBox(width: 8),
           Stack(
             children: [
               IconButton(
@@ -427,7 +487,11 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen> {
           ),
         ],
       ),
-      body: _buildBody(),
+      body: RefreshIndicator(
+        onRefresh: _refreshProfiles,
+        color: AppColors.primary,
+        child: _buildBody(),
+      ),
     );
   }
 
@@ -618,8 +682,8 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen> {
                   Positioned.fill(
                     child: TinderSwipeCard(
                       key: ValueKey('${currentProfile.uid}_$_currentIndex'), // Unique key for each card
-                      onSwipeLeft: () => _handleSwipe('like'),
-                      onSwipeRight: () => _handleSwipe('pass'),
+                      onSwipeLeft: () => _handleSwipe('pass'),
+                      onSwipeRight: () => _handleSwipe('like'),
                       onSwipeUp: () => _handleSwipe('superlike'),
                       child: GestureDetector(
                         onTap: () {

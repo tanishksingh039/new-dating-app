@@ -131,6 +131,19 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
     }
   }
 
+  Future<void> _refreshData() async {
+    await _loadData();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Rewards refreshed!'),
+          duration: Duration(seconds: 1),
+          backgroundColor: Colors.purple,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(

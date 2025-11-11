@@ -88,14 +88,39 @@ class _LikesScreenState extends State<LikesScreen>
         final likes = snapshot.data?.docs ?? [];
 
         if (likes.isEmpty) {
-          return _buildEmptyState(
-            icon: Icons.favorite_border,
-            title: 'No likes yet',
-            subtitle: 'Keep swiping to find your matches!',
+          return RefreshIndicator(
+            onRefresh: () async {
+              setState(() {}); // Trigger rebuild
+              await Future.delayed(const Duration(milliseconds: 500));
+            },
+            color: const Color(0xFFFF6B9D),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
+                    child: _buildEmptyState(
+                      icon: Icons.favorite_border,
+                      title: 'No likes yet',
+                      subtitle: 'Keep swiping to find your matches!',
+                    ),
+                  ),
+                );
+              },
+            ),
           );
         }
 
-        return GridView.builder(
+        return RefreshIndicator(
+          onRefresh: () async {
+            setState(() {}); // Trigger rebuild
+            await Future.delayed(const Duration(milliseconds: 500));
+          },
+          color: const Color(0xFFFF6B9D),
+          child: GridView.builder(
           padding: const EdgeInsets.all(16),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
@@ -130,6 +155,7 @@ class _LikesScreenState extends State<LikesScreen>
               },
             );
           },
+        ),
         );
       },
     );
@@ -157,14 +183,39 @@ class _LikesScreenState extends State<LikesScreen>
         final likes = snapshot.data?.docs ?? [];
 
         if (likes.isEmpty) {
-          return _buildEmptyState(
-            icon: Icons.favorite,
-            title: 'No likes sent',
-            subtitle: 'Start swiping to like people!',
+          return RefreshIndicator(
+            onRefresh: () async {
+              setState(() {}); // Trigger rebuild
+              await Future.delayed(const Duration(milliseconds: 500));
+            },
+            color: const Color(0xFFFF6B9D),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
+                    child: _buildEmptyState(
+                      icon: Icons.favorite,
+                      title: 'No likes sent',
+                      subtitle: 'Start swiping to like people!',
+                    ),
+                  ),
+                );
+              },
+            ),
           );
         }
 
-        return GridView.builder(
+        return RefreshIndicator(
+          onRefresh: () async {
+            setState(() {}); // Trigger rebuild
+            await Future.delayed(const Duration(milliseconds: 500));
+          },
+          color: const Color(0xFFFF6B9D),
+          child: GridView.builder(
           padding: const EdgeInsets.all(16),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
@@ -199,6 +250,7 @@ class _LikesScreenState extends State<LikesScreen>
               },
             );
           },
+        ),
         );
       },
     );

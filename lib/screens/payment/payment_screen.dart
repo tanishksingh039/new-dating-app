@@ -20,41 +20,19 @@ class _PaymentScreenState extends State<PaymentScreen> {
     {
       'name': 'Premium 1 Month',
       'description': 'Unlock all premium features',
-      'amount': 49900, // ₹499.00 in paise
-      'displayAmount': '₹499',
+      'amount': 9900, // ₹99.00 in paise
+      'displayAmount': '₹99',
       'features': [
+        '20 free swipes daily',
         'Unlimited likes',
         'See who liked you',
         'Advanced filters',
+        'No verification after swipes',
+        'Better swipe packages (₹20 for 10 swipes)',
         'Priority support',
-      ],
-      'popular': false,
-    },
-    {
-      'name': 'Premium 3 Months',
-      'description': 'Best value for serious daters',
-      'amount': 119900, // ₹1199.00 in paise
-      'displayAmount': '₹1,199',
-      'features': [
-        'All 1-month features',
-        '20% discount',
-        'Boost profile weekly',
-        'VIP badge',
+        'Ad-free experience',
       ],
       'popular': true,
-    },
-    {
-      'name': 'Premium 6 Months',
-      'description': 'Maximum savings',
-      'amount': 199900, // ₹1999.00 in paise
-      'displayAmount': '₹1,999',
-      'features': [
-        'All 3-month features',
-        '33% discount',
-        'Boost profile daily',
-        'Exclusive events access',
-      ],
-      'popular': false,
     },
   ];
 
@@ -75,9 +53,16 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   void _handlePaymentSuccess(PaymentSuccessResponse response) async {
+    if (!mounted) return;
+    
     setState(() => _isProcessing = true);
 
     try {
+      // Small delay to ensure Razorpay UI is dismissed
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      if (!mounted) return;
+
       // Verify payment on backend
       final isValid = await _paymentService.verifyPayment(
         orderId: response.orderId ?? '',
@@ -85,30 +70,48 @@ class _PaymentScreenState extends State<PaymentScreen> {
         signature: response.signature ?? '',
       );
 
+      if (!mounted) return;
+      
       setState(() => _isProcessing = false);
 
-      if (isValid && mounted) {
-        _showSuccessDialog();
-      } else if (mounted) {
-        _showErrorDialog('Payment verification failed. Please contact support.');
+      if (isValid) {
+        // Update user premium status immediately
+        await _paymentService.handlePaymentSuccess(
+          paymentId: response.paymentId ?? '',
+          orderId: response.orderId,
+          signature: response.signature,
+        );
+        
+        if (mounted) {
+          _showSuccessDialog();
+        }
+      } else {
+        if (mounted) {
+          _showErrorDialog('Payment verification failed. Please contact support.');
+        }
       }
     } catch (e) {
+      if (!mounted) return;
+      
       setState(() => _isProcessing = false);
-      if (mounted) {
-        _showErrorDialog('Error verifying payment: $e');
-      }
+      _showErrorDialog('Error verifying payment: $e');
     }
   }
 
   void _handlePaymentError(PaymentFailureResponse response) {
-    setState(() => _isProcessing = false);
+    if (!mounted) return;
     
-    if (mounted) {
+    // Small delay to ensure Razorpay UI is dismissed
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      
+      setState(() => _isProcessing = false);
+      
       _showErrorDialog(
         'Payment failed: ${response.message ?? "Unknown error"}\n'
         'Code: ${response.code ?? "N/A"}',
       );
-    }
+    });
   }
 
   void _handleExternalWallet(ExternalWalletResponse response) {
@@ -126,28 +129,39 @@ class _PaymentScreenState extends State<PaymentScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Column(
-          children: [
-            Icon(Icons.check_circle, color: Colors.green, size: 64),
-            SizedBox(height: 16),
-            Text('Payment Successful!', textAlign: TextAlign.center),
+      builder: (context) => WillPopScope(
+        onWillPop: () async => false,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Column(
+            children: [
+              Icon(Icons.check_circle, color: Colors.green, size: 64),
+              SizedBox(height: 16),
+              Text('Payment Successful!', textAlign: TextAlign.center),
+            ],
+          ),
+          content: const Text(
+            'Your premium features are now active. Enjoy!',
+            textAlign: TextAlign.center,
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // Close dialog
+                Navigator.of(context).pop(); // Go back to previous screen
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text('Done', style: TextStyle(fontSize: 16)),
+            ),
           ],
         ),
-        content: const Text(
-          'Your premium features are now active. Enjoy!',
-          textAlign: TextAlign.center,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop(); // Close dialog
-              Navigator.of(context).pop(); // Go back to previous screen
-            },
-            child: const Text('Done'),
-          ),
-        ],
       ),
     );
   }
@@ -189,11 +203,18 @@ class _PaymentScreenState extends State<PaymentScreen> {
         amountInPaise: plan['amount'],
         description: plan['name'],
       );
+      
+      // Reset processing state after a delay if Razorpay doesn't trigger callbacks
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted && _isProcessing) {
+          setState(() => _isProcessing = false);
+        }
+      });
     } catch (e) {
+      if (!mounted) return;
+      
       setState(() => _isProcessing = false);
-      if (mounted) {
-        _showErrorDialog('Error initiating payment: $e');
-      }
+      _showErrorDialog('Error initiating payment: $e');
     }
   }
 

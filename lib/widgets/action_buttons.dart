@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
+import '../screens/payment/payment_screen.dart';
+import '../screens/spotlight/spotlight_booking_screen.dart';
 
 class ActionButtons extends StatelessWidget {
   final VoidCallback onPass;
@@ -28,13 +30,7 @@ class ActionButtons extends StatelessWidget {
             color: AppColors.warmPeach,
             size: 50,
             onTap: () {
-              // TODO: Implement rewind (premium feature)
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Rewind is a premium feature'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
+              _showPremiumDialog(context, 'Rewind');
             },
             isPremium: true,
           ),
@@ -47,13 +43,8 @@ class ActionButtons extends StatelessWidget {
             onTap: isProcessing ? null : onPass,
           ),
 
-          // Super like button
-          _buildActionButton(
-            icon: Icons.star,
-            color: AppColors.deepPurplePink,
-            size: 55,
-            onTap: isProcessing ? null : onSuperLike,
-          ),
+          // Spotlight button (replaces super like)
+          _buildSpotlightButton(context),
 
           // Like button
           _buildActionButton(
@@ -69,17 +60,95 @@ class ActionButtons extends StatelessWidget {
             color: AppColors.shadowyPurple,
             size: 50,
             onTap: () {
-              // TODO: Implement boost (premium feature)
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Boost is a premium feature'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
+              _showPremiumDialog(context, 'Boost');
             },
             isPremium: true,
           ),
         ],
+      ),
+    );
+  }
+
+  void _showPremiumDialog(BuildContext context, String feature) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(Icons.workspace_premium, color: Colors.amber[700], size: 28),
+            const SizedBox(width: 12),
+            const Text('Premium Feature'),
+          ],
+        ),
+        content: const Text(
+          'Do you want to avail Premium?\n\nUpgrade now to unlock exclusive features like unlimited swipes, advanced filters, and much more!',
+          style: TextStyle(fontSize: 16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Maybe Later'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const PaymentScreen(),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text('Upgrade Now'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSpotlightButton(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const SpotlightBookingScreen(),
+          ),
+        );
+      },
+      child: Container(
+        width: 55,
+        height: 55,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFFA500).withOpacity(0.4),
+              blurRadius: 15,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: const Center(
+          child: Icon(
+            Icons.star,
+            color: Colors.white,
+            size: 28,
+          ),
+        ),
       ),
     );
   }

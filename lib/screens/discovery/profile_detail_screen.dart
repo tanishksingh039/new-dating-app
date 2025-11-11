@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/user_model.dart';
 import '../../widgets/action_buttons.dart';
+import '../../mixins/screenshot_protection_mixin.dart';
 
 class ProfileDetailScreen extends StatefulWidget {
   final UserModel user;
@@ -21,7 +22,8 @@ class ProfileDetailScreen extends StatefulWidget {
   State<ProfileDetailScreen> createState() => _ProfileDetailScreenState();
 }
 
-class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
+class _ProfileDetailScreenState extends State<ProfileDetailScreen>
+    with ScreenshotProtectionMixin {
   final PageController _pageController = PageController();
   int _currentPhotoIndex = 0;
 

@@ -191,10 +191,10 @@ class TinderSwipeCardState extends State<TinderSwipeCard>
     final isQuickSwipe = velocity.distance > 300;
 
     if (_dragOffset.dx > horizontalThreshold || (isQuickSwipe && velocity.dx > 300)) {
-      // Swipe right - LIKE
+      // Swipe right - Triggers onSwipeRight callback
       _animateCardOff(const Offset(1.5, 0.3), () => widget.onSwipeRight?.call());
     } else if (_dragOffset.dx < -horizontalThreshold || (isQuickSwipe && velocity.dx < -300)) {
-      // Swipe left - PASS/REJECT
+      // Swipe left - Triggers onSwipeLeft callback
       _animateCardOff(const Offset(-1.5, 0.3), () => widget.onSwipeLeft?.call());
     } else if (_dragOffset.dy < -verticalThreshold || (isQuickSwipe && velocity.dy < -300)) {
       // Swipe up - SUPER LIKE

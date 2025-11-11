@@ -10,6 +10,8 @@ import 'package:audioplayers/audioplayers.dart';
 import '../../firebase_services.dart';
 import '../../services/rewards_service.dart';
 import '../../models/user_model.dart';
+import '../../widgets/premium_lock_overlay.dart';
+import '../../mixins/screenshot_protection_mixin.dart';
 
 class ChatScreen extends StatefulWidget {
   final String currentUserId;
@@ -29,7 +31,8 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen>
+    with ScreenshotProtectionMixin {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _imagePicker = ImagePicker();
@@ -1201,8 +1204,47 @@ class _ChatScreenState extends State<ChatScreen> {
 }
 
 // Conversations list with actual data
-class ConversationsScreen extends StatelessWidget {
+class ConversationsScreen extends StatefulWidget {
   const ConversationsScreen({Key? key}) : super(key: key);
+
+  @override
+  State<ConversationsScreen> createState() => _ConversationsScreenState();
+}
+
+class _ConversationsScreenState extends State<ConversationsScreen> {
+  bool _isPremium = false;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkPremiumStatus();
+  }
+
+  Future<void> _checkPremiumStatus() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      setState(() => _loading = false);
+      return;
+    }
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      
+      if (doc.exists) {
+        final userData = doc.data();
+        setState(() {
+          _isPremium = userData?['isPremium'] ?? false;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      setState(() => _loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1237,57 +1279,72 @@ class ConversationsScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('matches')
-            .where('users', arrayContains: currentUserId)
-            .orderBy('lastMessageTime', descending: true)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(color: Color(0xFFFF6B9D)),
-            );
-          }
+      body: _buildBody(currentUserId),
+    );
+  }
 
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          }
+  Widget _buildBody(String currentUserId) {
+    if (_loading) {
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFFFF6B9D)),
+      );
+    }
 
-          final matches = snapshot.data?.docs ?? [];
+    // Show lock overlay for free users
+    if (!_isPremium) {
+      return const PremiumLockOverlay(
+        featureName: 'Chat',
+        icon: Icons.chat_bubble,
+      );
+    }
 
-          if (matches.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.chat_bubble_outline_rounded,
-                    size: 80,
-                    color: Colors.grey.shade400,
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('matches')
+          .where('users', arrayContains: currentUserId)
+          .orderBy('lastMessageTime', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: Color(0xFFFF6B9D)),
+          );
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.chat_bubble_outline_rounded,
+                  size: 80,
+                  color: Colors.grey.shade400,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No conversations yet',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade700,
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No conversations yet',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey.shade700,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Start matching to begin chatting!',
-                    style: TextStyle(color: Colors.grey.shade500),
-                  ),
-                ],
-              ),
-            );
-          }
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Start matching to begin chatting!',
+                  style: TextStyle(color: Colors.grey.shade500),
+                ),
+              ],
+            ),
+          );
+        }
 
-          return ListView.builder(
-            itemCount: matches.length,
-            itemBuilder: (context, index) {
+        final matches = snapshot.data!.docs;
+
+        return ListView.builder(
+          itemCount: matches.length,
+          itemBuilder: (context, index) {
               final matchData = matches[index].data() as Map<String, dynamic>;
               final users = matchData['users'] as List<dynamic>;
               final otherUserId = users.firstWhere(
@@ -1329,8 +1386,7 @@ class ConversationsScreen extends StatelessWidget {
               );
             },
           );
-        },
-      ),
+      },
     );
   }
 

@@ -5,9 +5,11 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:animate_do/animate_do.dart';
 import '../../models/user_model.dart';
 import '../../services/match_service.dart';
+import '../../widgets/spotlight_status_widget.dart';
 import 'edit_profile_screen.dart';
 import 'profile_preview_screen.dart';
 import '../settings/settings_screen.dart';
+import '../payment/payment_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -68,6 +70,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _refreshProfile() async {
+    await _loadUserData();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profile refreshed!'),
+          duration: Duration(seconds: 1),
+          backgroundColor: Colors.pink,
+        ),
+      );
+    }
+  }
+
   int _calculateProfileCompletion(UserModel user) {
     int completed = 0;
     int total = 7;
@@ -99,7 +114,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       backgroundColor: Colors.grey[100],
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : CustomScrollView(
+          : RefreshIndicator(
+              onRefresh: _refreshProfile,
+              color: Colors.pink,
+              child: CustomScrollView(
               slivers: [
                 _buildAppBar(),
                 SliverToBoxAdapter(
@@ -107,6 +125,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     children: [
                       _buildProfileHeader(),
                       const SizedBox(height: 10),
+                      const SpotlightStatusWidget(),
                       _buildStatsSection(),
                       const SizedBox(height: 10),
                       _buildCompletionSection(),
@@ -120,6 +139,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ],
             ),
+          ),
     );
   }
 
@@ -411,9 +431,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               'Upgrade to Premium',
               'Unlock exclusive features',
               () {
-                // TODO: Navigate to premium screen
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Premium features coming in Phase 4!')),
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const PaymentScreen(),
+                  ),
                 );
               },
               trailingColor: Colors.amber[700],
