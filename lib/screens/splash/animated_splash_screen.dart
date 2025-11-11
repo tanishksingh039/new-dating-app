@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
-import '../../widgets/app_logo.dart';
 import '../../constants/app_colors.dart';
 
 class AnimatedSplashScreen extends StatefulWidget {
@@ -12,40 +11,30 @@ class AnimatedSplashScreen extends StatefulWidget {
 
 class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
     with TickerProviderStateMixin {
-  late AnimationController _pulseController;
-  late AnimationController _rotateController;
-  late Animation<double> _pulseAnimation;
-  late Animation<double> _rotateAnimation;
+  late AnimationController _zoomController;
+  late Animation<double> _zoomAnimation;
 
   @override
   void initState() {
     super.initState();
 
-    // Pulse animation
-    _pulseController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
+    // Smooth zoom in/out animation
+    _zoomController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
       vsync: this,
     )..repeat(reverse: true);
 
-    _pulseAnimation = Tween<double>(begin: 0.9, end: 1.1).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
-
-    // Rotate animation
-    _rotateController = AnimationController(
-      duration: const Duration(seconds: 3),
-      vsync: this,
-    )..repeat();
-
-    _rotateAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _rotateController, curve: Curves.linear),
+    _zoomAnimation = Tween<double>(begin: 0.85, end: 1.15).animate(
+      CurvedAnimation(
+        parent: _zoomController,
+        curve: Curves.easeInOut,
+      ),
     );
   }
 
   @override
   void dispose() {
-    _pulseController.dispose();
-    _rotateController.dispose();
+    _zoomController.dispose();
     super.dispose();
   }
 
@@ -58,86 +47,34 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
         ),
         child: Stack(
           children: [
-            // Animated circles in background
-            Positioned(
-              top: -100,
-              right: -100,
-              child: FadeInDown(
-                duration: const Duration(milliseconds: 1000),
-                child: AnimatedBuilder(
-                  animation: _rotateAnimation,
-                  builder: (context, child) {
-                    return Transform.rotate(
-                      angle: _rotateAnimation.value * 2 * 3.14159,
-                      child: Container(
-                        width: 300,
-                        height: 300,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.1),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: -150,
-              left: -150,
-              child: FadeInUp(
-                duration: const Duration(milliseconds: 1000),
-                child: AnimatedBuilder(
-                  animation: _rotateAnimation,
-                  builder: (context, child) {
-                    return Transform.rotate(
-                      angle: -_rotateAnimation.value * 2 * 3.14159,
-                      child: Container(
-                        width: 400,
-                        height: 400,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.05),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-
             // Main content
             Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Animated logo
+                  // Animated love logo with zoom in/out
                   ZoomIn(
-                    duration: const Duration(milliseconds: 800),
+                    duration: const Duration(milliseconds: 1000),
                     child: AnimatedBuilder(
-                      animation: _pulseAnimation,
+                      animation: _zoomAnimation,
                       builder: (context, child) {
                         return Transform.scale(
-                          scale: _pulseAnimation.value,
+                          scale: _zoomAnimation.value,
                           child: Container(
-                            padding: const EdgeInsets.all(30),
                             decoration: BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.2),
-                                  blurRadius: 30,
-                                  offset: const Offset(0, 15),
+                                  color: Colors.white.withOpacity(0.3),
+                                  blurRadius: 40,
+                                  spreadRadius: 10,
                                 ),
                               ],
                             ),
-                            child: const ClipOval(
-                              child: AppLogo(
-                                width: 120,
-                                height: 120,
-                                fit: BoxFit.cover,
-                              ),
+                            child: Image.asset(
+                              'assets/logo/Picsart_25-11-11_22-30-10-727.png',
+                              width: 200,
+                              height: 200,
+                              fit: BoxFit.contain,
                             ),
                           ),
                         );
