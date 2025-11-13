@@ -7,6 +7,7 @@ import '../../firebase_services.dart';
 import '../../widgets/app_logo.dart';
 import '../../constants/app_colors.dart';
 import '../../services/location_service.dart';
+import '../admin/admin_login_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -22,11 +23,111 @@ class _LoginScreenState extends State<LoginScreen> {
   final LocationService _locationService = LocationService();
   bool _isLoading = false;
   String _countryCode = "+91";
+  
+  // Admin access variables
+  int _logoTapCount = 0;
+  DateTime? _lastLogoTap;
+  bool _showAdminHint = false;
 
   void _log(String message) {
     if (kDebugMode) {
       debugPrint('[LoginScreen] $message');
     }
+  }
+
+  /// Handle logo tap for admin access
+  /// Requires 7 taps within 10 seconds to reveal admin access
+  void _onLogoTap() {
+    final now = DateTime.now();
+    
+    // Reset counter if more than 10 seconds have passed
+    if (_lastLogoTap != null && now.difference(_lastLogoTap!).inSeconds > 10) {
+      _logoTapCount = 0;
+    }
+    
+    _logoTapCount++;
+    _lastLogoTap = now;
+    
+    if (_logoTapCount >= 7) {
+      setState(() {
+        _showAdminHint = true;
+      });
+      
+      // Show admin access dialog
+      _showAdminAccessDialog();
+      
+      // Reset counter
+      _logoTapCount = 0;
+    } else if (_logoTapCount >= 3) {
+      // Show subtle hint after 3 taps
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${7 - _logoTapCount} more taps...'),
+          duration: const Duration(milliseconds: 800),
+          backgroundColor: Colors.grey.shade700,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  /// Show admin access confirmation dialog
+  void _showAdminAccessDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: const Color(0xFF1A1A2E),
+        title: Row(
+          children: [
+            Icon(
+              Icons.admin_panel_settings,
+              color: Colors.red.shade400,
+              size: 28,
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Admin Access',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          'You have discovered the admin panel access.\nProceed to admin login?',
+          style: TextStyle(
+            color: Colors.white70,
+            fontSize: 16,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: Colors.grey.shade400),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const AdminLoginScreen(),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade600,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Access Admin'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -423,29 +524,32 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Animated logo with bounce
+                  // Animated logo with bounce (tappable for admin access)
                   Bounce(
                     delay: const Duration(milliseconds: 200),
                     child: ZoomIn(
                       duration: const Duration(milliseconds: 1000),
-                      child: Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.2),
-                              blurRadius: 20,
-                              offset: const Offset(0, 10),
+                      child: GestureDetector(
+                        onTap: _onLogoTap,
+                        child: Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 20,
+                                offset: const Offset(0, 10),
+                              ),
+                            ],
+                          ),
+                          child: const ClipOval(
+                            child: AppLogo(
+                              width: 80,
+                              height: 80,
+                              fit: BoxFit.cover,
                             ),
-                          ],
-                        ),
-                        child: const ClipOval(
-                          child: AppLogo(
-                            width: 80,
-                            height: 80,
-                            fit: BoxFit.cover,
                           ),
                         ),
                       ),

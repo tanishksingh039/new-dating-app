@@ -14,6 +14,25 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
     
+    // Admin access function - checks for admin email patterns
+    function isAdmin() {
+      return isAuthenticated() && 
+             (request.auth.token.email != null && 
+              (request.auth.token.email.matches('.*admin.*@campusbound\\.com') ||
+               request.auth.token.email in [
+                 'admin@campusbound.com',
+                 'support@campusbound.com',
+                 'analytics@campusbound.com',
+                 'finance@campusbound.com'
+               ]));
+    }
+    
+    // Super admin function for critical operations
+    function isSuperAdmin() {
+      return isAuthenticated() && 
+             request.auth.token.email == 'admin@campusbound.com';
+    }
+    
     // Users collection
     match /users/{userId} {
       // Anyone authenticated can read user profiles (for discovery)
