@@ -22,11 +22,14 @@ class AdminDashboardCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Debug print to check what value is being passed
+    print('📊 [DashboardCard] Rendering: $title = $value');
+    
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 140, // Increased height for better visibility
-        padding: const EdgeInsets.all(20), // Increased padding
+        height: 160, // Further increased height to fully show content
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -72,21 +75,24 @@ class AdminDashboardCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 12), // Increased spacing
+            const SizedBox(height: 8), // Reduced spacing
             Flexible(
               child: Text(
-                value,
+                value.isEmpty ? '0' : value, // Fallback to '0' if empty
                 style: const TextStyle(
-                  fontSize: 28, // Increased font size for main value
+                  fontSize: 24, // Reduced font size to prevent overflow
                   fontWeight: FontWeight.bold,
                   color: Colors.black87,
+                  fontFamily: 'Roboto', // Explicitly set font family
+                  letterSpacing: 0.5, // Add letter spacing for better readability
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
+                textDirection: TextDirection.ltr, // Ensure left-to-right rendering
               ),
             ),
             if (subtitle != null) ...[
-              const SizedBox(height: 6), // Increased spacing
+              const SizedBox(height: 4), // Reduced spacing
               Flexible(
                 child: Text(
                   subtitle!,

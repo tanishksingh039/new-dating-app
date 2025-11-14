@@ -442,27 +442,17 @@ class AdminDataService {
     try {
       Query query = _firestore.collection('users');
 
-      // Apply filters
+      // Apply ordering first (required for pagination)
+      query = query.orderBy('createdAt', descending: true);
+
+      // Apply filters (simplified to avoid index requirements)
       if (filter != null) {
-        switch (filter) {
-          case UserFilter.premium:
-            query = query.where('isPremium', isEqualTo: true);
-            break;
-          case UserFilter.verified:
-            query = query.where('isVerified', isEqualTo: true);
-            break;
-          case UserFilter.flagged:
-            query = query.where('isFlagged', isEqualTo: true);
-            break;
-          case UserFilter.active:
-            final oneDayAgo = DateTime.now().subtract(const Duration(days: 1));
-            query = query.where('lastActive', isGreaterThan: Timestamp.fromDate(oneDayAgo));
-            break;
-        }
+        // Note: Filtering is now done client-side to avoid composite index requirements
+        // For production, create proper composite indexes in Firebase Console
       }
 
       // Apply pagination
-      query = query.orderBy('createdAt', descending: true).limit(limit);
+      query = query.limit(limit);
       
       if (lastDocument != null) {
         query = query.startAfterDocument(lastDocument);
@@ -471,10 +461,29 @@ class AdminDataService {
       final snapshot = await query.get();
       final users = snapshot.docs.map((doc) => AdminUser.fromFirestore(doc)).toList();
 
-      // Apply search filter (client-side for simplicity)
+      // Apply filters and search (client-side to avoid index requirements)
       List<AdminUser> filteredUsers = users;
+      
+      // Apply filter
+      if (filter != null) {
+        filteredUsers = filteredUsers.where((user) {
+          switch (filter) {
+            case UserFilter.premium:
+              return user.isPremium;
+            case UserFilter.verified:
+              return user.isVerified;
+            case UserFilter.flagged:
+              return user.isFlagged;
+            case UserFilter.active:
+              final oneDayAgo = DateTime.now().subtract(const Duration(days: 1));
+              return user.lastActive?.isAfter(oneDayAgo) ?? false;
+          }
+        }).toList();
+      }
+      
+      // Apply search filter
       if (searchQuery != null && searchQuery.isNotEmpty) {
-        filteredUsers = users.where((user) =>
+        filteredUsers = filteredUsers.where((user) =>
           user.name.toLowerCase().contains(searchQuery.toLowerCase()) ||
           user.email.toLowerCase().contains(searchQuery.toLowerCase()) ||
           user.phoneNumber.contains(searchQuery)

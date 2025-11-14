@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../../../services/admin_data_service.dart';
+import '../../../models/admin_models.dart';
 
 /// Admin Statistics Chart Widget
 /// Displays various analytics charts for the admin panel
@@ -139,11 +139,11 @@ class AdminStatsChart extends StatelessWidget {
                 minX: 0,
                 maxX: growthData.length.toDouble() - 1,
                 minY: 0,
-                maxY: growthData.map((e) => e.newUsers).reduce((a, b) => a > b ? a : b).toDouble() + 1,
+                maxY: growthData.map((e) => e.count).reduce((a, b) => a > b ? a : b).toDouble() + 1,
                 lineBarsData: [
                   LineChartBarData(
                     spots: growthData.asMap().entries.map((entry) {
-                      return FlSpot(entry.key.toDouble(), entry.value.newUsers.toDouble());
+                      return FlSpot(entry.key.toDouble(), entry.value.count.toDouble());
                     }).toList(),
                     isCurved: true,
                     gradient: LinearGradient(

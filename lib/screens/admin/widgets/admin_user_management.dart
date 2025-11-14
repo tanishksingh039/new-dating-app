@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../../services/admin_data_service.dart';
+import '../../../services/admin_real_data_service.dart';
+import '../../../models/admin_models.dart';
 import '../../../constants/app_colors.dart';
 
 /// Admin User Management Widget
@@ -66,7 +67,7 @@ class _AdminUserManagementState extends State<AdminUserManagement> {
     });
 
     try {
-      final result = await AdminDataService.getUsers(
+      final result = await AdminRealDataService.getUsers(
         limit: 20,
         lastDocument: refresh ? null : _lastDocument,
         searchQuery: _searchQuery.isEmpty ? null : _searchQuery,
@@ -140,7 +141,7 @@ class _AdminUserManagementState extends State<AdminUserManagement> {
 
     if (confirm == true) {
       try {
-        await AdminDataService.toggleUserBlock(user.id, !user.isBlocked);
+        await AdminRealDataService.toggleUserBlock(user.id, !user.isBlocked);
         widget.onUserAction('User ${user.isBlocked ? 'unblocked' : 'blocked'} successfully');
         _loadUsers(refresh: true);
       } catch (e) {
@@ -173,7 +174,7 @@ class _AdminUserManagementState extends State<AdminUserManagement> {
 
     if (confirm == true) {
       try {
-        await AdminDataService.deleteUser(user.id);
+        await AdminRealDataService.deleteUser(user.id);
         widget.onUserAction('User deleted successfully');
         _loadUsers(refresh: true);
       } catch (e) {

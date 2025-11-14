@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/admin_auth_service.dart';
-import '../../services/admin_data_service.dart';
+import '../../../services/admin_real_data_service.dart';
+import '../../models/admin_models.dart';
 import '../../constants/app_colors.dart';
 import 'widgets/admin_dashboard_card.dart';
 import 'widgets/admin_stats_chart.dart';
@@ -25,7 +26,7 @@ class AdminPanelScreen extends StatefulWidget {
 class _AdminPanelScreenState extends State<AdminPanelScreen>
     with TickerProviderStateMixin {
   late TabController _tabController;
-  bool _isLoading = true;
+  bool _isLoading = false; // Start with false since we have default data
   String? _errorMessage;
   
   // Analytics data with default values
@@ -52,8 +53,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
     activeUsers: 2,
     totalPointsDistributed: 120,
     topUsers: [
-      LeaderboardUser(userId: 'user1', name: 'Ajay KuMaR', monthlyScore: 85, totalScore: 85),
-      LeaderboardUser(userId: 'user2', name: 'Riya', monthlyScore: 35, totalScore: 35),
+      LeaderboardUser(userId: 'user1', name: 'Ajay KuMaR', monthlyScore: 85, totalScore: 85, photoUrl: null),
+      LeaderboardUser(userId: 'user2', name: 'Riya', monthlyScore: 35, totalScore: 35, photoUrl: null),
     ],
   );
   PaymentAnalytics? _paymentAnalytics = PaymentAnalytics(
@@ -77,8 +78,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 5, vsync: this);
-    // Set loading to false initially since we have default data
-    _isLoading = false;
     _loadAnalytics();
   }
 
@@ -89,28 +88,49 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
   }
 
   Future<void> _loadAnalytics() async {
-    // Don't show loading state since we have default data
+    print('🔄 [AdminPanel] REFRESH BUTTON PRESSED - Loading analytics data...');
+    
+    // Clear any previous error messages
     setState(() {
       _errorMessage = null;
     });
 
     try {
       // Load analytics with individual error handling
-      final userAnalytics = await AdminDataService.getUserAnalytics();
-      final spotlightAnalytics = await AdminDataService.getSpotlightAnalytics();
-      final rewardsAnalytics = await AdminDataService.getRewardsAnalytics();
-      final paymentAnalytics = await AdminDataService.getPaymentAnalytics();
-      final storageAnalytics = await AdminDataService.getStorageAnalytics();
+      print('📊 [AdminPanel] Starting API calls...');
+      
+      final userAnalytics = await AdminRealDataService.getUserAnalytics();
+      print('[AdminPanel] User Analytics: ${userAnalytics.totalUsers} users');
+      
+      final spotlightAnalytics = await AdminRealDataService.getSpotlightAnalytics();
+      print('[AdminPanel] Spotlight Analytics: ${spotlightAnalytics.totalBookings} bookings');
+      
+      final rewardsAnalytics = await AdminRealDataService.getRewardsAnalytics();
+      print('[AdminPanel] Rewards Analytics: ${rewardsAnalytics.totalUsers} users');
+      
+      final paymentAnalytics = await AdminRealDataService.getPaymentAnalytics();
+      print('[AdminPanel] Payment Analytics: ₹${paymentAnalytics.totalRevenue}');
+      
+      final storageAnalytics = await AdminRealDataService.getStorageAnalytics();
+      print('[AdminPanel] Storage Analytics: ${storageAnalytics.totalSizeGB} GB');
 
       setState(() {
+        // Update with real data from Firestore
+        print('🔄 [State] Updating state with real data...');
+        
         _userAnalytics = userAnalytics;
         _spotlightAnalytics = spotlightAnalytics;
         _rewardsAnalytics = rewardsAnalytics;
         _paymentAnalytics = paymentAnalytics;
         _storageAnalytics = storageAnalytics;
         _isLoading = false;
+        
+        print('✅ [State] All analytics updated successfully!');
       });
+      
+      print('[AdminPanel] Analytics loaded successfully!');
     } catch (e) {
+      print('[AdminPanel] Error loading analytics: $e');
       // If all fails, use fallback data
       setState(() {
         _userAnalytics = UserAnalytics(
@@ -136,8 +156,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
           activeUsers: 2,
           totalPointsDistributed: 120,
           topUsers: [
-            LeaderboardUser(userId: 'user1', name: 'Ajay KuMaR', monthlyScore: 85, totalScore: 85),
-            LeaderboardUser(userId: 'user2', name: 'Riya', monthlyScore: 35, totalScore: 35),
+            LeaderboardUser(userId: 'user1', name: 'Ajay KuMaR', monthlyScore: 85, totalScore: 85, photoUrl: null),
+            LeaderboardUser(userId: 'user2', name: 'Riya', monthlyScore: 35, totalScore: 35, photoUrl: null),
           ],
         );
         _paymentAnalytics = PaymentAnalytics(
@@ -301,9 +321,34 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
           ),
           // Refresh button
           IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadAnalytics,
-            tooltip: 'Refresh Data',
+            icon: _isLoading 
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Icon(Icons.refresh),
+            onPressed: _isLoading ? null : () async {
+              print('🔄 [UI] Refresh button tapped!');
+              HapticFeedback.lightImpact(); // Add haptic feedback
+              setState(() {
+                _isLoading = true;
+              });
+              await _loadAnalytics();
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Data refreshed successfully!'),
+                    duration: Duration(seconds: 2),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              }
+            },
+            tooltip: _isLoading ? 'Refreshing...' : 'Refresh Data',
           ),
           // Logout button
           IconButton(
@@ -382,21 +427,48 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                 _buildStorageTab(),
               ],
             ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _isLoading ? null : () async {
+          print('🔄 [FAB] Refresh button tapped!');
+          HapticFeedback.lightImpact();
+          setState(() {
+            _isLoading = true;
+          });
+          await _loadAnalytics();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Data refreshed successfully!'),
+                duration: Duration(seconds: 2),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        },
+        backgroundColor: _isLoading ? Colors.grey : AppColors.primary,
+        child: _isLoading 
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : const Icon(Icons.refresh, color: Colors.white),
+        tooltip: _isLoading ? 'Refreshing...' : 'Refresh Data',
+      ),
     );
   }
 
   Widget _buildDashboardTab() {
-    if (_userAnalytics == null) {
-      return const Center(child: Text('Loading analytics data...'));
-    }
-    
-    // Debug logging
-    print('Dashboard Data:');
-    print('Total Users: ${_userAnalytics!.totalUsers}');
-    print('Premium Users: ${_userAnalytics!.premiumUsers}');
-    print('Daily Active: ${_userAnalytics!.dailyActiveUsers}');
-    print('Payment Analytics: ${_paymentAnalytics?.totalRevenue}');
-    print('Spotlight Analytics: ${_spotlightAnalytics?.totalBookings}');
+    // Debug logging for UI display
+    print('🖥️ [UI] Building Dashboard with current data:');
+    print('   Total Users: ${_userAnalytics?.totalUsers ?? 0}');
+    print('   Premium Users: ${_userAnalytics?.premiumUsers ?? 0}');
+    print('   Daily Active: ${_userAnalytics?.dailyActiveUsers ?? 0}');
+    print('   Payment Revenue: ₹${_paymentAnalytics?.totalRevenue ?? 0}');
+    print('   Spotlight Bookings: ${_spotlightAnalytics?.totalBookings ?? 0}');
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -446,32 +518,32 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
             physics: const NeverScrollableScrollPhysics(),
             crossAxisSpacing: 16,
             mainAxisSpacing: 16,
-            childAspectRatio: 1.6, // Adjusted aspect ratio for larger cards
+            childAspectRatio: 1.3, // Further adjusted for taller cards
             children: [
               AdminDashboardCard(
                 title: 'Total Users',
-                value: '${_userAnalytics?.totalUsers ?? 0}',
+                value: (_userAnalytics?.totalUsers ?? 0).toString(),
                 icon: Icons.people,
                 color: Colors.blue,
                 subtitle: '${_userAnalytics?.dailyActiveUsers ?? 0} active today',
               ),
               AdminDashboardCard(
                 title: 'Premium Users',
-                value: '${_userAnalytics?.premiumUsers ?? 0}',
+                value: (_userAnalytics?.premiumUsers ?? 0).toString(),
                 icon: Icons.star,
                 color: Colors.amber,
                 subtitle: '${_userAnalytics != null && _userAnalytics!.totalUsers > 0 ? ((_userAnalytics!.premiumUsers / _userAnalytics!.totalUsers) * 100).toStringAsFixed(1) : '0.0'}% conversion',
               ),
               AdminDashboardCard(
                 title: 'Total Revenue',
-                value: '₹${_paymentAnalytics?.totalRevenue?.toStringAsFixed(0) ?? '0'}',
+                value: '₹${(_paymentAnalytics?.totalRevenue ?? 0.0).toStringAsFixed(0)}',
                 icon: Icons.currency_rupee,
                 color: Colors.green,
                 subtitle: '${_paymentAnalytics?.successfulTransactions ?? 0} transactions',
               ),
               AdminDashboardCard(
                 title: 'Spotlight Bookings',
-                value: '${_spotlightAnalytics?.totalBookings ?? 0}',
+                value: (_spotlightAnalytics?.totalBookings ?? 0).toString(),
                 icon: Icons.flash_on,
                 color: Colors.orange,
                 subtitle: '${_spotlightAnalytics?.activeBookings ?? 0} active',
@@ -507,8 +579,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                 const SizedBox(height: 16),
                 _buildHealthIndicator(
                   'User Activity',
-                  _userAnalytics!.dailyActiveUsers > 0,
-                  '${_userAnalytics!.dailyActiveUsers} users active today',
+                  (_userAnalytics?.dailyActiveUsers ?? 0) > 0,
+                  '${_userAnalytics?.dailyActiveUsers ?? 0} users active today',
                 ),
                 _buildHealthIndicator(
                   'Payment System',
@@ -518,7 +590,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                 _buildHealthIndicator(
                   'Storage Usage',
                   (_storageAnalytics?.totalSizeGB ?? 0) < 10, // Assuming 10GB limit
-                  '${_storageAnalytics?.totalSizeGB.toStringAsFixed(2) ?? '0'} GB used',
+                  '${(_storageAnalytics?.totalSizeGB ?? 0.0).toStringAsFixed(2)} GB used',
                 ),
               ],
             ),
@@ -605,11 +677,11 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
             physics: const NeverScrollableScrollPhysics(),
             crossAxisSpacing: 16,
             mainAxisSpacing: 16,
-            childAspectRatio: 1.6, // Adjusted for larger cards
+            childAspectRatio: 1.3, // Further adjusted for taller cards
             children: [
               AdminDashboardCard(
                 title: 'Total Revenue',
-                value: '₹${analytics.totalRevenue.toStringAsFixed(0)}',
+                value: '₹${(analytics.totalRevenue).toStringAsFixed(0)}',
                 icon: Icons.currency_rupee,
                 color: Colors.green,
                 subtitle: 'All time earnings',
@@ -619,7 +691,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                 value: '${analytics.totalTransactions > 0 ? ((analytics.successfulTransactions / analytics.totalTransactions) * 100).toStringAsFixed(1) : '0.0'}%',
                 icon: Icons.check_circle,
                 color: Colors.blue,
-                subtitle: '${analytics.successfulTransactions}/${analytics.totalTransactions}',
+                subtitle: '${analytics.successfulTransactions}/${analytics.totalTransactions} transactions',
               ),
             ],
           ),
@@ -650,26 +722,38 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                   ),
                 ),
                 const SizedBox(height: 16),
-                ..._paymentAnalytics!.paymentMethods.entries.map(
-                  (entry) => Padding(
+                if (analytics.paymentMethods.isEmpty)
+                  Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          entry.key.toUpperCase(),
-                          style: const TextStyle(fontWeight: FontWeight.w500),
-                        ),
-                        Text(
-                          entry.value.toString(),
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
+                    child: Text(
+                      'No payment methods data available',
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  )
+                else
+                  ...analytics.paymentMethods.entries.map(
+                    (entry) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            entry.key.toUpperCase(),
+                            style: const TextStyle(fontWeight: FontWeight.w500),
                           ),
-                        ),
-                      ],
+                          Text(
+                            entry.value.toString(),
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
           ),
@@ -701,21 +785,21 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
             physics: const NeverScrollableScrollPhysics(),
             crossAxisSpacing: 16,
             mainAxisSpacing: 16,
-            childAspectRatio: 1.6, // Adjusted for larger cards
+            childAspectRatio: 1.3, // Further adjusted for taller cards
             children: [
               AdminDashboardCard(
                 title: 'Total Storage',
-                value: '${analytics.totalSizeGB.toStringAsFixed(2)} GB',
+                value: '${(analytics.totalSizeGB).toStringAsFixed(2)} GB',
                 icon: Icons.storage,
                 color: Colors.purple,
                 subtitle: '${analytics.totalFiles} files',
               ),
               AdminDashboardCard(
                 title: 'User Photos',
-                value: analytics.userPhotos.toString(),
+                value: (analytics.userPhotos).toString(),
                 icon: Icons.photo,
                 color: Colors.blue,
-                subtitle: '${analytics.userPhotosSizeGB.toStringAsFixed(2)} GB',
+                subtitle: '${(analytics.userPhotosSizeGB).toStringAsFixed(2)} GB',
               ),
             ],
           ),
@@ -748,14 +832,14 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                 const SizedBox(height: 16),
                 _buildStorageItem(
                   'User Photos',
-                  _storageAnalytics!.userPhotos,
-                  _storageAnalytics!.userPhotosSizeGB,
+                  _storageAnalytics?.userPhotos ?? 0,
+                  _storageAnalytics?.userPhotosSizeGB ?? 0.0,
                   Colors.blue,
                 ),
                 _buildStorageItem(
                   'Chat Images',
-                  _storageAnalytics!.chatImages,
-                  _storageAnalytics!.chatImagesSizeGB,
+                  _storageAnalytics?.chatImages ?? 0,
+                  _storageAnalytics?.chatImagesSizeGB ?? 0.0,
                   Colors.green,
                 ),
               ],
