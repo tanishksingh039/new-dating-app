@@ -12,6 +12,9 @@ import '../../services/rewards_service.dart';
 import '../../models/user_model.dart';
 import '../../widgets/premium_lock_overlay.dart';
 import '../../mixins/screenshot_protection_mixin.dart';
+import '../safety/report_user_screen.dart';
+import '../safety/block_user_screen.dart';
+import '../../services/user_safety_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final String currentUserId;
@@ -228,13 +231,15 @@ class _ChatScreenState extends State<ChatScreen>
         messageText,
       );
 
-      _messageController.clear();
-      setState(() => _isTyping = false);
-
-      // Award points only if female, verified, and sending to male
+      // Award points only if female, verified, and sending to male (before clearing message)
       if (_isCurrentUserFemale && _isOtherUserMale) {
         if (_isCurrentUserVerified) {
-          await _rewardsService.awardMessagePoints(widget.currentUserId);
+          final chatId = _getChatId(widget.currentUserId, widget.otherUserId);
+          await _rewardsService.awardMessagePoints(
+            widget.currentUserId,
+            chatId,
+            messageText, // Use the saved messageText before it was cleared
+          );
           await _rewardsService.trackDailyConversation(widget.currentUserId, widget.otherUserId);
           debugPrint('✅ Points awarded: Verified Female → Male message');
         } else {
@@ -243,6 +248,9 @@ class _ChatScreenState extends State<ChatScreen>
       } else {
         debugPrint('⏭️ No points: Not female→male conversation');
       }
+
+      _messageController.clear();
+      setState(() => _isTyping = false);
 
       Future.delayed(const Duration(milliseconds: 100), () {
         if (_scrollController.hasClients) {
@@ -346,12 +354,37 @@ class _ChatScreenState extends State<ChatScreen>
         'lastMessageSenderId': widget.currentUserId,
       }, SetOptions(merge: true));
 
-      // Award 30 points only if female, verified, and sending to male
+      // Award image points only if female, verified, and sending to male
       if (_isCurrentUserFemale && _isOtherUserMale) {
         if (_isCurrentUserVerified) {
           debugPrint('💰 About to award image points (Verified Female → Male)...');
           try {
-            await _rewardsService.awardImagePoints(widget.currentUserId);
+            final chatId = _getChatId(widget.currentUserId, widget.otherUserId);
+            
+            // Get user's profile photo for face comparison
+            String? profilePhotoPath;
+            try {
+              final userDoc = await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(widget.currentUserId)
+                  .get();
+              if (userDoc.exists) {
+                final userData = userDoc.data();
+                final photos = userData?['photos'] as List<dynamic>?;
+                if (photos != null && photos.isNotEmpty) {
+                  profilePhotoPath = photos[0] as String;
+                }
+              }
+            } catch (e) {
+              debugPrint('⚠️ Could not fetch profile photo: $e');
+            }
+            
+            await _rewardsService.awardImagePoints(
+              widget.currentUserId,
+              chatId,
+              imageFile.path,
+              profileImagePath: profilePhotoPath,
+            );
             debugPrint('💰 Image points awarded successfully');
             
             await _rewardsService.trackDailyConversation(widget.currentUserId, widget.otherUserId);
@@ -670,6 +703,91 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  void _showOptionsBottomSheet() async {
+    // First get the other user's data
+    UserModel? otherUser;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.otherUserId)
+          .get();
+      if (doc.exists) {
+        otherUser = UserModel.fromMap(doc.data()!);
+      }
+    } catch (e) {
+      debugPrint('Error fetching user data: $e');
+    }
+
+    if (otherUser == null) return;
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              widget.otherUserName,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(Icons.report, color: Colors.orange),
+              title: const Text('Report User'),
+              subtitle: const Text('Report inappropriate behavior'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ReportUserScreen(reportedUser: otherUser!),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.block, color: Colors.red),
+              title: const Text('Block User'),
+              subtitle: const Text('You won\'t see each other'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => BlockUserScreen(userToBlock: otherUser!),
+                  ),
+                ).then((blocked) {
+                  if (blocked == true) {
+                    Navigator.pop(context); // Go back to matches/chat list
+                  }
+                });
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
   PreferredSizeWidget _buildAppBar() {
     final initials = widget.otherUserName.split(' ')
         .map((word) => word.isNotEmpty ? word[0].toUpperCase() : '')
@@ -749,20 +867,8 @@ class _ChatScreenState extends State<ChatScreen>
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.videocam_outlined, color: Color(0xFF2D3142)),
-          onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Video call coming soon!')),
-            );
-          },
-        ),
-        IconButton(
-          icon: const Icon(Icons.call_outlined, color: Color(0xFF2D3142)),
-          onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Voice call coming soon!')),
-            );
-          },
+          icon: const Icon(Icons.more_vert, color: Color(0xFF2D3142)),
+          onPressed: _showOptionsBottomSheet,
         ),
         const SizedBox(width: 8),
       ],

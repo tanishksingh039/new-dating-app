@@ -163,7 +163,7 @@ class _PhotoUploadScreenState extends State<PhotoUploadScreen> {
       await FirebaseServices.updateUserProfile(user.uid, {
         'photos': _uploadedUrls,
         'profilePhoto': _uploadedUrls.first, // First photo as profile photo
-        'profileComplete': 40, // 40% complete
+        'profileComplete': 50, // 50% complete
       });
 
       _log('Photos uploaded successfully');
@@ -232,13 +232,48 @@ class _PhotoUploadScreenState extends State<PhotoUploadScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Upload ${AppConstants.minPhotos}-${AppConstants.maxPhotos} photos',
+                        'Upload ${AppConstants.minPhotos}-${AppConstants.maxPhotos} photos to get more matches',
                         style: TextStyle(
                           fontSize: 16,
                           color: Colors.white.withOpacity(0.9),
                         ),
                       ),
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 20),
+
+                      // Photo Tips
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.lightbulb_outline,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Photo Tips',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            ..._buildPhotoTips(),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
 
                       // Photo Grid
                       Container(
@@ -255,7 +290,46 @@ class _PhotoUploadScreenState extends State<PhotoUploadScreen> {
                           ],
                         ),
                         child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // Photo count indicator
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Your Photos',
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppConstants.textDark,
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _selectedImages.length >= AppConstants.minPhotos
+                                        ? AppConstants.successColor.withOpacity(0.1)
+                                        : AppColors.primary.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    '${_selectedImages.length}/${AppConstants.maxPhotos}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: _selectedImages.length >= AppConstants.minPhotos
+                                          ? AppConstants.successColor
+                                          : AppColors.primary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            
                             GridView.builder(
                               shrinkWrap: true,
                               physics: const NeverScrollableScrollPhysics(),
@@ -329,12 +403,14 @@ class _PhotoUploadScreenState extends State<PhotoUploadScreen> {
                 ),
               ),
 
-              // Continue Button
+              // Upload Button
               Padding(
                 padding: const EdgeInsets.all(24),
                 child: CustomButton(
-                  text: 'Continue',
-                  onPressed: _isUploading ? null : _uploadPhotos,
+                  text: _selectedImages.length >= AppConstants.minPhotos 
+                    ? 'Continue (${_selectedImages.length} photos)'
+                    : 'Add ${AppConstants.minPhotos - _selectedImages.length} more photos',
+                  onPressed: _isUploading ? null : (_selectedImages.length >= AppConstants.minPhotos ? _uploadPhotos : null),
                   isLoading: _isUploading,
                 ),
               ),
@@ -360,7 +436,7 @@ class _PhotoUploadScreenState extends State<PhotoUploadScreen> {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(10),
                   child: LinearProgressIndicator(
-                    value: 0.4, // 40% - Step 2 of 5
+                    value: 0.5, // 50% - Step 5 of 10
                     backgroundColor: Colors.white.withOpacity(0.3),
                     valueColor:
                         const AlwaysStoppedAnimation<Color>(Colors.white),
@@ -370,7 +446,7 @@ class _PhotoUploadScreenState extends State<PhotoUploadScreen> {
               ),
               const SizedBox(width: 12),
               Text(
-                '2/5',
+                '5/10',
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.9),
                   fontWeight: FontWeight.w600,
@@ -472,6 +548,27 @@ class _PhotoUploadScreenState extends State<PhotoUploadScreen> {
         ),
       ),
     );
+  }
+
+  List<Widget> _buildPhotoTips() {
+    final tips = [
+      '✨ Show your face clearly in the first photo',
+      '📸 Use recent photos (within the last year)',
+      '🌟 Smile and look approachable',
+      '🚫 Avoid group photos as your main picture',
+    ];
+
+    return tips.map((tip) => Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        tip,
+        style: TextStyle(
+          fontSize: 14,
+          color: Colors.white.withOpacity(0.9),
+          height: 1.3,
+        ),
+      ),
+    )).toList();
   }
 }
 

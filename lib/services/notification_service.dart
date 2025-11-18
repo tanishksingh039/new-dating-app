@@ -3,6 +3,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:convert';
+import 'navigation_service.dart';
 
 /// Top-level function to handle background messages
 @pragma('vm:entry-point')
@@ -133,7 +135,7 @@ class NotificationService {
       _showLocalNotification(
         title: notification.title ?? 'New notification',
         body: notification.body ?? '',
-        payload: message.data.toString(),
+        payload: jsonEncode(message.data),
       );
     }
   }
@@ -178,14 +180,43 @@ class NotificationService {
   /// Handle message tap (when user taps notification)
   void _handleMessageTap(RemoteMessage message) {
     debugPrint('👆 Notification tapped: ${message.data}');
-    // TODO: Navigate to appropriate screen based on message data
-    // You can emit an event or use a navigation service here
+    
+    // Navigate to appropriate screen based on message data
+    if (message.data.isNotEmpty) {
+      NavigationService.navigateFromNotification(message.data);
+    }
   }
 
   /// Handle local notification tap
   void _handleLocalNotificationTap(NotificationResponse response) {
     debugPrint('👆 Local notification tapped: ${response.payload}');
-    // TODO: Navigate to appropriate screen based on payload
+    
+    // Parse payload and navigate
+    if (response.payload != null && response.payload!.isNotEmpty) {
+      try {
+        // Parse JSON payload
+        final data = jsonDecode(response.payload!) as Map<String, dynamic>;
+        NavigationService.navigateFromNotification(data);
+      } catch (e) {
+        debugPrint('Error parsing notification payload: $e');
+        // Fallback to simple string parsing if JSON fails
+        final data = <String, dynamic>{};
+        if (response.payload!.contains('like')) {
+          data['type'] = 'like';
+          data['screen'] = 'likes';
+        } else if (response.payload!.contains('match')) {
+          data['type'] = 'match';
+          data['screen'] = 'matches';
+        } else if (response.payload!.contains('message')) {
+          data['type'] = 'message';
+          data['screen'] = 'chat';
+        }
+        
+        if (data.isNotEmpty) {
+          NavigationService.navigateFromNotification(data);
+        }
+      }
+    }
   }
 
   /// Send notification for new like
@@ -228,11 +259,33 @@ class NotificationService {
     }
   }
 
+  /// Send notification for super like
+  Future<void> sendSuperLikeNotification({
+    required String targetUserId,
+    required String likerName,
+  }) async {
+    try {
+      await _sendNotificationToUser(
+        userId: targetUserId,
+        title: '⭐ Super Like!',
+        body: '$likerName super liked you!',
+        data: {
+          'type': 'super_like',
+          'screen': 'likes',
+        },
+      );
+    } catch (e) {
+      debugPrint('Error sending super like notification: $e');
+    }
+  }
+
   /// Send notification for new message
   Future<void> sendMessageNotification({
     required String targetUserId,
+    required String senderId,
     required String senderName,
     required String messagePreview,
+    String? senderPhoto,
   }) async {
     try {
       await _sendNotificationToUser(
@@ -242,6 +295,10 @@ class NotificationService {
         data: {
           'type': 'message',
           'screen': 'chat',
+          'senderId': senderId,
+          'senderName': senderName,
+          'senderPhoto': senderPhoto ?? '',
+          'currentUserId': targetUserId,
         },
       );
     } catch (e) {
@@ -304,6 +361,46 @@ class NotificationService {
 
   /// Get FCM token
   String? get fcmToken => _fcmToken;
+
+  /// Test notification navigation (for development/testing)
+  static void testNotificationNavigation(String type) {
+    final data = <String, dynamic>{};
+    
+    switch (type) {
+      case 'message':
+        data.addAll({
+          'type': 'message',
+          'screen': 'chat',
+          'senderId': 'test_sender',
+          'senderName': 'Test User',
+          'senderPhoto': '',
+          'currentUserId': FirebaseAuth.instance.currentUser?.uid ?? '',
+        });
+        break;
+      case 'like':
+        data.addAll({
+          'type': 'like',
+          'screen': 'likes',
+        });
+        break;
+      case 'match':
+        data.addAll({
+          'type': 'match',
+          'screen': 'matches',
+        });
+        break;
+      case 'super_like':
+        data.addAll({
+          'type': 'super_like',
+          'screen': 'likes',
+        });
+        break;
+    }
+    
+    if (data.isNotEmpty) {
+      NavigationService.navigateFromNotification(data);
+    }
+  }
 
   /// Dispose
   void dispose() {

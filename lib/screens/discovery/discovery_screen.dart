@@ -56,53 +56,53 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
         elevation: 0,
       ),
       body: RefreshIndicator(
-        onRefresh: _loadProfiles,
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : _profiles.isEmpty
-                ? ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    children: const [
-                      SizedBox(height: 80),
-                      Center(child: Text('No profiles found')),
-                    ],
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(12),
-                    itemCount: _profiles.length,
-                    itemBuilder: (context, index) {
-                      final user = _profiles[index];
-                      return Card(
-                        margin: const EdgeInsets.symmetric(vertical: 8),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.all(12),
-                          leading: user.photos.isNotEmpty
-                              ? CircleAvatar(
-                                  backgroundImage: NetworkImage(user.photos[0]),
-                                  radius: 28,
-                                )
-                              : const CircleAvatar(
-                                  child: Icon(Icons.person),
-                                ),
-                          title: Text(user.name.isEmpty ? 'No name' : user.name),
-                          subtitle: Text(user.bio.isEmpty ? 'No bio' : user.bio),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => ProfileDetailScreen(
-                                  user: user,
-                                  onLike: () {},
-                                  onPass: () {},
-                                  onSuperLike: () {},
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      );
-                    },
-                  ),
+            onRefresh: _loadProfiles,
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _profiles.isEmpty
+                    ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: const [
+                          SizedBox(height: 80),
+                          Center(child: Text('No profiles found')),
+                        ],
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(12),
+                        itemCount: _profiles.length,
+                        itemBuilder: (context, index) {
+                          final user = _profiles[index];
+                          return Card(
+                            margin: const EdgeInsets.symmetric(vertical: 8),
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.all(12),
+                              leading: user.photos.isNotEmpty
+                                  ? CircleAvatar(
+                                      backgroundImage: NetworkImage(user.photos[0]),
+                                      radius: 28,
+                                    )
+                                  : const CircleAvatar(
+                                      child: Icon(Icons.person),
+                                    ),
+                              title: Text(user.name.isEmpty ? 'No name' : user.name),
+                              subtitle: Text(user.bio.isEmpty ? 'No bio' : user.bio),
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => ProfileDetailScreen(
+                                      user: user,
+                                      onLike: () {},
+                                      onPass: () {},
+                                      onSuperLike: () {},
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          );
+                        },
+                      ),
       ),
     );
   }

@@ -5,6 +5,9 @@ import 'account_settings_screen.dart';
 import 'privacy_settings_screen.dart';
 import 'notification_settings_screen.dart';
 import '../verification/liveness_verification_screen.dart';
+import '../safety/blocked_users_screen.dart';
+import '../admin/admin_reports_screen.dart';
+import '../admin/admin_login_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -16,6 +19,16 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   late final String currentUserId;
   bool _isLoading = false;
+  
+  // Admin user IDs
+  final List<String> _adminUserIds = [
+    'admin_user',
+    'tanishk_admin',
+    'shooluv_admin',
+    'dev_admin',
+  ];
+  
+  bool get _isAdmin => _adminUserIds.contains(currentUserId);
 
   @override
   void initState() {
@@ -189,7 +202,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               children: [
-                const SizedBox(height: 10),
+                if (_isAdmin) const SizedBox(height: 10),
                 _buildSection(
                   'Account',
                   [
@@ -257,9 +270,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       'Blocked Users',
                       'Manage blocked accounts',
                       () {
-                        // TODO: Navigate to blocked users screen
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Coming soon!')),
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const BlockedUsersScreen(),
+                          ),
                         );
                       },
                     ),
@@ -317,6 +332,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                 ),
                 const SizedBox(height: 10),
+                // Admin section (only for admin users)
+                if (_isAdmin)
+                  _buildSection(
+                    'Admin',
+                    [
+                      _buildSettingTile(
+                        Icons.dashboard,
+                        'Admin Dashboard',
+                        'View real-time statistics and analytics',
+                        () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const AdminLoginScreen(),
+                            ),
+                          );
+                        },
+                        iconColor: Colors.purple,
+                      ),
+                      _buildSettingTile(
+                        Icons.report,
+                        'Manage Reports',
+                        'Review and manage user reports',
+                        () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const AdminReportsScreen(),
+                            ),
+                          );
+                        },
+                        iconColor: Colors.orange,
+                      ),
+                    ],
+                  ),
+                if (currentUserId == 'admin_user') const SizedBox(height: 10),
                 _buildSection(
                   'Account Actions',
                   [
@@ -351,7 +402,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildSection(String title, List<Widget> children) {
     return Container(
-      color: Colors.white,
+      color: Theme.of(context).cardColor,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -362,7 +413,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: Colors.grey[600],
+                color: Theme.of(context).textTheme.bodySmall?.color ?? Colors.grey[600],
               ),
             ),
           ),
@@ -379,6 +430,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     VoidCallback onTap, {
     Color? iconColor,
     bool hasSwitch = false,
+    bool switchValue = false,
+    ValueChanged<bool>? onSwitchChanged,
   }) {
     return ListTile(
       leading: Container(
@@ -395,13 +448,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       subtitle: Text(
         subtitle,
-        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+        style: TextStyle(
+          fontSize: 12, 
+          color: Theme.of(context).textTheme.bodySmall?.color ?? Colors.grey[600]
+        ),
       ),
       trailing: hasSwitch
           ? Switch(
-              value: true,
-              onChanged: (value) {},
-              activeColor: Colors.pink,
+              value: switchValue,
+              onChanged: onSwitchChanged ?? (value) {},
+              activeColor: iconColor ?? Colors.pink,
             )
           : Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[400]),
       onTap: hasSwitch ? null : onTap,

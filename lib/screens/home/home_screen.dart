@@ -9,6 +9,7 @@ import '../profile/profile_screen.dart';
 import '../rewards/rewards_leaderboard_screen.dart';
 import '../../constants/app_colors.dart';
 import '../../models/user_model.dart';
+import '../../services/navigation_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -28,6 +29,24 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _checkUserGender();
+    
+    // Listen to navigation service for tab changes
+    NavigationService.selectedTabNotifier.addListener(_onTabChangeFromNotification);
+  }
+
+  @override
+  void dispose() {
+    NavigationService.selectedTabNotifier.removeListener(_onTabChangeFromNotification);
+    super.dispose();
+  }
+
+  void _onTabChangeFromNotification() {
+    final newIndex = NavigationService.selectedTabNotifier.value;
+    if (newIndex != _selectedIndex && mounted) {
+      setState(() {
+        _selectedIndex = newIndex;
+      });
+    }
   }
 
   Future<void> _checkUserGender() async {
@@ -106,73 +125,73 @@ class _HomeScreenState extends State<HomeScreen> {
           type: BottomNavigationBarType.fixed,
           elevation: 0,
           backgroundColor: AppColors.surface,
-          selectedLabelStyle: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 12,
-          ),
-          unselectedLabelStyle: const TextStyle(
-            fontSize: 12,
-          ),
-          items: _isFemale
-              ? const [
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.explore_outlined),
-                    activeIcon: Icon(Icons.explore),
-                    label: 'Discover',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.favorite_border),
-                    activeIcon: Icon(Icons.favorite),
-                    label: 'Likes',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.people_outline),
-                    activeIcon: Icon(Icons.people),
-                    label: 'Matches',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.chat_bubble_outline),
-                    activeIcon: Icon(Icons.chat_bubble),
-                    label: 'Chat',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.emoji_events_outlined),
-                    activeIcon: Icon(Icons.emoji_events),
-                    label: 'Rewards',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.person_outline),
-                    activeIcon: Icon(Icons.person),
-                    label: 'Profile',
-                  ),
-                ]
-              : const [
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.explore_outlined),
-                    activeIcon: Icon(Icons.explore),
-                    label: 'Discover',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.favorite_border),
-                    activeIcon: Icon(Icons.favorite),
-                    label: 'Likes',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.people_outline),
-                    activeIcon: Icon(Icons.people),
-                    label: 'Matches',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.chat_bubble_outline),
-                    activeIcon: Icon(Icons.chat_bubble),
-                    label: 'Chat',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.person_outline),
-                    activeIcon: Icon(Icons.person),
-                    label: 'Profile',
-                  ),
-                ],
+              selectedLabelStyle: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontSize: 12,
+              ),
+              items: _isFemale
+                  ? const [
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.explore_outlined),
+                        activeIcon: Icon(Icons.explore),
+                        label: 'Discover',
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.favorite_border),
+                        activeIcon: Icon(Icons.favorite),
+                        label: 'Likes',
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.people_outline),
+                        activeIcon: Icon(Icons.people),
+                        label: 'Matches',
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.chat_bubble_outline),
+                        activeIcon: Icon(Icons.chat_bubble),
+                        label: 'Chat',
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.emoji_events_outlined),
+                        activeIcon: Icon(Icons.emoji_events),
+                        label: 'Rewards',
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.person_outline),
+                        activeIcon: Icon(Icons.person),
+                        label: 'Profile',
+                      ),
+                    ]
+                  : const [
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.explore_outlined),
+                        activeIcon: Icon(Icons.explore),
+                        label: 'Discover',
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.favorite_border),
+                        activeIcon: Icon(Icons.favorite),
+                        label: 'Likes',
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.people_outline),
+                        activeIcon: Icon(Icons.people),
+                        label: 'Matches',
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.chat_bubble_outline),
+                        activeIcon: Icon(Icons.chat_bubble),
+                        label: 'Chat',
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.person_outline),
+                        activeIcon: Icon(Icons.person),
+                        label: 'Profile',
+                      ),
+                    ],
         ),
       ),
     );

@@ -24,6 +24,10 @@ class UserModel {
   // Phase 2 fields - Privacy & Notification Settings
   final Map<String, dynamic> privacySettings;
   final Map<String, dynamic> notificationSettings;
+  
+  // Phase 3 fields - Safety & Blocking
+  final List<String> blockedUsers;
+  final List<String> blockedBy;
 
   UserModel({
     required this.uid,
@@ -45,6 +49,8 @@ class UserModel {
     this.dailySwipes = const {},
     Map<String, dynamic>? privacySettings,
     Map<String, dynamic>? notificationSettings,
+    this.blockedUsers = const [],
+    this.blockedBy = const [],
   })  : privacySettings = privacySettings ??
             {
               'showOnlineStatus': true,
@@ -89,6 +95,8 @@ class UserModel {
       'dailySwipes': dailySwipes,
       'privacySettings': privacySettings,
       'notificationSettings': notificationSettings,
+      'blockedUsers': blockedUsers,
+      'blockedBy': blockedBy,
     };
   }
 
@@ -132,6 +140,8 @@ class UserModel {
       notificationSettings: map['notificationSettings'] != null
           ? Map<String, dynamic>.from(map['notificationSettings'])
           : null,
+      blockedUsers: List<String>.from(map['blockedUsers'] ?? []),
+      blockedBy: List<String>.from(map['blockedBy'] ?? []),
     );
   }
 
@@ -156,6 +166,8 @@ class UserModel {
     Map<String, int>? dailySwipes,
     Map<String, dynamic>? privacySettings,
     Map<String, dynamic>? notificationSettings,
+    List<String>? blockedUsers,
+    List<String>? blockedBy,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -177,6 +189,8 @@ class UserModel {
       dailySwipes: dailySwipes ?? this.dailySwipes,
       privacySettings: privacySettings ?? this.privacySettings,
       notificationSettings: notificationSettings ?? this.notificationSettings,
+      blockedUsers: blockedUsers ?? this.blockedUsers,
+      blockedBy: blockedBy ?? this.blockedBy,
     );
   }
 }

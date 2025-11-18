@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:animate_do/animate_do.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/user_model.dart';
+import '../safety/report_user_screen.dart';
+import '../safety/block_user_screen.dart';
 
 class ProfilePreviewScreen extends StatefulWidget {
   final UserModel user;
@@ -18,11 +21,90 @@ class ProfilePreviewScreen extends StatefulWidget {
 class _ProfilePreviewScreenState extends State<ProfilePreviewScreen> {
   final PageController _pageController = PageController();
   int _currentPhotoIndex = 0;
+  bool _isCurrentUser = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkIfCurrentUser();
+  }
 
   @override
   void dispose() {
     _pageController.dispose();
     super.dispose();
+  }
+
+  void _checkIfCurrentUser() {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    _isCurrentUser = currentUserId == widget.user.uid;
+  }
+
+  void _showOptionsBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              widget.user.name,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(Icons.report, color: Colors.orange),
+              title: const Text('Report User'),
+              subtitle: const Text('Report inappropriate behavior'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ReportUserScreen(reportedUser: widget.user),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.block, color: Colors.red),
+              title: const Text('Block User'),
+              subtitle: const Text('You won\'t see each other'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => BlockUserScreen(userToBlock: widget.user),
+                  ),
+                ).then((blocked) {
+                  if (blocked == true) {
+                    Navigator.pop(context); // Go back to previous screen
+                  }
+                });
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
   }
 
   int _calculateAge(DateTime birthDate) {
@@ -64,6 +146,19 @@ class _ProfilePreviewScreenState extends State<ProfilePreviewScreen> {
                   ),
                   onPressed: () => Navigator.pop(context),
                 ),
+                actions: !_isCurrentUser ? [
+                  IconButton(
+                    icon: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.more_vert, color: Colors.white),
+                    ),
+                    onPressed: _showOptionsBottomSheet,
+                  ),
+                ] : null,
                 flexibleSpace: FlexibleSpaceBar(
                   background: widget.user.photos.isNotEmpty
                       ? Stack(

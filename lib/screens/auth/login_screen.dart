@@ -7,6 +7,7 @@ import '../../firebase_services.dart';
 import '../../widgets/app_logo.dart';
 import '../../constants/app_colors.dart';
 import '../../services/location_service.dart';
+import '../admin/admin_login_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -22,11 +23,48 @@ class _LoginScreenState extends State<LoginScreen> {
   final LocationService _locationService = LocationService();
   bool _isLoading = false;
   String _countryCode = "+91";
+  
+  // Admin access
+  int _logoTapCount = 0;
+  DateTime? _lastTapTime;
+  final List<String> _adminUserIds = [
+    'admin_user',
+    'tanishk_admin',
+    'shooluv_admin',
+    'dev_admin',
+  ];
 
   void _log(String message) {
     if (kDebugMode) {
       debugPrint('[LoginScreen] $message');
     }
+  }
+
+  void _onLogoTap() {
+    final now = DateTime.now();
+    
+    // Reset counter if more than 2 seconds since last tap
+    if (_lastTapTime != null && now.difference(_lastTapTime!).inSeconds > 2) {
+      _logoTapCount = 0;
+    }
+    
+    _lastTapTime = now;
+    _logoTapCount++;
+    
+    if (_logoTapCount >= 5) {
+      _logoTapCount = 0;
+      _showAdminAccessDialog();
+    }
+  }
+
+  void _showAdminAccessDialog() {
+    // Navigate directly to admin login screen
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const AdminLoginScreen(),
+      ),
+    );
   }
 
   @override
@@ -423,29 +461,32 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Animated logo with bounce
+                  // Animated logo with bounce (tap 5 times for admin access)
                   Bounce(
                     delay: const Duration(milliseconds: 200),
                     child: ZoomIn(
                       duration: const Duration(milliseconds: 1000),
-                      child: Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.2),
-                              blurRadius: 20,
-                              offset: const Offset(0, 10),
+                      child: GestureDetector(
+                        onTap: _onLogoTap,
+                        child: Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 20,
+                                offset: const Offset(0, 10),
+                              ),
+                            ],
+                          ),
+                          child: const ClipOval(
+                            child: AppLogo(
+                              width: 80,
+                              height: 80,
+                              fit: BoxFit.cover,
                             ),
-                          ],
-                        ),
-                        child: const ClipOval(
-                          child: AppLogo(
-                            width: 80,
-                            height: 80,
-                            fit: BoxFit.cover,
                           ),
                         ),
                       ),

@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'services/notification_service.dart';
 import 'constants/app_colors.dart';
+import 'providers/appearance_provider.dart';
+import 'providers/theme_provider.dart';
+import 'services/navigation_service.dart';
 
 // Screens - Splash
 import 'screens/splash/splash_screen.dart';
@@ -14,10 +18,17 @@ import 'screens/auth/login_screen.dart';
 import 'screens/auth/otp_screen.dart';
 
 // Screens - Onboarding
-import 'screens/onboarding/onboarding_screen.dart';
+import 'screens/onboarding/welcome_screen.dart';
+import 'screens/onboarding/phone_verification_screen.dart';
+import 'screens/onboarding/basic_info_screen.dart';
+import 'screens/onboarding/detailed_profile_screen.dart';
+import 'screens/onboarding/prompts_screen.dart';
 import 'screens/onboarding/photo_upload_screen.dart';
 import 'screens/onboarding/interests_screen.dart';
 import 'screens/onboarding/bio_screen.dart';
+import 'screens/onboarding/location_permission_screen.dart';
+import 'screens/onboarding/notification_permission_screen.dart';
+import 'screens/onboarding/profile_review_screen.dart';
 import 'screens/onboarding/preferences_screen.dart';
 
 // Screens - Home & Chat
@@ -64,7 +75,13 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AppearanceProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+      ],
+      child: MaterialApp(
+      navigatorKey: NavigationService.navigatorKey,
       title: 'ShooLuv',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -109,83 +126,118 @@ class MyApp extends StatelessWidget {
         ),
       ),
       initialRoute: '/',
-      routes: {
-        // Splash Route
-        '/': (_) => const SplashScreen(),
-        
-        // Auth Routes
-        '/wrapper': (_) => const WrapperScreen(),
-        '/login': (_) => const LoginScreen(),
-        '/otp': (_) => const OtpScreen(),
-        
-        // Onboarding Routes
-        '/onboarding': (_) => const OnboardingScreen(),
-        '/onboarding/photos': (_) => const PhotoUploadScreen(),
-        '/onboarding/interests': (_) => const InterestsScreen(),
-        '/onboarding/bio': (_) => const BioScreen(),
-        '/onboarding/preferences': (_) => const PreferencesScreen(),
-        
-        // Main App Routes
-        '/home': (_) => const HomeScreen(),
-        
-        // Phase 1 Routes (Optional - accessed via bottom nav)
-        '/discovery': (_) => const DiscoveryScreen(),
-        '/matches': (_) => const MatchesScreen(),
-        '/profile': (_) => const ProfileScreen(),
-        
-        // Phase 2 Routes - Settings
-        '/settings': (_) => const SettingsScreen(),
-        '/settings/account': (_) => const AccountSettingsScreen(),
-        '/settings/privacy': (_) => const PrivacySettingsScreen(),
-        '/settings/notifications': (_) => const NotificationSettingsScreen(),
-        
-        // Verification Routes
-        '/settings/verification': (_) => const LivenessVerificationScreen(),
-      },
       onGenerateRoute: (settings) {
-        // Handle chat screen with arguments
-        if (settings.name == '/chat') {
-          final args = settings.arguments as Map<String, dynamic>;
-          final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-          if (currentUserId == null) {
+        // Define all routes here to ensure provider context is available
+        switch (settings.name) {
+          // Splash Route
+          case '/':
+            return MaterialPageRoute(builder: (_) => const SplashScreen());
+          
+          // Auth Routes
+          case '/wrapper':
+            return MaterialPageRoute(builder: (_) => const WrapperScreen());
+          case '/login':
+            return MaterialPageRoute(builder: (_) => const LoginScreen());
+          case '/otp':
+            return MaterialPageRoute(builder: (_) => const OtpScreen());
+          
+          // Onboarding Routes - New Enhanced Flow
+          case '/onboarding/welcome':
+            return MaterialPageRoute(builder: (_) => const WelcomeScreen());
+          case '/onboarding/phone':
+            return MaterialPageRoute(builder: (_) => const PhoneVerificationScreen());
+          case '/onboarding/basic-info':
+            return MaterialPageRoute(builder: (_) => const BasicInfoScreen());
+          case '/onboarding/detailed-profile':
+            return MaterialPageRoute(builder: (_) => const DetailedProfileScreen());
+          case '/onboarding/prompts':
+            return MaterialPageRoute(builder: (_) => const PromptsScreen());
+          case '/onboarding/photos':
+            return MaterialPageRoute(builder: (_) => const PhotoUploadScreen());
+          case '/onboarding/interests':
+            return MaterialPageRoute(builder: (_) => const InterestsScreen());
+          case '/onboarding/bio':
+            return MaterialPageRoute(builder: (_) => const BioScreen());
+          case '/onboarding/location':
+            return MaterialPageRoute(builder: (_) => const LocationPermissionScreen());
+          case '/onboarding/notifications':
+            return MaterialPageRoute(builder: (_) => const NotificationPermissionScreen());
+          case '/onboarding/profile-review':
+            return MaterialPageRoute(builder: (_) => const ProfileReviewScreen());
+          case '/onboarding/preferences':
+            return MaterialPageRoute(builder: (_) => const PreferencesScreen());
+          
+          // Legacy Onboarding Route (redirect to new flow)
+          case '/onboarding':
+            return MaterialPageRoute(builder: (_) => const WelcomeScreen());
+          
+          // Main App Routes
+          case '/home':
+            return MaterialPageRoute(builder: (_) => const HomeScreen());
+          
+          // Phase 1 Routes (Optional - accessed via bottom nav)
+          case '/discovery':
+            return MaterialPageRoute(builder: (_) => const DiscoveryScreen());
+          case '/matches':
+            return MaterialPageRoute(builder: (_) => const MatchesScreen());
+          case '/profile':
+            return MaterialPageRoute(builder: (_) => const ProfileScreen());
+          
+          // Phase 2 Routes - Settings
+          case '/settings':
+            return MaterialPageRoute(builder: (_) => const SettingsScreen());
+          case '/settings/account':
+            return MaterialPageRoute(builder: (_) => const AccountSettingsScreen());
+          case '/settings/privacy':
+            return MaterialPageRoute(builder: (_) => const PrivacySettingsScreen());
+          case '/settings/notifications':
+            return MaterialPageRoute(builder: (_) => const NotificationSettingsScreen());
+          
+          // Verification Routes
+          case '/settings/verification':
+            return MaterialPageRoute(builder: (_) => const LivenessVerificationScreen());
+          
+          // Handle chat screen with arguments
+          case '/chat':
+            final args = settings.arguments as Map<String, dynamic>;
+            final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+            if (currentUserId == null) {
+              return MaterialPageRoute(builder: (_) => const LoginScreen());
+            }
             return MaterialPageRoute(
-              builder: (_) => const LoginScreen(),
+              builder: (_) => ChatScreen(
+                currentUserId: currentUserId,
+                otherUserId: args['receiverId'] ?? args['otherUserId'],
+                otherUserName: args['receiverName'] ?? args['otherUserName'],
+              ),
             );
-          }
-          return MaterialPageRoute(
-            builder: (_) => ChatScreen(
-              currentUserId: currentUserId,
-              otherUserId: args['receiverId'] ?? args['otherUserId'],
-              otherUserName: args['receiverName'] ?? args['otherUserName'],
-            ),
-          );
+          
+          // Handle profile detail screen with arguments
+          case '/profile-detail':
+            final args = settings.arguments as Map<String, dynamic>;
+            return MaterialPageRoute(
+              builder: (context) => ProfileDetailScreen(
+                user: args['user'],
+                onLike: args['onLike'] ?? () {},
+                onPass: args['onPass'] ?? () {},
+                onSuperLike: args['onSuperLike'] ?? () {},
+              ),
+            );
+          
+          // Handle edit profile screen with arguments
+          case '/edit-profile':
+            final args = settings.arguments as Map<String, dynamic>;
+            return MaterialPageRoute(
+              builder: (context) => EditProfileScreen(
+                user: args['user'] as UserModel,
+              ),
+            );
+          
+          default:
+            return null;
         }
-        
-        // Handle profile detail screen with arguments
-        if (settings.name == '/profile-detail') {
-          final args = settings.arguments as Map<String, dynamic>;
-          return MaterialPageRoute(
-            builder: (context) => ProfileDetailScreen(
-              user: args['user'],
-              onLike: args['onLike'] ?? () {},
-              onPass: args['onPass'] ?? () {},
-              onSuperLike: args['onSuperLike'] ?? () {},
-            ),
-          );
-        }
-        
-        // Handle edit profile screen with arguments
-        if (settings.name == '/edit-profile') {
-          final args = settings.arguments as Map<String, dynamic>;
-          return MaterialPageRoute(
-            builder: (context) => EditProfileScreen(
-              user: args['user'] as UserModel,
-            ),
-          );
-        }
-        
-        return null;
       },
+      ),
     );
   }
 }

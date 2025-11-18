@@ -12,8 +12,8 @@ class FaceDetectionService {
       enableClassification: true,
       enableLandmarks: true,
       enableTracking: false,
-      minFaceSize: 0.15,
-      performanceMode: FaceDetectorMode.accurate,
+      minFaceSize: 0.10, // Lowered from 0.15 to allow smaller faces
+      performanceMode: FaceDetectorMode.fast, // Changed from accurate to fast for better detection
     );
     _faceDetector = FaceDetector(options: options);
   }
@@ -75,7 +75,8 @@ class FaceDetectionService {
     final boundingBox = face.boundingBox;
     final faceArea = boundingBox.width * boundingBox.height;
     
-    if (faceArea < 10000) {
+    // Lowered from 10000 to 5000 to allow smaller faces
+    if (faceArea < 5000) {
       return ProfileVerificationResult(
         isValid: false,
         message: 'Face is too small. Please move closer.',
@@ -86,7 +87,8 @@ class FaceDetectionService {
     final headEulerAngleY = face.headEulerAngleY ?? 0;
     final headEulerAngleZ = face.headEulerAngleZ ?? 0;
     
-    if (headEulerAngleY.abs() > 30 || headEulerAngleZ.abs() > 30) {
+    // Increased from 30 to 45 degrees to allow more angled faces
+    if (headEulerAngleY.abs() > 45 || headEulerAngleZ.abs() > 45) {
       return ProfileVerificationResult(
         isValid: false,
         message: 'Please face the camera directly.',
@@ -94,18 +96,8 @@ class FaceDetectionService {
       );
     }
 
-    if (face.leftEyeOpenProbability != null && face.rightEyeOpenProbability != null) {
-      final leftEyeOpen = face.leftEyeOpenProbability! > 0.5;
-      final rightEyeOpen = face.rightEyeOpenProbability! > 0.5;
-      
-      if (!leftEyeOpen || !rightEyeOpen) {
-        return ProfileVerificationResult(
-          isValid: false,
-          message: 'Please keep your eyes open.',
-          confidence: 0.0,
-        );
-      }
-    }
+    // Removed strict eye open requirement - too restrictive
+    // Users can have eyes partially closed, squinting, etc.
 
     double confidence = 1.0;
     confidence -= (headEulerAngleY.abs() / 100);
@@ -153,9 +145,9 @@ class FaceDetectionService {
     double similarity = _calculateFaceSimilarity(face1, face2);
 
     return FaceComparisonResult(
-      isMatch: similarity > 0.7,
+      isMatch: similarity > 0.5, // Lowered from 0.7 to 0.5 for more lenient matching
       similarity: similarity,
-      message: similarity > 0.7 ? 'Faces match!' : 'Faces do not match',
+      message: similarity > 0.5 ? 'Faces match!' : 'Faces do not match',
     );
   }
 

@@ -124,9 +124,9 @@ class _MatchesScreenState extends State<MatchesScreen> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: _refreshMatches,
-        color: const Color(0xFFFF6B9D),
-        child: _buildBody(),
+            onRefresh: _refreshMatches,
+            color: const Color(0xFFFF6B9D),
+            child: _buildBody(),
       ),
     );
   }

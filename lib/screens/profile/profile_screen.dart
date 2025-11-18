@@ -3,9 +3,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:animate_do/animate_do.dart';
+import 'package:provider/provider.dart';
 import '../../models/user_model.dart';
 import '../../services/match_service.dart';
 import '../../widgets/spotlight_status_widget.dart';
+import '../../providers/appearance_provider.dart';
 import 'edit_profile_screen.dart';
 import 'profile_preview_screen.dart';
 import '../settings/settings_screen.dart';
@@ -49,14 +51,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
           .doc(currentUserId)
           .get();
 
-      if (userDoc.exists) {
+      if (userDoc.exists && userDoc.data() != null) {
         _currentUser = UserModel.fromMap(userDoc.data()!);
         
         // Load statistics
         _stats = await _matchService.getMatchStats(currentUserId);
         
         // Calculate profile completion
-        _profileCompletion = _calculateProfileCompletion(_currentUser!);
+        if (_currentUser != null) {
+          _profileCompletion = _calculateProfileCompletion(_currentUser!);
+        }
       }
 
       setState(() => _isLoading = false);
@@ -110,8 +114,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[100],
+    return Consumer<AppearanceProvider>(
+      builder: (context, appearanceProvider, child) {
+        return Scaffold(
+          backgroundColor: appearanceProvider.surfaceColor,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -140,6 +146,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
           ),
+        );
+      },
     );
   }
 
@@ -178,128 +186,136 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ? _calculateAge(_currentUser!.dateOfBirth!)
         : 0;
 
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          Row(
+    return Consumer<AppearanceProvider>(
+      builder: (context, appearanceProvider, child) {
+        return Container(
+          color: appearanceProvider.backgroundColor,
+          padding: const EdgeInsets.all(20),
+          child: Column(
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Flexible(
-                          child: Text(
-                            _currentUser?.name ?? '',
-                            style: const TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Text(
-                          ', $age',
-                          style: const TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                        if (_currentUser?.isVerified == true) ...[
-                          const SizedBox(width: 5),
-                          const Icon(Icons.verified, color: Colors.blue, size: 24),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    if (_currentUser?.isPremium == true)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [Colors.amber[700]!, Colors.orange[600]!],
-                          ),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
+                        Row(
                           children: [
-                            Icon(Icons.star, size: 16, color: Colors.white),
-                            SizedBox(width: 4),
-                            Text(
-                              'Premium Member',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
+                            Flexible(
+                              child: Text(
+                                _currentUser?.name ?? '',
+                                style: const TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
+                            Text(
+                              ', $age',
+                              style: const TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                            if (_currentUser?.isVerified == true) ...[
+                              const SizedBox(width: 5),
+                              const Icon(Icons.verified, color: Colors.blue, size: 24),
+                            ],
                           ],
                         ),
-                      ),
-                  ],
-                ),
-              ),
-              ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => EditProfileScreen(user: _currentUser!),
+                        const SizedBox(height: 8),
+                        if (_currentUser?.isPremium == true)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [Colors.amber[700]!, Colors.orange[600]!],
+                              ),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.star, size: 16, color: Colors.white),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Premium Member',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
                     ),
-                  ).then((_) => _loadUserData());
-                },
-                icon: const Icon(Icons.edit, size: 18),
-                label: const Text('Edit'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.pink,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(25),
                   ),
-                ),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => EditProfileScreen(user: _currentUser!),
+                        ),
+                      ).then((_) => _loadUserData());
+                    },
+                    icon: const Icon(Icons.edit, size: 18),
+                    label: const Text('Edit'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.pink,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(25),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   Widget _buildStatsSection() {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(vertical: 20),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _buildStatItem(
-            Icons.favorite,
-            '${_stats['matches'] ?? 0}',
-            'Matches',
-            Colors.pink,
+    return Consumer<AppearanceProvider>(
+      builder: (context, appearanceProvider, child) {
+        return Container(
+          color: appearanceProvider.backgroundColor,
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildStatItem(
+                Icons.favorite,
+                '${_stats['matches'] ?? 0}',
+                'Matches',
+                Colors.pink,
+              ),
+              _buildStatItem(
+                Icons.thumb_up,
+                '${_stats['likes'] ?? 0}',
+                'Likes Sent',
+                Colors.green,
+              ),
+              _buildStatItem(
+                Icons.visibility,
+                '${_stats['receivedLikes'] ?? 0}',
+                'Likes Received',
+                Colors.blue,
+              ),
+            ],
           ),
-          _buildStatItem(
-            Icons.thumb_up,
-            '${_stats['likes'] ?? 0}',
-            'Likes Sent',
-            Colors.green,
-          ),
-          _buildStatItem(
-            Icons.visibility,
-            '${_stats['receivedLikes'] ?? 0}',
-            'Likes Received',
-            Colors.blue,
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -729,6 +745,116 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildAppearanceSection() {
+    return Consumer<AppearanceProvider>(
+      builder: (context, appearanceProvider, child) {
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: appearanceProvider.cardBackgroundColor,
+            borderRadius: BorderRadius.circular(15),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.purple.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      appearanceProvider.isDarkModeEnabled ? Icons.dark_mode : Icons.light_mode,
+                      color: Colors.purple,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Appearance',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: appearanceProvider.textColor,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Dark Mode',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: appearanceProvider.textColor,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        appearanceProvider.isDarkModeEnabled 
+                            ? 'Dark backgrounds enabled' 
+                            : 'Light backgrounds enabled',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: appearanceProvider.secondaryTextColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Transform.scale(
+                    scale: 0.9,
+                    child: Switch(
+                      value: appearanceProvider.isDarkModeEnabled,
+                      onChanged: (_) => appearanceProvider.toggleDarkMode(),
+                      activeColor: Colors.purple,
+                      activeTrackColor: Colors.purple.shade200,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      color: Colors.blue,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Dark mode only affects white backgrounds. Your brand colors remain unchanged.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.blue.shade700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

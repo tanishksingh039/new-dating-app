@@ -2,6 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/rewards_model.dart';
 import '../models/user_model.dart';
+import '../models/message_tracking_model.dart';
+import 'message_content_analyzer.dart';
+import 'face_detection_service.dart';
 
 class RewardsService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -180,22 +183,138 @@ class RewardsService {
     }
   }
 
-  // Award points for message sent
-  Future<void> awardMessagePoints(String userId) async {
-    await _updateScore(userId, ScoringRules.messageSentPoints, 'messagesSent');
-  }
-
-  // Award points for reply given
-  Future<void> awardReplyPoints(String userId) async {
-    await _updateScore(userId, ScoringRules.replyGivenPoints, 'repliesGiven');
-  }
-
-  // Award points for image sent
-  Future<void> awardImagePoints(String userId) async {
+  // Award points for message sent (with quality check)
+  Future<void> awardMessagePoints(
+    String userId,
+    String conversationId,
+    String messageText,
+  ) async {
     try {
+      // Check rate limits
+      final tracking = await _getMessageTracking(userId, conversationId);
+      if (tracking != null) {
+        if (tracking.hasExceededMessageLimit()) {
+          debugPrint('❌ Message rate limit exceeded for user: $userId');
+          return;
+        }
+        if (tracking.isTooQuick()) {
+          debugPrint('❌ Messages sent too quickly for user: $userId');
+          return;
+        }
+      }
+
+      // Analyze message quality
+      final quality = MessageContentAnalyzer.analyzeMessage(messageText);
+      
+      // Check for spam/gibberish
+      if (quality.isSpam || quality.isGibberish) {
+        debugPrint('❌ Spam/gibberish detected - no points awarded');
+        await _applyPenalty(userId, ScoringRules.spamPenalty);
+        return;
+      }
+
+      // Check for duplicates
+      if (tracking != null && MessageContentAnalyzer.isDuplicate(messageText, tracking.recentMessages)) {
+        debugPrint('❌ Duplicate message detected - penalty applied');
+        await _applyPenalty(userId, ScoringRules.duplicatePenalty);
+        return;
+      }
+
+      // Calculate points with quality multiplier
+      final multiplier = MessageContentAnalyzer.getPointsMultiplier(quality.score);
+      final points = (ScoringRules.messageSentPoints * multiplier).toInt();
+
+      if (points > 0) {
+        await _updateScore(userId, points, 'messagesSent');
+        await _updateMessageTracking(userId, conversationId, messageText, quality.score);
+        debugPrint('✅ Awarded $points points (quality: ${quality.score})');
+      } else {
+        debugPrint('⚠️ Low quality message - no points awarded');
+      }
+    } catch (e) {
+      debugPrint('❌ Error awarding message points: $e');
+    }
+  }
+
+  // Award points for reply given (with quality check)
+  Future<void> awardReplyPoints(
+    String userId,
+    String conversationId,
+    String messageText,
+  ) async {
+    try {
+      // Analyze message quality
+      final quality = MessageContentAnalyzer.analyzeMessage(messageText);
+      
+      if (quality.isSpam || quality.isGibberish) {
+        debugPrint('❌ Spam reply detected - no points awarded');
+        return;
+      }
+
+      // Calculate points with quality multiplier
+      final multiplier = MessageContentAnalyzer.getPointsMultiplier(quality.score);
+      final points = (ScoringRules.replyGivenPoints * multiplier).toInt();
+
+      if (points > 0) {
+        await _updateScore(userId, points, 'repliesGiven');
+        debugPrint('✅ Awarded $points reply points (quality: ${quality.score})');
+      }
+    } catch (e) {
+      debugPrint('❌ Error awarding reply points: $e');
+    }
+  }
+
+  // Award points for image sent (with rate limiting and face verification)
+  Future<void> awardImagePoints(
+    String userId,
+    String conversationId,
+    String imagePath, {
+    String? profileImagePath,
+  }) async {
+    try {
+      // Check image rate limits
+      final tracking = await _getMessageTracking(userId, conversationId);
+      if (tracking != null && tracking.hasExceededImageLimit()) {
+        debugPrint('❌ Image rate limit exceeded for user: $userId');
+        return;
+      }
+
+      debugPrint('🎯 Verifying face in image for user: $userId');
+      
+      // Verify that image contains a face
+      final faceDetectionService = FaceDetectionService();
+      final faceResult = await faceDetectionService.detectFacesInImage(imagePath);
+      
+      if (!faceResult.success || faceResult.faceCount == 0) {
+        debugPrint('❌ No face detected in image - no points awarded');
+        faceDetectionService.dispose();
+        return;
+      }
+
+      // If profile image is provided, compare faces for similarity
+      if (profileImagePath != null && profileImagePath.isNotEmpty) {
+        final comparisonResult = await faceDetectionService.compareFaces(
+          profileImagePath,
+          imagePath,
+        );
+        
+        if (!comparisonResult.isMatch) {
+          debugPrint('❌ Face does not match profile - no points awarded');
+          debugPrint('   Similarity: ${comparisonResult.similarity}');
+          faceDetectionService.dispose();
+          return;
+        }
+        
+        debugPrint('✅ Face matches profile! Similarity: ${comparisonResult.similarity}');
+      } else {
+        debugPrint('✅ Face detected in image (${faceResult.faceCount} face(s))');
+      }
+
+      faceDetectionService.dispose();
+
       debugPrint('🎯 Awarding image points to user: $userId');
-      debugPrint('📊 Points to award: ${ScoringRules.imageSentPoints}');
       await _updateScore(userId, ScoringRules.imageSentPoints, 'imagesSent');
+      await _updateImageTracking(userId, conversationId);
       debugPrint('✅ Image points awarded successfully!');
     } catch (e) {
       debugPrint('❌ Error awarding image points: $e');
@@ -206,6 +325,16 @@ class RewardsService {
   // Award points for positive feedback
   Future<void> awardPositiveFeedbackPoints(String userId) async {
     await _updateScore(userId, ScoringRules.positiveFeedbackPoints, null);
+  }
+
+  // Apply penalty for spam/duplicates
+  Future<void> _applyPenalty(String userId, int penaltyPoints) async {
+    try {
+      await _updateScore(userId, penaltyPoints, null);
+      debugPrint('⚠️ Applied penalty: $penaltyPoints points');
+    } catch (e) {
+      debugPrint('❌ Error applying penalty: $e');
+    }
   }
 
   // Update score helper
@@ -440,6 +569,116 @@ class RewardsService {
       }
     } catch (e) {
       print('Error resetting monthly scores: $e');
+    }
+  }
+
+  // Get message tracking for rate limiting and duplicate detection
+  Future<MessageTracking?> _getMessageTracking(String userId, String conversationId) async {
+    try {
+      final doc = await _firestore
+          .collection('message_tracking')
+          .doc('${userId}_$conversationId')
+          .get();
+
+      if (doc.exists) {
+        return MessageTracking.fromMap(doc.data()!);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error getting message tracking: $e');
+      return null;
+    }
+  }
+
+  // Update message tracking after sending a message
+  Future<void> _updateMessageTracking(
+    String userId,
+    String conversationId,
+    String messageText,
+    int qualityScore,
+  ) async {
+    try {
+      final docRef = _firestore
+          .collection('message_tracking')
+          .doc('${userId}_$conversationId');
+
+      final doc = await docRef.get();
+      final now = DateTime.now();
+
+      if (!doc.exists) {
+        // Create new tracking
+        final tracking = MessageTracking(
+          userId: userId,
+          conversationId: conversationId,
+          recentMessages: [messageText],
+          messageQualities: [qualityScore],
+          hourlyMessageCount: 1,
+          hourlyImageCount: 0,
+          lastMessageTime: now,
+          lastImageTime: now,
+          dailyConversationCount: 1,
+        );
+        await docRef.set(tracking.toMap());
+      } else {
+        // Update existing tracking
+        final data = doc.data()!;
+        final lastMessageTime = (data['lastMessageTime'] as Timestamp).toDate();
+        final hoursSinceLastMessage = now.difference(lastMessageTime).inHours;
+
+        // Reset hourly counter if more than 1 hour has passed
+        final hourlyCount = hoursSinceLastMessage >= 1 ? 1 : (data['hourlyMessageCount'] ?? 0) + 1;
+
+        // Keep only last 10 messages
+        final recentMessages = List<String>.from(data['recentMessages'] ?? []);
+        recentMessages.add(messageText);
+        if (recentMessages.length > RateLimitConfig.maxRecentMessagesTracked) {
+          recentMessages.removeAt(0);
+        }
+
+        // Keep only last 10 quality scores
+        final messageQualities = List<int>.from(data['messageQualities'] ?? []);
+        messageQualities.add(qualityScore);
+        if (messageQualities.length > RateLimitConfig.maxRecentMessagesTracked) {
+          messageQualities.removeAt(0);
+        }
+
+        await docRef.update({
+          'recentMessages': recentMessages,
+          'messageQualities': messageQualities,
+          'hourlyMessageCount': hourlyCount,
+          'lastMessageTime': Timestamp.fromDate(now),
+        });
+      }
+    } catch (e) {
+      debugPrint('Error updating message tracking: $e');
+    }
+  }
+
+  // Update image tracking after sending an image
+  Future<void> _updateImageTracking(String userId, String conversationId) async {
+    try {
+      final docRef = _firestore
+          .collection('message_tracking')
+          .doc('${userId}_$conversationId');
+
+      final doc = await docRef.get();
+      final now = DateTime.now();
+
+      if (doc.exists) {
+        final data = doc.data()!;
+        final lastImageTime = (data['lastImageTime'] as Timestamp?)?.toDate() ?? now;
+        final hoursSinceLastImage = now.difference(lastImageTime).inHours;
+
+        // Reset hourly counter if more than 1 hour has passed
+        final hourlyCount = hoursSinceLastImage >= 1 ? 1 : (data['hourlyImageCount'] ?? 0) + 1;
+
+        await docRef.update({
+          'hourlyImageCount': hourlyCount,
+          'lastImageTime': Timestamp.fromDate(now),
+        });
+      }
+    } catch (e) {
+      debugPrint('Error updating image tracking: $e');
     }
   }
 }

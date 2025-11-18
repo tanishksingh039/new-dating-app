@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../home/home_screen.dart';
 import 'login_screen.dart';
-import '../onboarding/onboarding_screen.dart';
+import '../onboarding/welcome_screen.dart';
 
 class WrapperScreen extends StatefulWidget {
   const WrapperScreen({super.key});
@@ -92,7 +92,7 @@ class _WrapperScreenState extends State<WrapperScreen> {
               }
               
               // No user data or onboarding not completed
-              return const OnboardingScreen();
+              return const WelcomeScreen();
             },
           );
         }

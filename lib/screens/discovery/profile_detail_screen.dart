@@ -3,6 +3,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/user_model.dart';
 import '../../widgets/action_buttons.dart';
 import '../../mixins/screenshot_protection_mixin.dart';
+import '../safety/report_user_screen.dart';
+import '../safety/block_user_screen.dart';
 
 class ProfileDetailScreen extends StatefulWidget {
   final UserModel user;
@@ -43,6 +45,73 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen>
     super.dispose();
   }
 
+  void _showOptionsBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              widget.user.name,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(Icons.report, color: Colors.orange),
+              title: const Text('Report User'),
+              subtitle: const Text('Report inappropriate behavior'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ReportUserScreen(reportedUser: widget.user),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.block, color: Colors.red),
+              title: const Text('Block User'),
+              subtitle: const Text('You won\'t see each other'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => BlockUserScreen(userToBlock: widget.user),
+                  ),
+                ).then((blocked) {
+                  if (blocked == true) {
+                    Navigator.pop(context); // Go back to discovery
+                  }
+                });
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final age = widget.user.dateOfBirth != null
@@ -72,6 +141,19 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen>
                   ),
                   onPressed: () => Navigator.pop(context),
                 ),
+                actions: [
+                  IconButton(
+                    icon: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.more_vert, color: Colors.white),
+                    ),
+                    onPressed: _showOptionsBottomSheet,
+                  ),
+                ],
                 flexibleSpace: FlexibleSpaceBar(
                   background: Stack(
                     fit: StackFit.expand,

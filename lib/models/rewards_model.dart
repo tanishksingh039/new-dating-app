@@ -237,18 +237,37 @@ class RewardHistory {
 }
 
 class ScoringRules {
+  // Base points (before quality multiplier)
   static const int messageSentPoints = 5;
   static const int replyGivenPoints = 10;
-  static const int imageSentPoints = 30; // Updated: 30 points for sending image
+  static const int imageSentPoints = 15; // Reduced from 30 to prevent image spam
   static const int positiveFeedbackPoints = 20;
-  static const int dailyStreakBonus = 25; // Bonus for chatting daily with multiple people
+  static const int dailyStreakBonus = 25;
   static const int weeklyStreakBonus = 100;
   
-  // Streak bonus multipliers based on number of unique conversations per day
-  static const int streakBonusPerConversation = 5; // 5 points per unique person chatted with
-  static const int maxDailyConversationBonus = 50; // Max 50 points from conversations (10 people)
+  // Quality-based multipliers (applied to base points)
+  // High quality (80-100): 1.5x multiplier
+  // Normal quality (60-79): 1.0x multiplier
+  // Low quality (40-59): 0.5x multiplier
+  // Very low (<40): 0.0x multiplier (no points)
   
+  // Conversation bonuses
+  static const int streakBonusPerConversation = 5;
+  static const int maxDailyConversationBonus = 50;
+  static const int genuineConversationBonus = 10; // Bonus for high-quality conversations
+  
+  // Penalties
+  static const int spamPenalty = -10; // Penalty for detected spam
+  static const int duplicatePenalty = -5; // Penalty for duplicate messages
+  
+  // Rewards
   static const int top1Reward = 1000;
   static const int top3Reward = 500;
   static const int top10Reward = 250;
+  
+  // Rate limits (enforced by MessageTracking)
+  static const int maxMessagesPerHour = 20;
+  static const int maxImagesPerHour = 5;
+  static const int minSecondsBetweenMessages = 3;
+  static const int maxConversationsPerDayForPoints = 10;
 }

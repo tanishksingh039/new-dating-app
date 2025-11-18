@@ -1,6 +1,7 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_model.dart';
+import 'user_safety_service.dart';
 import '../models/discovery_filters.dart';
 import '../firebase_services.dart';
 import 'notification_service.dart';
@@ -140,10 +141,18 @@ class DiscoveryService {
 
       debugPrint('Filtered down to ${profiles.length} valid profiles');
 
-      // Shuffle for variety
-      profiles.shuffle();
+      // Filter out blocked users
+      final filteredProfiles = await UserSafetyService.filterBlockedUsers(
+        currentUserId: currentUserId,
+        users: profiles,
+      );
 
-      return profiles;
+      debugPrint('After blocking filter: ${filteredProfiles.length} profiles');
+
+      // Shuffle for variety
+      filteredProfiles.shuffle();
+
+      return filteredProfiles;
     } catch (e) {
       debugPrint('Error getting discovery profiles: $e');
       return [];

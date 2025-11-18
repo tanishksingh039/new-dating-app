@@ -55,7 +55,7 @@ class _BioScreenState extends State<BioScreen> {
       _log('Bio saved successfully');
 
       if (mounted) {
-        Navigator.pushReplacementNamed(context, '/onboarding/preferences');
+        Navigator.pushReplacementNamed(context, '/onboarding/location');
       }
     } catch (e) {
       _log('Error saving bio: $e');
@@ -70,7 +70,7 @@ class _BioScreenState extends State<BioScreen> {
   }
 
   void _skip() {
-    Navigator.pushReplacementNamed(context, '/onboarding/preferences');
+    Navigator.pushReplacementNamed(context, '/onboarding/location');
   }
 
   void _showSnackBar(String message, Color color) {
@@ -284,7 +284,7 @@ class _BioScreenState extends State<BioScreen> {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: LinearProgressIndicator(
-                value: 0.8, // 80% - Step 4 of 5
+                value: 0.6, // 60% - Step 6 of 10
                 backgroundColor: Colors.white.withOpacity(0.3),
                 valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
                 minHeight: 8,
@@ -293,7 +293,7 @@ class _BioScreenState extends State<BioScreen> {
           ),
           const SizedBox(width: 12),
           Text(
-            '4/5',
+            '6/10',
             style: TextStyle(
               color: Colors.white.withOpacity(0.9),
               fontWeight: FontWeight.w600,

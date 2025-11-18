@@ -81,37 +81,37 @@ class RewardsRulesScreen extends StatelessWidget {
           _buildPointRow(
             Icons.message,
             'Send a message',
-            '${ScoringRules.messageSentPoints} points',
+            'Points vary',
             Colors.blue,
           ),
           _buildPointRow(
             Icons.reply,
             'Give a reply',
-            '${ScoringRules.replyGivenPoints} points',
+            'Points vary',
             Colors.green,
           ),
           _buildPointRow(
             Icons.image,
             'Send an image',
-            '${ScoringRules.imageSentPoints} points',
+            'Points vary',
             Colors.orange,
           ),
           _buildPointRow(
             Icons.thumb_up,
             'Receive positive feedback',
-            '${ScoringRules.positiveFeedbackPoints} points',
+            'Bonus points',
             Colors.pink,
           ),
           _buildPointRow(
             Icons.local_fire_department,
             'Daily streak bonus',
-            '${ScoringRules.dailyStreakBonus} points',
+            'Bonus points',
             Colors.red,
           ),
           _buildPointRow(
             Icons.emoji_events,
             'Weekly streak bonus',
-            '${ScoringRules.weeklyStreakBonus} points',
+            'Bonus points',
             Colors.amber,
           ),
           const SizedBox(height: 16),
@@ -330,7 +330,7 @@ class RewardsRulesScreen extends StatelessWidget {
           ),
           _buildModerationItem(
             'Quality Engagement',
-            'Points are awarded for genuine engagement. Spam messages or low-quality interactions may be penalized.',
+            'Points are awarded based on engagement quality and authenticity. Our system analyzes various factors to ensure fair scoring. Low-quality or suspicious activity may be penalized.',
           ),
           _buildModerationItem(
             'Appeals Process',

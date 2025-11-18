@@ -724,9 +724,13 @@ class FirebaseServices {
     String messageText,
   ) async {
     try {
-      // Get sender's name
+      // Get sender's name and photo
       final senderDoc = await _firestore.collection('users').doc(senderId).get();
-      final senderName = senderDoc.data()?['name'] ?? 'Someone';
+      final senderData = senderDoc.data();
+      final senderName = senderData?['name'] ?? 'Someone';
+      final senderPhoto = (senderData?['photos'] as List?)?.isNotEmpty == true 
+          ? senderData!['photos'][0] as String?
+          : null;
 
       // Truncate message for preview
       final messagePreview = messageText.length > 50
@@ -736,8 +740,10 @@ class FirebaseServices {
       // Send notification
       await _notificationService.sendMessageNotification(
         targetUserId: receiverId,
+        senderId: senderId,
         senderName: senderName,
         messagePreview: messagePreview,
+        senderPhoto: senderPhoto,
       );
 
       _log('✅ Message notification sent to $receiverId');
