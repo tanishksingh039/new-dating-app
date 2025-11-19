@@ -53,6 +53,153 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
     }
   }
 
+  Future<void> _showBanOptionsDialog(ReportModel report) async {
+    final action = await showDialog<AdminAction>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Take Action on ${report.reportedUserName}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Choose an action to take:',
+              style: TextStyle(color: Colors.grey[700]),
+            ),
+            const SizedBox(height: 16),
+            _buildActionOption(
+              icon: Icons.warning,
+              title: 'Issue Warning',
+              description: 'Send a warning to the user',
+              color: Colors.orange,
+              action: AdminAction.warning,
+            ),
+            const SizedBox(height: 8),
+            _buildActionOption(
+              icon: Icons.block,
+              title: 'Ban for 7 Days',
+              description: 'Temporarily suspend account',
+              color: Colors.red,
+              action: AdminAction.tempBan7Days,
+            ),
+            const SizedBox(height: 8),
+            _buildActionOption(
+              icon: Icons.block_outlined,
+              title: 'Permanent Ban',
+              description: 'Permanently ban this user',
+              color: Colors.red.shade900,
+              action: AdminAction.permanentBan,
+            ),
+            const SizedBox(height: 8),
+            _buildActionOption(
+              icon: Icons.delete_forever,
+              title: 'Delete Account',
+              description: 'Permanently delete user account',
+              color: Colors.black,
+              action: AdminAction.accountDeleted,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+
+    if (action != null && mounted) {
+      await _takeAdminAction(report, action);
+    }
+  }
+
+  Widget _buildActionOption({
+    required IconData icon,
+    required String title,
+    required String description,
+    required Color color,
+    required AdminAction action,
+  }) {
+    return InkWell(
+      onTap: () => Navigator.pop(context, action),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                    ),
+                  ),
+                  Text(
+                    description,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: Colors.grey[400]),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _takeAdminAction(ReportModel report, AdminAction action) async {
+    try {
+      // Apply ban if needed
+      if (action == AdminAction.tempBan7Days || action == AdminAction.permanentBan) {
+        await UserSafetyService.banUser(
+          userId: report.reportedUserId,
+          banType: action,
+          reason: 'Reported for ${report.reason.displayName}',
+        );
+      }
+
+      // Update report with action taken
+      await UserSafetyService.updateReportStatus(
+        reportId: report.id,
+        status: ReportStatus.resolved,
+        adminAction: action,
+        adminNotes: 'Action taken: ${action.displayName}',
+        adminId: 'admin_user',
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${action.displayName} - Report resolved'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error taking action: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -268,57 +415,105 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
 
               const SizedBox(height: 12),
 
-              // User info
-              FutureBuilder<UserModel?>(
-                future: _getUserInfo(report.reportedUserId),
-                builder: (context, snapshot) {
-                  if (snapshot.hasData && snapshot.data != null) {
-                    final user = snapshot.data!;
-                    return Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 16,
-                          backgroundImage: user.photos.isNotEmpty
-                              ? NetworkImage(user.photos[0])
-                              : null,
-                          child: user.photos.isEmpty
-                              ? const Icon(Icons.person, size: 16)
-                              : null,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Reported: ${user.name}',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
+              // Reported User info (from report model)
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundImage: report.reportedUserPhoto != null
+                          ? NetworkImage(report.reportedUserPhoto!)
+                          : null,
+                      child: report.reportedUserPhoto == null
+                          ? const Icon(Icons.person, size: 20)
+                          : null,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Reported User',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey[600],
                             ),
                           ),
+                          Text(
+                            report.reportedUserName,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (report.evidenceImages.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
                         ),
-                      ],
-                    );
-                  }
-                  return const SizedBox.shrink();
-                },
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade100,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.photo_library, size: 14, color: Colors.blue.shade700),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${report.evidenceImages.length}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
               ),
 
-              // Quick actions for pending reports
-              if (report.status == ReportStatus.pending) ...[
+              // Quick actions for pending/reviewing reports
+              if (report.status == ReportStatus.pending || report.status == ReportStatus.underReview) ...[
                 const SizedBox(height: 12),
                 Row(
                   children: [
+                    if (report.status == ReportStatus.pending)
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => _updateReportStatus(report, ReportStatus.underReview),
+                          child: const Text('Review'),
+                        ),
+                      ),
+                    if (report.status == ReportStatus.pending) const SizedBox(width: 8),
                     Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => _updateReportStatus(report, ReportStatus.underReview),
-                        child: const Text('Review'),
+                      child: ElevatedButton.icon(
+                        onPressed: () => _showBanOptionsDialog(report),
+                        icon: const Icon(Icons.gavel, size: 18),
+                        label: const Text('Take Action'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: ElevatedButton(
+                      child: OutlinedButton(
                         onPressed: () => _updateReportStatus(report, ReportStatus.dismissed),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.grey,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.grey,
                         ),
                         child: const Text('Dismiss'),
                       ),

@@ -1,6 +1,9 @@
 # Payment Error Fix
 
 ## Problem
+Payment was completing successfully with Razorpay, but the app showed# Payment Failed Error - FIXED! 
+
+## Update: Thunder Button Payment Issue Resolved
 Payment was completing successfully with Razorpay, but the app showed "Payment Failed - Failed to activate premium. Please contact support." error.
 
 ## Root Cause

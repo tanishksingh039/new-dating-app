@@ -3,11 +3,11 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:animate_do/animate_do.dart';
 import 'dart:io';
 import 'dart:math';
 import '../../services/face_detection_service.dart';
+import '../../services/r2_storage_service.dart';
 import '../../constants/app_colors.dart';
 
 class LivenessVerificationScreen extends StatefulWidget {
@@ -256,18 +256,12 @@ class _LivenessVerificationScreenState extends State<LivenessVerificationScreen>
       final userId = FirebaseAuth.instance.currentUser?.uid;
       if (userId == null) throw 'User not logged in';
 
-      // Upload all verification photos
-      List<String> photoUrls = [];
-      for (int i = 0; i < _capturedImages.length; i++) {
-        final storageRef = FirebaseStorage.instance
-            .ref()
-            .child('verification_photos')
-            .child('${userId}_$i.jpg');
-        
-        await storageRef.putFile(_capturedImages[i]);
-        final url = await storageRef.getDownloadURL();
-        photoUrls.add(url);
-      }
+      // Upload all verification photos to Cloudflare R2 (FREE downloads)
+      final photoUrls = await R2StorageService.uploadMultipleImages(
+        imageFiles: _capturedImages,
+        folder: 'verification',
+        userId: userId,
+      );
 
       // Calculate average confidence
       final avgConfidence = _verificationResults

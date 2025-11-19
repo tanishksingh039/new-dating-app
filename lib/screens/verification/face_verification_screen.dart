@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:animate_do/animate_do.dart';
 import 'dart:io';
 import '../../services/face_detection_service.dart';
+import '../../services/r2_storage_service.dart';
 import '../../constants/app_colors.dart';
 
 class FaceVerificationScreen extends StatefulWidget {
@@ -102,14 +102,12 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> with Au
       final userId = FirebaseAuth.instance.currentUser?.uid;
       if (userId == null) throw 'User not logged in';
 
-      // Upload verification photo to Firebase Storage
-      final storageRef = FirebaseStorage.instance
-          .ref()
-          .child('verification_photos')
-          .child('$userId.jpg');
-      
-      await storageRef.putFile(_selectedImage!);
-      final photoUrl = await storageRef.getDownloadURL();
+      // Upload verification photo to Cloudflare R2 (FREE downloads)
+      final photoUrl = await R2StorageService.uploadImage(
+        imageFile: _selectedImage!,
+        folder: 'verification',
+        userId: userId,
+      );
 
       // Update user verification status in Firestore
       await FirebaseFirestore.instance

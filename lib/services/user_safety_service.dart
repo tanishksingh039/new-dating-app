@@ -155,8 +155,11 @@ class UserSafetyService {
   static Future<void> reportUser({
     required String reporterId,
     required String reportedUserId,
+    required String reportedUserName,
+    String? reportedUserPhoto,
     required ReportReason reason,
     required String description,
+    List<String> evidenceImages = const [],
   }) async {
     try {
       final reportId = _firestore.collection('reports').doc().id;
@@ -165,8 +168,11 @@ class UserSafetyService {
         id: reportId,
         reporterId: reporterId,
         reportedUserId: reportedUserId,
+        reportedUserName: reportedUserName,
+        reportedUserPhoto: reportedUserPhoto,
         reason: reason,
         description: description,
+        evidenceImages: evidenceImages,
         createdAt: DateTime.now(),
       );
 
@@ -207,10 +213,31 @@ class UserSafetyService {
     }
   }
 
+  // Get reports submitted by a specific user (for user-facing "My Reports" screen)
+  static Future<List<ReportModel>> getMyReports({
+    required String reporterId,
+  }) async {
+    try {
+      final snapshot = await _firestore
+          .collection('reports')
+          .where('reporterId', isEqualTo: reporterId)
+          .orderBy('createdAt', descending: true)
+          .get();
+      
+      return snapshot.docs
+          .map((doc) => ReportModel.fromMap(doc.data() as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('Error getting user reports: $e');
+      return [];
+    }
+  }
+
   // Update report status (admin function)
   static Future<void> updateReportStatus({
     required String reportId,
     required ReportStatus status,
+    AdminAction? adminAction,
     String? adminNotes,
     String? adminId,
   }) async {
@@ -222,6 +249,7 @@ class UserSafetyService {
             : null,
       };
 
+      if (adminAction != null) updateData['adminAction'] = adminAction.name;
       if (adminNotes != null) updateData['adminNotes'] = adminNotes;
       if (adminId != null) updateData['adminId'] = adminId;
 
@@ -233,6 +261,63 @@ class UserSafetyService {
       debugPrint('Report $reportId status updated to ${status.name}');
     } catch (e) {
       debugPrint('Error updating report status: $e');
+      rethrow;
+    }
+  }
+
+  // Ban user (admin function)
+  static Future<void> banUser({
+    required String userId,
+    required AdminAction banType,
+    String? reason,
+  }) async {
+    try {
+      final updateData = <String, dynamic>{
+        'isBanned': true,
+        'banReason': reason,
+        'bannedAt': Timestamp.fromDate(DateTime.now()),
+      };
+
+      if (banType == AdminAction.tempBan7Days) {
+        final banUntil = DateTime.now().add(const Duration(days: 7));
+        updateData['banUntil'] = Timestamp.fromDate(banUntil);
+        updateData['banType'] = 'temporary';
+      } else if (banType == AdminAction.permanentBan) {
+        updateData['banUntil'] = null;
+        updateData['banType'] = 'permanent';
+      }
+
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .update(updateData);
+
+      debugPrint('User $userId banned: ${banType.name}');
+    } catch (e) {
+      debugPrint('Error banning user: $e');
+      rethrow;
+    }
+  }
+
+  // Unban user (admin function)
+  static Future<void> unbanUser({
+    required String userId,
+  }) async {
+    try {
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .update({
+        'isBanned': false,
+        'banReason': null,
+        'bannedAt': null,
+        'banUntil': null,
+        'banType': null,
+      });
+
+      debugPrint('User $userId unbanned');
+    } catch (e) {
+      debugPrint('Error unbanning user: $e');
       rethrow;
     }
   }

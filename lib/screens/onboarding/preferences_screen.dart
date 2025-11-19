@@ -183,13 +183,9 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
                                 Expanded(
                                   child: _buildInterestedInCard('male', 'Men', '👨'),
                                 ),
-                                const SizedBox(width: 12),
+                                const SizedBox(width: 16),
                                 Expanded(
                                   child: _buildInterestedInCard('female', 'Women', '👩'),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: _buildInterestedInCard('everyone', 'Everyone', '🌈'),
                                 ),
                               ],
                             ),

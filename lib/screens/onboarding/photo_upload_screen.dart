@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
 import '../../../utils/constants.dart';
 import '../../../widgets/custom_button.dart';
 import '../../../firebase_services.dart';
 import '../../constants/app_colors.dart';
+import '../../services/r2_storage_service.dart';
 
 class PhotoUploadScreen extends StatefulWidget {
   const PhotoUploadScreen({super.key});
@@ -113,24 +113,20 @@ class _PhotoUploadScreenState extends State<PhotoUploadScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('No user signed in');
 
-    final fileName = 'photo_${DateTime.now().millisecondsSinceEpoch}_$index.jpg';
-    final storageRef = FirebaseStorage.instance
-        .ref()
-        .child('users')
-        .child(user.uid)
-        .child('photos')
-        .child(fileName);
-
-    final uploadTask = storageRef.putFile(File(image.path));
-
-    uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
-      setState(() {
-        _uploadProgress = snapshot.bytesTransferred / snapshot.totalBytes;
-      });
+    // Upload to Cloudflare R2 (FREE downloads, auto-compression)
+    setState(() {
+      _uploadProgress = (index / _selectedImages.length);
     });
-
-    final snapshot = await uploadTask;
-    final downloadUrl = await snapshot.ref.getDownloadURL();
+    
+    final downloadUrl = await R2StorageService.uploadImage(
+      imageFile: File(image.path),
+      folder: 'profiles',
+      userId: user.uid,
+    );
+    
+    setState(() {
+      _uploadProgress = ((index + 1) / _selectedImages.length);
+    });
     
     _log('Uploaded image $index: $downloadUrl');
     return downloadUrl;

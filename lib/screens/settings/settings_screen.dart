@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:convert';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 import 'account_settings_screen.dart';
 import 'privacy_settings_screen.dart';
 import 'notification_settings_screen.dart';
@@ -8,6 +12,13 @@ import '../verification/liveness_verification_screen.dart';
 import '../safety/blocked_users_screen.dart';
 import '../admin/admin_reports_screen.dart';
 import '../admin/admin_login_screen.dart';
+import '../legal/privacy_policy_screen.dart';
+import '../legal/terms_of_service_screen.dart';
+import '../legal/community_guidelines_screen.dart';
+import '../safety/my_reports_screen.dart';
+
+// Add Timestamp import
+import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -38,6 +49,112 @@ class _SettingsScreenState extends State<SettingsScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         Navigator.of(context).pushReplacementNamed('/login');
       });
+    }
+  }
+
+  // Helper method to convert Firestore data to JSON-serializable format
+  Map<String, dynamic> _convertFirestoreData(Map<String, dynamic> data) {
+    final Map<String, dynamic> converted = {};
+    
+    data.forEach((key, value) {
+      if (value is Timestamp) {
+        // Convert Timestamp to ISO 8601 string
+        converted[key] = value.toDate().toIso8601String();
+      } else if (value is Map) {
+        // Recursively convert nested maps
+        converted[key] = _convertFirestoreData(Map<String, dynamic>.from(value));
+      } else if (value is List) {
+        // Convert lists
+        converted[key] = value.map((item) {
+          if (item is Timestamp) {
+            return item.toDate().toIso8601String();
+          } else if (item is Map) {
+            return _convertFirestoreData(Map<String, dynamic>.from(item));
+          }
+          return item;
+        }).toList();
+      } else {
+        converted[key] = value;
+      }
+    });
+    
+    return converted;
+  }
+
+  Future<void> _downloadUserData() async {
+    setState(() => _isLoading = true);
+
+    try {
+      // Fetch user data
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserId)
+          .get();
+
+      if (!userDoc.exists) {
+        throw Exception('User data not found');
+      }
+
+      // Collect all user data and convert Timestamps
+      final Map<String, dynamic> userData = {
+        'profile': _convertFirestoreData(userDoc.data() ?? {}),
+        'exportDate': DateTime.now().toIso8601String(),
+        'userId': currentUserId,
+      };
+
+      // Fetch matches
+      final matchesSnapshot = await FirebaseFirestore.instance
+          .collection('matches')
+          .where('users', arrayContains: currentUserId)
+          .get();
+      userData['matches'] = matchesSnapshot.docs
+          .map((doc) => _convertFirestoreData(doc.data()))
+          .toList();
+
+      // Fetch swipes
+      final swipesSnapshot = await FirebaseFirestore.instance
+          .collection('swipes')
+          .where('userId', isEqualTo: currentUserId)
+          .get();
+      userData['swipes'] = swipesSnapshot.docs
+          .map((doc) => _convertFirestoreData(doc.data()))
+          .toList();
+
+      // Convert to JSON
+      final jsonString = const JsonEncoder.withIndent('  ').convert(userData);
+
+      // Save to file
+      final directory = await getApplicationDocumentsDirectory();
+      final file = File('${directory.path}/shooluv_data_${DateTime.now().millisecondsSinceEpoch}.json');
+      await file.writeAsString(jsonString);
+
+      setState(() => _isLoading = false);
+
+      if (mounted) {
+        // Share the file
+        await Share.shareXFiles(
+          [XFile(file.path)],
+          subject: 'My shooLuv Data',
+          text: 'Your personal data export from shooLuv',
+        );
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Data exported successfully! ✅'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error exporting data: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -278,6 +395,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         );
                       },
                     ),
+                    _buildSettingTile(
+                      Icons.report_outlined,
+                      'My Reports',
+                      'View your submitted reports',
+                      () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const MyReportsScreen(),
+                          ),
+                        );
+                      },
+                      iconColor: Colors.orange,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -305,27 +436,73 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(height: 10),
                 _buildSection(
-                  'Support',
+                  'Data & Privacy',
                   [
+                    _buildSettingTile(
+                      Icons.download,
+                      'Download My Data',
+                      'Export all your data (GDPR/CCPA)',
+                      _downloadUserData,
+                      iconColor: Colors.blue,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                _buildSection(
+                  'Legal & Support',
+                  [
+                    _buildSettingTile(
+                      Icons.shield,
+                      'Community Guidelines',
+                      'Rules and best practices',
+                      () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const CommunityGuidelinesScreen(),
+                          ),
+                        );
+                      },
+                      iconColor: Colors.green,
+                    ),
+                    _buildSettingTile(
+                      Icons.privacy_tip,
+                      'Privacy Policy',
+                      'How we handle your data',
+                      () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const PrivacyPolicyScreen(),
+                          ),
+                        );
+                      },
+                      iconColor: Colors.blue,
+                    ),
+                    _buildSettingTile(
+                      Icons.description,
+                      'Terms of Service',
+                      'User agreement and terms',
+                      () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const TermsOfServiceScreen(),
+                          ),
+                        );
+                      },
+                      iconColor: Colors.purple,
+                    ),
                     _buildSettingTile(
                       Icons.help,
                       'Help & Support',
-                      'FAQs, contact us',
+                      'Contact: support@shooluv.com',
                       () {
-                        // TODO: Navigate to help screen
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Coming soon!')),
-                        );
-                      },
-                    ),
-                    _buildSettingTile(
-                      Icons.info,
-                      'About',
-                      'Terms, privacy policy, version',
-                      () {
-                        // TODO: Navigate to about screen
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Coming soon!')),
+                          const SnackBar(
+                            content: Text('Email us at: support@shooluv.com'),
+                            duration: Duration(seconds: 3),
+                          ),
                         );
                       },
                     ),

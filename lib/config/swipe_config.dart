@@ -1,10 +1,10 @@
 /// Swipe Limit Configuration
 class SwipeConfig {
-  // Free swipes for non-premium users
+  // Free swipes for non-premium users (STATIC - lifetime per account, never resets)
   static const int freeSwipesNonPremium = 8;
   
-  // Free swipes for premium users
-  static const int freeSwipesPremium = 20;
+  // Free swipes for premium users (WEEKLY - resets every week)
+  static const int freeSwipesPremium = 50;
   
   // Additional swipes for non-premium users (per purchase)
   static const int additionalSwipesNonPremium = 6;

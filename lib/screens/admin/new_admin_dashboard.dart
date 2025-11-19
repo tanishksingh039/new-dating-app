@@ -259,7 +259,7 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
           tabs: const [
             Tab(
               icon: Icon(Icons.dashboard, size: 20),
-              text: 'Dashboard',
+              text: 'shooLuv Admin Dashboard',
             ),
             Tab(
               icon: Icon(Icons.people, size: 20),
@@ -343,7 +343,7 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  "Here's what's happening with\nCampusBound today",
+                  "Here's what's happening with\nshooLuv today",
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 14,

@@ -73,7 +73,7 @@ class PaymentService {
         'key': RazorpayConfig.keyId,
         'amount': amountInPaise,
         'currency': RazorpayConfig.currency,
-        'name': RazorpayConfig.appName,
+        'name': RazorpayConfig.companyName,
         'description': description,
         'receipt': receipt,
         'prefill': {

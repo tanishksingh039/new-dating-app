@@ -3,6 +3,8 @@ import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/payment_service.dart';
+import '../../services/swipe_limit_service.dart';
+import '../../widgets/premium_options_dialog.dart';
 
 class PremiumSubscriptionScreen extends StatefulWidget {
   const PremiumSubscriptionScreen({Key? key}) : super(key: key);
@@ -157,6 +159,22 @@ class _PremiumSubscriptionScreenState extends State<PremiumSubscriptionScreen> {
     }
   }
 
+  Future<bool> _checkPremiumStatus() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return false;
+
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      
+      return userDoc.data()?['isPremium'] ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
   @override
   void dispose() {
     _paymentService.dispose();
@@ -174,14 +192,30 @@ class _PremiumSubscriptionScreenState extends State<PremiumSubscriptionScreen> {
           icon: const Icon(Icons.close, color: Color(0xFF2D3142)),
           onPressed: () => Navigator.pop(context),
         ),
+        title: const Text(
+          'Premium Plans',
+          style: TextStyle(
+            color: Color(0xFF2D3142),
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
+        child: FutureBuilder<bool>(
+          future: _checkPremiumStatus(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            
+            final isPremium = snapshot.data ?? false;
+            
+            return SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
                 // Premium Badge
                 Container(
                   padding: const EdgeInsets.all(20),
@@ -393,6 +427,8 @@ class _PremiumSubscriptionScreenState extends State<PremiumSubscriptionScreen> {
               ],
             ),
           ),
+        );
+          },
         ),
       ),
     );

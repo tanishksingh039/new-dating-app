@@ -133,10 +133,11 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
     );
   }
 
-  // Show purchase swipes dialog for non-premium users
+  // Show purchase swipes dialog for both premium and non-premium users when swipes reach zero
   void _showPurchaseSwipesDialog() async {
     showDialog(
       context: context,
+      barrierDismissible: false, // User must take action
       builder: (context) => PurchaseSwipesDialog(isPremium: _isPremium),
     );
   }
@@ -343,10 +344,8 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
     // Check swipe limit BEFORE swiping
     final canSwipe = await _swipeLimitService.canSwipe();
     if (!canSwipe) {
-      // Show purchase dialog for non-premium users
-      if (!_isPremium) {
-        _showPurchaseSwipesDialog();
-      }
+      // Show purchase dialog for BOTH premium and non-premium users when swipes reach zero
+      _showPurchaseSwipesDialog();
       return;
     }
     
@@ -355,10 +354,8 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
     // Use a swipe
     final swipeUsed = await _swipeLimitService.useSwipe();
     if (!swipeUsed) {
-      // Swipe limit reached, show purchase dialog
-      if (!_isPremium) {
-        _showPurchaseSwipesDialog();
-      }
+      // Swipe limit reached, show purchase dialog for BOTH premium and non-premium users
+      _showPurchaseSwipesDialog();
       return;
     }
     

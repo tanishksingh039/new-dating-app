@@ -21,7 +21,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final GoogleSignIn _googleSignIn = GoogleSignIn();
   final TextEditingController _phoneController = TextEditingController();
   final LocationService _locationService = LocationService();
-  bool _isLoading = false;
+  bool _isPhoneLoading = false;
+  bool _isGoogleLoading = false;
   String _countryCode = "+91";
   
   // Admin access
@@ -82,7 +83,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> signInWithGoogle() async {
-    setState(() => _isLoading = true);
+    setState(() => _isGoogleLoading = true);
 
     try {
       _log('Starting Google Sign-In...');
@@ -94,7 +95,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!locationResult.isAllowed) {
         _log('Location check failed: ${locationResult.errorMessage}');
         if (mounted) {
-          setState(() => _isLoading = false);
+          setState(() => _isGoogleLoading = false);
           _showLocationErrorDialog(
             locationResult.errorMessage ?? 'Location check failed',
             locationResult.distanceInKm,
@@ -113,7 +114,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (googleUser == null) {
         _log('User cancelled Google Sign-In');
         if (mounted) {
-          setState(() => _isLoading = false);
+          setState(() => _isGoogleLoading = false);
         }
         return;
       }
@@ -219,7 +220,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() => _isGoogleLoading = false);
       }
     }
   }
@@ -330,7 +331,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() => _isPhoneLoading = true);
 
     try {
       // Check location before allowing login
@@ -340,7 +341,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!locationResult.isAllowed) {
         _log('Location check failed: ${locationResult.errorMessage}');
         if (mounted) {
-          setState(() => _isLoading = false);
+          setState(() => _isPhoneLoading = false);
           _showLocationErrorDialog(
             locationResult.errorMessage ?? 'Location check failed',
             locationResult.distanceInKm,
@@ -353,7 +354,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       _log('Location check error: $e');
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() => _isPhoneLoading = false);
         _showErrorSnackBar('Unable to verify location. Please enable location services.');
       }
       return;
@@ -379,13 +380,13 @@ class _LoginScreenState extends State<LoginScreen> {
           }
           
           if (mounted) {
-            setState(() => _isLoading = false);
+            setState(() => _isPhoneLoading = false);
             Navigator.pushReplacementNamed(context, '/');
           }
         } catch (e) {
           _log('Auto sign-in error: $e');
           if (mounted) {
-            setState(() => _isLoading = false);
+            setState(() => _isPhoneLoading = false);
             _showErrorSnackBar("Auto-verification failed");
           }
         }
@@ -402,7 +403,7 @@ class _LoginScreenState extends State<LoginScreen> {
           }
           
           _showErrorSnackBar(errorMessage);
-          setState(() => _isLoading = false);
+          setState(() => _isPhoneLoading = false);
         }
       },
       codeSent: (String verificationId, int? resendToken) {
@@ -424,7 +425,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           );
-          setState(() => _isLoading = false);
+          setState(() => _isPhoneLoading = false);
           Navigator.pushNamed(context, '/otp', arguments: {
             'verificationId': verificationId,
             'phone': phone,
@@ -434,7 +435,7 @@ class _LoginScreenState extends State<LoginScreen> {
       codeAutoRetrievalTimeout: (String verificationId) {
         _log('Code auto-retrieval timeout');
         if (mounted) {
-          setState(() => _isLoading = false);
+          setState(() => _isPhoneLoading = false);
         }
       },
       timeout: const Duration(seconds: 60),
@@ -554,7 +555,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             TextField(
                               controller: _phoneController,
                               keyboardType: TextInputType.phone,
-                              enabled: !_isLoading,
+                              enabled: !_isPhoneLoading && !_isGoogleLoading,
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w500,
@@ -613,7 +614,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               width: double.infinity,
                               height: 56,
                               child: ElevatedButton(
-                                onPressed: _isLoading ? null : signInWithPhone,
+                                onPressed: (_isPhoneLoading || _isGoogleLoading) ? null : signInWithPhone,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppColors.primary,
                                   foregroundColor: Colors.white,
@@ -625,7 +626,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   disabledBackgroundColor:
                                       AppColors.primary.withOpacity(0.6),
                                 ),
-                                child: _isLoading
+                                child: _isPhoneLoading
                                     ? const SizedBox(
                                         width: 24,
                                         height: 24,
@@ -683,7 +684,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               width: double.infinity,
                               height: 56,
                               child: OutlinedButton(
-                                onPressed: _isLoading ? null : signInWithGoogle,
+                                onPressed: (_isPhoneLoading || _isGoogleLoading) ? null : signInWithGoogle,
                                 style: OutlinedButton.styleFrom(
                                   side: BorderSide(
                                     color: Colors.grey.shade300,
@@ -694,7 +695,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                   backgroundColor: Colors.white,
                                 ),
-                                child: _isLoading
+                                child: _isGoogleLoading
                                     ? const SizedBox(
                                         width: 24,
                                         height: 24,

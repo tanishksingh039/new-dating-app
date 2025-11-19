@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../models/user_model.dart';
 import '../../utils/constants.dart';
 import '../../widgets/custom_button.dart';
+import '../../services/r2_storage_service.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final UserModel user;
@@ -117,14 +117,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<String> _uploadPhoto(File photo) async {
-    final ref = FirebaseStorage.instance
-        .ref()
-        .child('user_photos')
-        .child(widget.user.uid)
-        .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
-
-    await ref.putFile(photo);
-    return await ref.getDownloadURL();
+    // Upload to Cloudflare R2 (FREE downloads, auto-compression)
+    final url = await R2StorageService.uploadImage(
+      imageFile: photo,
+      folder: 'profiles',
+      userId: widget.user.uid,
+    );
+    return url;
   }
 
   Future<void> _saveProfile() async {

@@ -65,7 +65,15 @@ class _PurchaseSwipesDialogState extends State<PurchaseSwipesDialog> {
     setState(() => _isProcessing = true);
 
     try {
-      _swipesCount = await _swipeLimitService.purchaseSwipes();
+      // Get swipe count first
+      _swipesCount = SwipeConfig.getAdditionalSwipesCount(widget.isPremium);
+      final description = SwipeConfig.getSwipePackageDescription(widget.isPremium);
+      
+      // Use the initialized payment service from this dialog
+      await _paymentService.startPayment(
+        amountInPaise: SwipeConfig.additionalSwipesPriceInPaise,
+        description: description,
+      );
     } catch (e) {
       if (mounted) {
         setState(() => _isProcessing = false);

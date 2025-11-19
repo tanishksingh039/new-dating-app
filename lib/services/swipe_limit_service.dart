@@ -28,10 +28,16 @@ class SwipeLimitService {
 
       final stats = SwipeStats.fromFirestore(doc);
 
-      // Check if daily reset is needed
-      if (stats.needsDailyReset()) {
-        return await _resetDailySwipes(stats);
+      // Get user's premium status to determine reset logic
+      final userDoc = await _firestore.collection('users').doc(user.uid).get();
+      final isPremium = userDoc.data()?['isPremium'] ?? false;
+
+      // Check if weekly reset is needed (ONLY for premium users)
+      if (isPremium && stats.needsWeeklyReset()) {
+        return await _resetWeeklySwipes(stats);
       }
+
+      // Non-premium users: NO reset - swipes are static (lifetime)
 
       return stats;
     } catch (e) {
@@ -56,10 +62,16 @@ class SwipeLimitService {
 
       final stats = SwipeStats.fromFirestore(doc);
 
-      // Check if daily reset is needed
-      if (stats.needsDailyReset()) {
-        return await _resetDailySwipes(stats);
+      // Get user's premium status
+      final userDoc = await _firestore.collection('users').doc(user.uid).get();
+      final isPremium = userDoc.data()?['isPremium'] ?? false;
+
+      // Check if weekly reset is needed (ONLY for premium users)
+      if (isPremium && stats.needsWeeklyReset()) {
+        return await _resetWeeklySwipes(stats);
       }
+
+      // Non-premium users: NO reset - swipes are static
 
       return stats;
     });
@@ -86,8 +98,8 @@ class SwipeLimitService {
     return stats;
   }
 
-  /// Reset daily free swipes
-  Future<SwipeStats> _resetDailySwipes(SwipeStats stats) async {
+  /// Reset weekly free swipes (for premium users only)
+  Future<SwipeStats> _resetWeeklySwipes(SwipeStats stats) async {
     final now = DateTime.now();
     final updatedStats = stats.copyWith(
       freeSwipesUsed: 0,
@@ -100,7 +112,7 @@ class SwipeLimitService {
         .doc(stats.userId)
         .update(updatedStats.toFirestore());
 
-    print('✅ Daily swipes reset for user ${stats.userId}');
+    print('✅ Weekly swipes reset for premium user ${stats.userId}');
     return updatedStats;
   }
 

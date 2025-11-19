@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../constants/app_colors.dart';
-import '../screens/payment/payment_screen.dart';
 import '../screens/spotlight/spotlight_booking_screen.dart';
+import 'premium_options_dialog.dart';
 
 class ActionButtons extends StatelessWidget {
   final VoidCallback onPass;
@@ -24,16 +26,8 @@ class ActionButtons extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          // Rewind button (premium feature)
-          _buildActionButton(
-            icon: Icons.replay,
-            color: AppColors.warmPeach,
-            size: 50,
-            onTap: () {
-              _showPremiumDialog(context, 'Rewind');
-            },
-            isPremium: true,
-          ),
+          // Spotlight button
+          _buildSpotlightButton(context),
 
           // Pass button
           _buildActionButton(
@@ -43,9 +37,6 @@ class ActionButtons extends StatelessWidget {
             onTap: isProcessing ? null : onPass,
           ),
 
-          // Spotlight button (replaces super like)
-          _buildSpotlightButton(context),
-
           // Like button
           _buildActionButton(
             icon: Icons.favorite,
@@ -54,64 +45,35 @@ class ActionButtons extends StatelessWidget {
             onTap: isProcessing ? null : onLike,
           ),
 
-          // Boost button (premium feature)
-          _buildActionButton(
-            icon: Icons.flash_on,
-            color: AppColors.shadowyPurple,
-            size: 50,
-            onTap: () {
-              _showPremiumDialog(context, 'Boost');
-            },
-            isPremium: true,
-          ),
+          // Thunder button (premium/swipe pack)
+          _buildThunderButton(context),
         ],
       ),
     );
   }
 
-  void _showPremiumDialog(BuildContext context, String feature) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Icon(Icons.workspace_premium, color: Colors.amber[700], size: 28),
-            const SizedBox(width: 12),
-            const Text('Premium Feature'),
-          ],
-        ),
-        content: const Text(
-          'Do you want to avail Premium?\n\nUpgrade now to unlock exclusive features like unlimited swipes, advanced filters, and much more!',
-          style: TextStyle(fontSize: 16),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Maybe Later'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const PaymentScreen(),
-                ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Text('Upgrade Now'),
-          ),
-        ],
-      ),
-    );
+  void _showPremiumOptionsDialog(BuildContext context) async {
+    // Get user's premium status
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      
+      final isPremium = userDoc.data()?['isPremium'] ?? false;
+
+      if (!context.mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (context) => PremiumOptionsDialog(isPremium: isPremium),
+      );
+    } catch (e) {
+      debugPrint('Error checking premium status: $e');
+    }
   }
 
   Widget _buildSpotlightButton(BuildContext context) {
@@ -145,6 +107,40 @@ class ActionButtons extends StatelessWidget {
         child: const Center(
           child: Icon(
             Icons.star,
+            color: Colors.white,
+            size: 28,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildThunderButton(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        _showPremiumOptionsDialog(context);
+      },
+      child: Container(
+        width: 55,
+        height: 55,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF9B59B6), Color(0xFF8E44AD)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF9B59B6).withOpacity(0.4),
+              blurRadius: 15,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: const Center(
+          child: Icon(
+            Icons.flash_on,
             color: Colors.white,
             size: 28,
           ),

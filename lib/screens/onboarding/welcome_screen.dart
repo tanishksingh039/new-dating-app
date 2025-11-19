@@ -103,7 +103,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
                           // App Name
                           const Text(
-                            'CampusBound',
+                            'Welcome to shooLuv',
                             style: TextStyle(
                               fontSize: 36,
                               fontWeight: FontWeight.bold,

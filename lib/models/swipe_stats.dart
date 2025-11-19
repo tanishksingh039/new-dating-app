@@ -66,7 +66,14 @@ class SwipeStats {
     return getRemainingFreeSwipes(freeSwipesLimit) + purchasedSwipesRemaining;
   }
 
-  /// Check if daily reset is needed
+  /// Check if weekly reset is needed (for premium users only)
+  bool needsWeeklyReset() {
+    final now = DateTime.now();
+    final daysSinceReset = now.difference(lastResetDate).inDays;
+    return daysSinceReset >= 7;
+  }
+  
+  /// Check if daily reset is needed (kept for backward compatibility, but not used for non-premium)
   bool needsDailyReset() {
     final now = DateTime.now();
     final lastReset = DateTime(

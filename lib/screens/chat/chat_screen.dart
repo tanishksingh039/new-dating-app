@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../../firebase_services.dart';
 import '../../services/rewards_service.dart';
+import '../../services/r2_storage_service.dart';
 import '../../models/user_model.dart';
 import '../../widgets/premium_lock_overlay.dart';
 import '../../mixins/screenshot_protection_mixin.dart';
@@ -250,12 +250,15 @@ class _ChatScreenState extends State<ChatScreen>
       }
 
       _messageController.clear();
-      setState(() => _isTyping = false);
+      if (_isTyping) {
+        setState(() => _isTyping = false);
+      }
 
+      // Scroll to bottom after sending message (reverse list, so scroll to 0)
       Future.delayed(const Duration(milliseconds: 100), () {
-        if (_scrollController.hasClients) {
+        if (_scrollController.hasClients && mounted) {
           _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
+            0,
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeOut,
           );
@@ -314,20 +317,17 @@ class _ChatScreenState extends State<ChatScreen>
 
   // Upload image to Firebase Storage and send message
   Future<void> _uploadAndSendImage(File imageFile) async {
-    setState(() => _isUploading = true);
+    if (!_isUploading) {
+      setState(() => _isUploading = true);
+    }
 
     try {
-      // Upload to Firebase Storage
-      final String fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final Reference storageRef = FirebaseStorage.instance
-          .ref()
-          .child('chat_images')
-          .child(widget.currentUserId)
-          .child(fileName);
-
-      final UploadTask uploadTask = storageRef.putFile(imageFile);
-      final TaskSnapshot snapshot = await uploadTask;
-      final String downloadUrl = await snapshot.ref.getDownloadURL();
+      // Upload to Cloudflare R2 (FREE downloads, auto-compression)
+      final String downloadUrl = await R2StorageService.uploadImage(
+        imageFile: imageFile,
+        folder: 'chat_images',
+        userId: widget.currentUserId,
+      );
 
       // Get chat ID
       final chatId = _getChatId(widget.currentUserId, widget.otherUserId);
@@ -440,11 +440,11 @@ class _ChatScreenState extends State<ChatScreen>
         }
       }
 
-      // Scroll to bottom
+      // Scroll to bottom after sending image (reverse list, so scroll to 0)
       Future.delayed(const Duration(milliseconds: 300), () {
-        if (_scrollController.hasClients) {
+        if (_scrollController.hasClients && mounted) {
           _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
+            0,
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeOut,
           );
@@ -472,7 +472,9 @@ class _ChatScreenState extends State<ChatScreen>
         final String filePath = '${appDocDir.path}/audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
         
         await _audioRecorder.start(const RecordConfig(), path: filePath);
-        setState(() => _isRecording = true);
+        if (!_isRecording) {
+          setState(() => _isRecording = true);
+        }
         debugPrint('🎤 Recording started: $filePath');
       } else {
         if (mounted) {
@@ -495,7 +497,9 @@ class _ChatScreenState extends State<ChatScreen>
   Future<void> _stopRecordingAndSend() async {
     try {
       final String? audioPath = await _audioRecorder.stop();
-      setState(() => _isRecording = false);
+      if (_isRecording) {
+        setState(() => _isRecording = false);
+      }
       
       if (audioPath != null) {
         debugPrint('🎤 Recording stopped: $audioPath');
@@ -503,7 +507,9 @@ class _ChatScreenState extends State<ChatScreen>
       }
     } catch (e) {
       debugPrint('❌ Error stopping recording: $e');
-      setState(() => _isRecording = false);
+      if (_isRecording) {
+        setState(() => _isRecording = false);
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error stopping recording: $e')),
@@ -516,7 +522,9 @@ class _ChatScreenState extends State<ChatScreen>
   Future<void> _cancelRecording() async {
     try {
       await _audioRecorder.stop();
-      setState(() => _isRecording = false);
+      if (_isRecording) {
+        setState(() => _isRecording = false);
+      }
       debugPrint('🎤 Recording cancelled');
     } catch (e) {
       debugPrint('❌ Error cancelling recording: $e');
@@ -525,7 +533,9 @@ class _ChatScreenState extends State<ChatScreen>
 
   // Send audio message
   Future<void> _sendAudioMessage(String audioPath) async {
-    setState(() => _isUploading = true);
+    if (!_isUploading) {
+      setState(() => _isUploading = true);
+    }
     
     String storagePath = '';
     try {
@@ -536,14 +546,12 @@ class _ChatScreenState extends State<ChatScreen>
       debugPrint('📤 Uploading audio: $storagePath');
       debugPrint('📤 User ID: ${widget.currentUserId}');
       
-      // Upload to Firebase Storage with metadata
-      final ref = FirebaseStorage.instance.ref().child(storagePath);
-      final metadata = SettableMetadata(
-        contentType: 'audio/m4a',
-        customMetadata: {'uploadedBy': widget.currentUserId},
+      // Upload to Cloudflare R2 (FREE downloads)
+      final String audioUrl = await R2StorageService.uploadImage(
+        imageFile: audioFile,
+        folder: 'voice_notes',
+        userId: widget.currentUserId,
       );
-      await ref.putFile(audioFile, metadata);
-      final String audioUrl = await ref.getDownloadURL();
       
       debugPrint('✅ Audio uploaded: $audioUrl');
       
@@ -569,11 +577,11 @@ class _ChatScreenState extends State<ChatScreen>
         );
       }
       
-      // Scroll to bottom
+      // Scroll to bottom after sending audio (reverse list, so scroll to 0)
       Future.delayed(const Duration(milliseconds: 300), () {
-        if (_scrollController.hasClients) {
+        if (_scrollController.hasClients && mounted) {
           _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
+            0,
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeOut,
           );
@@ -595,7 +603,9 @@ class _ChatScreenState extends State<ChatScreen>
         );
       }
     } finally {
-      setState(() => _isUploading = false);
+      if (_isUploading) {
+        setState(() => _isUploading = false);
+      }
     }
   }
 
@@ -650,36 +660,33 @@ class _ChatScreenState extends State<ChatScreen>
                   return _buildEmptyState();
                 }
 
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (_scrollController.hasClients) {
-                    _scrollController.jumpTo(
-                      _scrollController.position.maxScrollExtent,
-                    );
-                  }
-                });
-
                 return ListView.builder(
                   controller: _scrollController,
+                  reverse: true,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 20,
                   ),
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
-                    final message = messages[index].data() as Map<String, dynamic>;
+                    // Reverse the index since we're using reverse: true
+                    final reversedIndex = messages.length - 1 - index;
+                    final messageDoc = messages[reversedIndex];
+                    final message = messageDoc.data() as Map<String, dynamic>;
                     final isMe = message['senderId'] == widget.currentUserId;
                     final timestamp = message['timestamp'] as Timestamp?;
 
                     bool showDateSeparator = false;
-                    if (index == 0 ||
+                    if (reversedIndex == 0 ||
                         _shouldShowDateSeparator(
-                          messages[index - 1].data() as Map<String, dynamic>,
+                          messages[reversedIndex - 1].data() as Map<String, dynamic>,
                           message,
                         )) {
                       showDateSeparator = true;
                     }
 
                     return Column(
+                      key: ValueKey(messageDoc.id),
                       children: [
                         if (showDateSeparator)
                           _buildDateSeparator(timestamp),
