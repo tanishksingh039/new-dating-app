@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/report_model.dart';
-import '../../services/user_safety_service.dart';
 import 'package:intl/intl.dart';
 
 class MyReportsScreen extends StatefulWidget {
@@ -12,38 +12,7 @@ class MyReportsScreen extends StatefulWidget {
 }
 
 class _MyReportsScreenState extends State<MyReportsScreen> {
-  bool _isLoading = true;
-  List<ReportModel> _reports = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadReports();
-  }
-
-  Future<void> _loadReports() async {
-    setState(() => _isLoading = true);
-    
-    try {
-      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-      if (currentUserId != null) {
-        final reports = await UserSafetyService.getMyReports(
-          reporterId: currentUserId,
-        );
-        setState(() {
-          _reports = reports;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading reports: $e')),
-        );
-      }
-    }
-  }
+  final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
 
   Color _getStatusColor(ReportStatus status) {
     switch (status) {
@@ -90,6 +59,13 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (currentUserId == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('My Reports')),
+        body: const Center(child: Text('Please login to view reports')),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
@@ -97,27 +73,78 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadReports,
-          ),
-        ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _reports.isEmpty
-              ? _buildEmptyState()
-              : RefreshIndicator(
-                  onRefresh: _loadReports,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _reports.length,
-                    itemBuilder: (context, index) {
-                      return _buildReportCard(_reports[index]);
-                    },
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('reports')
+            .where('reporterId', isEqualTo: currentUserId)
+            .orderBy('createdAt', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          // Loading state
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          // Error state
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Error loading reports',
+                    style: TextStyle(fontSize: 18, color: Colors.grey[600]),
                   ),
-                ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${snapshot.error}',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      setState(() {}); // Trigger rebuild
+                    },
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          // Parse reports
+          final reports = snapshot.data?.docs
+              .map((doc) {
+                try {
+                  return ReportModel.fromMap(doc.data() as Map<String, dynamic>);
+                } catch (e) {
+                  debugPrint('Error parsing report: $e');
+                  return null;
+                }
+              })
+              .whereType<ReportModel>()
+              .toList() ?? [];
+
+          // Empty state
+          if (reports.isEmpty) {
+            return _buildEmptyState();
+          }
+
+          // Reports list
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: reports.length,
+            itemBuilder: (context, index) {
+              return _buildReportCard(reports[index]);
+            },
+          );
+        },
+      ),
     );
   }
 

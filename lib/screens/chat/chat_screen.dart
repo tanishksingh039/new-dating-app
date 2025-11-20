@@ -1359,6 +1359,19 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     }
   }
 
+  Future<void> _refreshChats() async {
+    await _checkPremiumStatus();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Chats refreshed!'),
+          duration: Duration(seconds: 1),
+          backgroundColor: Color(0xFFFF6B9D),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
@@ -1383,6 +1396,11 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         elevation: 0,
         actions: [
           IconButton(
+            icon: const Icon(Icons.refresh, color: Color(0xFF2D3142)),
+            onPressed: _refreshChats,
+            tooltip: 'Refresh',
+          ),
+          IconButton(
             icon: const Icon(Icons.search, color: Color(0xFF2D3142)),
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -1392,7 +1410,11 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
           ),
         ],
       ),
-      body: _buildBody(currentUserId),
+      body: RefreshIndicator(
+        onRefresh: _refreshChats,
+        color: const Color(0xFFFF6B9D),
+        child: _buildBody(currentUserId),
+      ),
     );
   }
 

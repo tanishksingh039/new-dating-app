@@ -7,7 +7,7 @@ import 'admin_payments_tab.dart';
 import 'admin_storage_tab.dart';
 import 'admin_profile_manager_screen.dart';
 import 'admin_leaderboard_control_screen.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'admin_reports_tab.dart';
 
 class NewAdminDashboard extends StatefulWidget {
   const NewAdminDashboard({Key? key}) : super(key: key);
@@ -36,7 +36,7 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 7, vsync: this);
+    _tabController = TabController(length: 8, vsync: this);
     _setupRealTimeListeners();
     _getCurrentAdminId();
   }
@@ -158,20 +158,13 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
             const SizedBox(width: 12),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
+              children: const [
+                Text(
                   'Admin',
                   style: TextStyle(
                     color: Colors.black,
-                    fontSize: 16,
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  'Master Admin',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 12,
                   ),
                 ),
               ],
@@ -259,7 +252,7 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
           tabs: const [
             Tab(
               icon: Icon(Icons.dashboard, size: 20),
-              text: 'shooLuv Admin Dashboard',
+              text: 'ShooLuv Admin Dashboard',
             ),
             Tab(
               icon: Icon(Icons.people, size: 20),
@@ -285,6 +278,10 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
               icon: Icon(Icons.leaderboard, size: 20),
               text: 'Leaderboard',
             ),
+            Tab(
+              icon: Icon(Icons.report, size: 20),
+              text: 'Reports',
+            ),
           ],
         ),
       ),
@@ -298,6 +295,7 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
           const AdminStorageTab(),
           AdminProfileManagerScreen(adminUserId: _currentAdminUserId),
           AdminLeaderboardControlScreen(adminUserId: _currentAdminUserId),
+          const AdminReportsTab(),
         ],
       ),
     );
@@ -312,7 +310,7 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
           // Welcome Card
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [Colors.pink.shade400, Colors.pink.shade600],
@@ -323,30 +321,34 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 const Text(
                   'Welcome back,',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 20,
+                    fontSize: 16,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   username,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 28,
+                    fontSize: 24,
                     fontWeight: FontWeight.bold,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 6),
                 const Text(
-                  "Here's what's happening with\nshooLuv today",
+                  "Here's what's happening with\nShooLuv today",
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 14,
+                    fontSize: 12,
+                    height: 1.2,
                   ),
                 ),
               ],
@@ -361,7 +363,7 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
             crossAxisCount: 2,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
-            childAspectRatio: 1.4,
+            childAspectRatio: 1.5,
             children: [
               _buildStatCard(
                 'Total Users',
@@ -427,7 +429,7 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
 
   Widget _buildStatCard(String title, String value, String subtitle, IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -442,6 +444,7 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -451,7 +454,7 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
                   title,
                   style: TextStyle(
                     color: Colors.grey[600],
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
                   maxLines: 1,
@@ -459,31 +462,31 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
                 ),
               ),
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(icon, color: color, size: 20),
+                child: Icon(icon, color: color, size: 18),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(
             value,
             style: const TextStyle(
-              fontSize: 24,
+              fontSize: 22,
               fontWeight: FontWeight.bold,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             subtitle,
             style: TextStyle(
               color: Colors.grey[500],
-              fontSize: 11,
+              fontSize: 10,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,

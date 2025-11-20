@@ -73,7 +73,7 @@ class _ProfileReviewScreenState extends State<ProfileReviewScreen> {
 
       if (mounted) {
         // Show success message
-        _showSnackBar('Welcome to shooLuv! 🎉', AppConstants.successColor);
+        _showSnackBar('Welcome to ShooLuv! 🎉', AppConstants.successColor);
         
         await Future.delayed(const Duration(milliseconds: 2000));
         

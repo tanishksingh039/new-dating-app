@@ -47,7 +47,7 @@ class CommunityGuidelinesScreen extends StatelessWidget {
                   Icon(Icons.favorite, color: Colors.white, size: 48),
                   SizedBox(height: 12),
                   Text(
-                    'Welcome to shooLuv!',
+                    'Welcome to ShooLuv!',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -205,7 +205,7 @@ class CommunityGuidelinesScreen extends StatelessWidget {
 
             _buildSection(
               '💡 Tips for Success',
-              'Make the most of shooLuv:',
+              'Make the most of ShooLuv:',
               children: [
                 _buildBulletPoint('Complete your profile with interesting details'),
                 _buildBulletPoint('Use high-quality, recent photos'),

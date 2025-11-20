@@ -152,7 +152,7 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
 
               // Content
               Expanded(
-                child: Padding(
+                child: SingleChildScrollView(
                   padding: const EdgeInsets.all(24),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -196,7 +196,7 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
                           height: 1.5,
                         ),
                       ),
-                      const SizedBox(height: 60),
+                      const SizedBox(height: 40),
 
                       // Benefits
                       if (!_locationGranted) ...[
@@ -205,19 +205,20 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
                           title: 'Find matches nearby',
                           description: 'See people in your area',
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 16),
                         _buildBenefit(
                           icon: '🔒',
                           title: 'Your privacy is protected',
                           description: 'We never share your exact location',
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 16),
                         _buildBenefit(
                           icon: '⚡',
                           title: 'Better matches',
                           description: 'Distance-based recommendations',
                         ),
                       ],
+                      const SizedBox(height: 20),
                     ],
                   ),
                 ),

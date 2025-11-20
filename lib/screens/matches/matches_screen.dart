@@ -113,6 +113,11 @@ class _MatchesScreenState extends State<MatchesScreen> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.refresh, color: Color(0xFF2D3142)),
+            onPressed: _refreshMatches,
+            tooltip: 'Refresh',
+          ),
+          IconButton(
             icon: const Icon(Icons.filter_list, color: Color(0xFF2D3142)),
             onPressed: () {
               // TODO: Filter options

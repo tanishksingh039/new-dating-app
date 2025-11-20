@@ -11,7 +11,7 @@ class AppColors {
   static const Color mutedMauve = Color(0xFF85474D);
 
   // Derived Colors
-  static const String appName = 'shooLuv';
+  static const String appName = 'ShooLuv';
   static const Color primary = magentaPink;
   static const Color secondary = warmPeach;
   static const Color accent = softWarmPink;

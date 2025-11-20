@@ -120,7 +120,7 @@ class _NotificationPermissionScreenState extends State<NotificationPermissionScr
 
               // Content
               Expanded(
-                child: Padding(
+                child: SingleChildScrollView(
                   padding: const EdgeInsets.all(24),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -164,7 +164,7 @@ class _NotificationPermissionScreenState extends State<NotificationPermissionScr
                           height: 1.5,
                         ),
                       ),
-                      const SizedBox(height: 60),
+                      const SizedBox(height: 40),
 
                       // Benefits
                       if (!_notificationsEnabled) ...[
@@ -173,19 +173,20 @@ class _NotificationPermissionScreenState extends State<NotificationPermissionScr
                           title: 'New matches',
                           description: 'Know instantly when someone likes you',
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 16),
                         _buildBenefit(
                           icon: '💬',
                           title: 'Messages',
                           description: 'Never miss a conversation',
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 16),
                         _buildBenefit(
                           icon: '🎯',
                           title: 'Smart timing',
                           description: 'We\'ll only notify you about important updates',
                         ),
                       ],
+                      const SizedBox(height: 20),
                     ],
                   ),
                 ),

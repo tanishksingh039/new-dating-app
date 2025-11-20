@@ -75,6 +75,12 @@ class R2StorageService {
   }) async {
     try {
       print('📤 Starting upload to R2...');
+      print('📋 Config: ${R2Config.getConfigStatus()}');
+      
+      // Validate configuration
+      if (!R2Config.isConfigured()) {
+        throw Exception('R2 is not configured. Please check lib/config/r2_config.dart');
+      }
       
       // Step 1: Compress image
       final compressedFile = await _compressImage(imageFile);
@@ -85,10 +91,17 @@ class R2StorageService {
       final fileName = '$folder/$userId/$timestamp$extension';
       
       // Step 3: Upload to R2
+      print('🔗 Connecting to R2...');
+      print('📍 Endpoint: $_endpoint');
+      print('📦 Bucket: $_bucketName');
+      print('📄 File: $fileName');
+      
       final client = _getClient();
       final fileBytes = await compressedFile.readAsBytes();
       final stream = Stream<Uint8List>.value(Uint8List.fromList(fileBytes));
       final fileSize = fileBytes.length;
+      
+      print('📤 Uploading ${(fileSize / 1024).toStringAsFixed(0)}KB...');
       
       await client.putObject(
         _bucketName,

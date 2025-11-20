@@ -44,7 +44,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
 
             _buildSection(
               'Introduction',
-              'shooLuv ("we", "our", or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our dating application.',
+              'ShooLuv ("we", "our", or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our dating application.',
             ),
 
             _buildSection(
@@ -163,7 +163,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
 
             _buildSection(
               '7. Age Requirement',
-              'You must be 18 years or older to use shooLuv. We do not knowingly collect information from users under 18. If we discover a user is under 18, we will immediately delete their account and data.',
+              'You must be 18 years or older to use ShooLuv. We do not knowingly collect information from users under 18. If we discover a user is under 18, we will immediately delete their account and data.',
             ),
 
             _buildSection(

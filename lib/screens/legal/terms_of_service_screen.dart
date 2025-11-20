@@ -36,7 +36,7 @@ class TermsOfServiceScreen extends StatelessWidget {
 
             _buildSection(
               'Agreement to Terms',
-              'By accessing or using shooLuv ("the App"), you agree to be bound by these Terms of Service. If you do not agree to these terms, you may not use the App.',
+              'By accessing or using ShooLuv ("the App"), you agree to be bound by these Terms of Service. If you do not agree to these terms, you may not use the App.',
             ),
 
             _buildSection(
@@ -151,7 +151,7 @@ class TermsOfServiceScreen extends StatelessWidget {
               children: [
                 _buildSubSection(
                   'Our Rights',
-                  'shooLuv and all related logos, designs, and content are owned by us. You may not copy, modify, or distribute our intellectual property without permission.',
+                  'ShooLuv and all related logos, designs, and content are owned by us. You may not copy, modify, or distribute our intellectual property without permission.',
                 ),
                 _buildSubSection(
                   'Your Content',
@@ -232,7 +232,7 @@ class TermsOfServiceScreen extends StatelessWidget {
 
             _buildSection(
               '13. Geographic Restrictions',
-              'shooLuv is currently available only at participating universities. We reserve the right to restrict access based on location. Future expansion to other universities will be announced.',
+              'ShooLuv is currently available only at participating universities. We reserve the right to restrict access based on location. Future expansion to other universities will be announced.',
             ),
 
             _buildSection(
@@ -308,7 +308,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'By using shooLuv, you acknowledge that you have read, understood, and agree to be bound by these Terms of Service and our Privacy Policy.',
+                    'By using ShooLuv, you acknowledge that you have read, understood, and agree to be bound by these Terms of Service and our Privacy Policy.',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.orange.shade900,

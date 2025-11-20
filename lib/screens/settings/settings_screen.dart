@@ -134,8 +134,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         // Share the file
         await Share.shareXFiles(
           [XFile(file.path)],
-          subject: 'My shooLuv Data',
-          text: 'Your personal data export from shooLuv',
+          subject: 'My ShooLuv Data',
+          text: 'Your personal data export from ShooLuv',
         );
 
         ScaffoldMessenger.of(context).showSnackBar(

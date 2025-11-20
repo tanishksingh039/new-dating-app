@@ -89,7 +89,7 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
                     delay: const Duration(milliseconds: 400),
                     duration: const Duration(milliseconds: 800),
                     child: const Text(
-                      'shooLuv',
+                      'ShooLuv',
                       style: TextStyle(
                         fontSize: 42,
                         fontWeight: FontWeight.bold,

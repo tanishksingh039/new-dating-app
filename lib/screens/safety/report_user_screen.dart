@@ -203,7 +203,7 @@ class _ReportUserScreenState extends State<ReportUserScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Help us keep shooLuv safe',
+                          'Help us keep ShooLuv safe',
                           style: TextStyle(
                             fontSize: 14,
                             color: Colors.grey[600],
@@ -433,7 +433,7 @@ class _ReportUserScreenState extends State<ReportUserScreen> {
               child: CheckboxListTile(
                 title: const Text('Also block this user'),
                 subtitle: Text(
-                  'You won\'t see each other on shooLuv',
+                  'You won\'t see each other on ShooLuv',
                   style: TextStyle(color: Colors.grey[600]),
                 ),
                 value: _alsoBlock,
@@ -483,7 +483,7 @@ class _ReportUserScreenState extends State<ReportUserScreen> {
                   Text(
                     '• Reports are reviewed by our moderation team\n'
                     '• False reports may result in account restrictions\n'
-                    'Your report helps keep shooLuv safe for everyone. We take all reports seriously and will review this matter promptly.\n'
+                    'Your report helps keep ShooLuv safe for everyone. We take all reports seriously and will review this matter promptly.\n'
                     '• Your report is anonymous to the reported user',
                     style: TextStyle(
                       fontSize: 13,

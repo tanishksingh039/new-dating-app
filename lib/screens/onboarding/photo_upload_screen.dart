@@ -8,6 +8,7 @@ import '../../../widgets/custom_button.dart';
 import '../../../firebase_services.dart';
 import '../../constants/app_colors.dart';
 import '../../services/r2_storage_service.dart';
+import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
 class PhotoUploadScreen extends StatefulWidget {
   const PhotoUploadScreen({super.key});
@@ -60,6 +61,14 @@ class _PhotoUploadScreenState extends State<PhotoUploadScreen> {
           return;
         }
 
+        // If this is the first photo (main profile photo), validate face clarity
+        if (_selectedImages.isEmpty) {
+          final isValid = await _validateFaceClarity(image);
+          if (!isValid) {
+            return; // Don't add the image if face validation fails
+          }
+        }
+
         setState(() {
           _selectedImages.add(image);
         });
@@ -68,6 +77,202 @@ class _PhotoUploadScreenState extends State<PhotoUploadScreen> {
       _log('Error picking image: $e');
       _showSnackBar('Failed to pick image', Colors.red);
     }
+  }
+
+  Future<bool> _validateFaceClarity(XFile image) async {
+    try {
+      _log('Validating face clarity for main profile photo...');
+      
+      final inputImage = InputImage.fromFilePath(image.path);
+      final faceDetector = FaceDetector(
+        options: FaceDetectorOptions(
+          enableLandmarks: true,
+          enableClassification: true,
+          minFaceSize: 0.10, // Face should be at least 10% of image (medium sensitivity)
+          performanceMode: FaceDetectorMode.fast, // Fast mode for medium sensitivity
+        ),
+      );
+
+      final faces = await faceDetector.processImage(inputImage);
+      await faceDetector.close();
+
+      _log('Detected ${faces.length} face(s) in image');
+
+      // No face detected
+      if (faces.isEmpty) {
+        _showFaceValidationDialog(
+          title: '⚠️ No Face Detected',
+          message: 'We couldn\'t detect a clear face in this photo.\n\n'
+              'For verification purposes, your main profile photo must have:\n'
+              '• A clear, visible face\n'
+              '• Good lighting\n'
+              '• Face looking at camera\n\n'
+              'Please upload a different photo.',
+          canProceed: false,
+        );
+        return false;
+      }
+
+      // Multiple faces detected
+      if (faces.length > 1) {
+        _showFaceValidationDialog(
+          title: '⚠️ Multiple Faces Detected',
+          message: 'Your main profile photo should only show your face.\n\n'
+              'We detected ${faces.length} faces in this photo.\n\n'
+              'Please upload a photo with only you in it for verification.',
+          canProceed: false,
+        );
+        return false;
+      }
+
+      // Check face quality
+      final face = faces.first;
+      final boundingBox = face.boundingBox;
+      
+      // Calculate face size relative to image
+      final imageFile = File(image.path);
+      final decodedImage = await decodeImageFromList(await imageFile.readAsBytes());
+      final imageWidth = decodedImage.width.toDouble();
+      final imageHeight = decodedImage.height.toDouble();
+      
+      final faceWidthRatio = boundingBox.width / imageWidth;
+      final faceHeightRatio = boundingBox.height / imageHeight;
+      final faceArea = faceWidthRatio * faceHeightRatio;
+
+      _log('Face area ratio: ${(faceArea * 100).toStringAsFixed(1)}%');
+
+      // Face too small (less than 5% of image) - Medium sensitivity
+      if (faceArea < 0.05) {
+        final shouldProceed = await _showFaceValidationDialog(
+          title: '⚠️ Face Too Small',
+          message: 'Your face appears too small in this photo.\n\n'
+              'For better verification:\n'
+              '• Move closer to the camera\n'
+              '• Make sure your face fills more of the frame\n'
+              '• Ensure good lighting\n\n'
+              'You can proceed, but we recommend uploading a clearer photo.',
+          canProceed: true,
+        );
+        return shouldProceed;
+      }
+
+      // Check head pose (if available) - Medium sensitivity
+      if (face.headEulerAngleY != null && face.headEulerAngleZ != null) {
+        final yaw = face.headEulerAngleY!.abs();
+        final roll = face.headEulerAngleZ!.abs();
+        
+        _log('Head angles - Yaw: ${yaw.toStringAsFixed(1)}°, Roll: ${roll.toStringAsFixed(1)}°');
+
+        // Face turned too much (more than 45 degrees) - Medium sensitivity
+        if (yaw > 45 || roll > 45) {
+          final shouldProceed = await _showFaceValidationDialog(
+            title: '⚠️ Face Not Facing Camera',
+            message: 'Your face should be looking directly at the camera.\n\n'
+                'For best verification results:\n'
+                '• Face the camera straight on\n'
+                '• Keep your head level\n'
+                '• Look directly at the lens\n\n'
+                'You can proceed, but we recommend a clearer photo.',
+            canProceed: true,
+          );
+          return shouldProceed;
+        }
+      }
+
+      // All checks passed
+      _log('✅ Face validation passed');
+      _showSnackBar('✅ Great photo! Face detected clearly', Colors.green);
+      return true;
+
+    } catch (e) {
+      _log('Error validating face: $e');
+      // If face detection fails, allow user to proceed with warning
+      final shouldProceed = await _showFaceValidationDialog(
+        title: '⚠️ Unable to Validate Photo',
+        message: 'We couldn\'t analyze this photo automatically.\n\n'
+            'Please make sure:\n'
+            '• Your face is clearly visible\n'
+            '• Photo has good lighting\n'
+            '• You\'re looking at the camera\n\n'
+            'Do you want to use this photo?',
+        canProceed: true,
+      );
+      return shouldProceed;
+    }
+  }
+
+  Future<bool> _showFaceValidationDialog({
+    required String title,
+    required String message,
+    required bool canProceed,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(message),
+              if (canProceed) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.orange.shade700, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Clear photos improve verification success',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.orange.shade900,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          if (canProceed)
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Use Anyway'),
+            ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            style: TextButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: Text(canProceed ? 'Choose Different Photo' : 'OK, Choose Another'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
   }
 
   void _removeImage(int index) {
@@ -113,23 +318,30 @@ class _PhotoUploadScreenState extends State<PhotoUploadScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('No user signed in');
 
-    // Upload to Cloudflare R2 (FREE downloads, auto-compression)
-    setState(() {
-      _uploadProgress = (index / _selectedImages.length);
-    });
-    
-    final downloadUrl = await R2StorageService.uploadImage(
-      imageFile: File(image.path),
-      folder: 'profiles',
-      userId: user.uid,
-    );
-    
-    setState(() {
-      _uploadProgress = ((index + 1) / _selectedImages.length);
-    });
-    
-    _log('Uploaded image $index: $downloadUrl');
-    return downloadUrl;
+    try {
+      // Upload to Cloudflare R2 (FREE downloads, auto-compression)
+      setState(() {
+        _uploadProgress = (index / _selectedImages.length);
+      });
+      
+      _log('Uploading image ${index + 1}/${_selectedImages.length}...');
+      
+      final downloadUrl = await R2StorageService.uploadImage(
+        imageFile: File(image.path),
+        folder: 'profiles',
+        userId: user.uid,
+      );
+      
+      setState(() {
+        _uploadProgress = ((index + 1) / _selectedImages.length);
+      });
+      
+      _log('✅ Uploaded image ${index + 1}: $downloadUrl');
+      return downloadUrl;
+    } catch (e) {
+      _log('❌ Failed to upload image ${index + 1}: $e');
+      rethrow;
+    }
   }
 
   Future<void> _uploadPhotos() async {
@@ -168,9 +380,9 @@ class _PhotoUploadScreenState extends State<PhotoUploadScreen> {
         Navigator.pushReplacementNamed(context, '/onboarding/interests');
       }
     } catch (e) {
-      _log('Error uploading photos: $e');
+      _log('❌ Error uploading photos: $e');
       if (mounted) {
-        _showSnackBar('Failed to upload photos. Try again.', Colors.red);
+        _showSnackBar('Failed to upload photos: ${e.toString()}', Colors.red);
       }
     } finally {
       if (mounted) {

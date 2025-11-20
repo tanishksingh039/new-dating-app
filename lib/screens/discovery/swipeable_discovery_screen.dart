@@ -577,34 +577,6 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
     return SafeArea(
       child: Column(
         children: [
-          // Swipe progress indicator
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            child: Row(
-              children: [
-                const Icon(Icons.person, color: Colors.grey, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: LinearProgressIndicator(
-                    value: _profiles.isEmpty ? 0 : (_currentIndex / _profiles.length),
-                    backgroundColor: Colors.grey.shade200,
-                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
-                    minHeight: 4,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '${_currentIndex + 1}/${_profiles.length}',
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
           // Active filters indicator
           if (_filters.hasActiveFilters)
             Padding(

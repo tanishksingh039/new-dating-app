@@ -10,7 +10,7 @@ class RazorpayConfig {
   static const String keySecret = 'ATch0WcTc1u5o8xbKYrPKqUs';
   
   // App Configuration
-  static const String companyName = 'shooLuv';
+  static const String companyName = 'ShooLuv';
   static const String currency = 'INR';
   static const String themeColor = '#FF6B9D';
   

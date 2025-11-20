@@ -148,7 +148,7 @@ class NotificationService {
   }) async {
     const androidDetails = AndroidNotificationDetails(
       'shooluv_channel',
-      'shooLuv Notifications',
+      'ShooLuv Notifications',
       channelDescription: 'Notifications for matches, likes, and messages',
       importance: Importance.high,
       priority: Priority.high,

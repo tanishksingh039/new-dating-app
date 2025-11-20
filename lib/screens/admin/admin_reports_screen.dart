@@ -28,6 +28,96 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
     super.dispose();
   }
 
+  void _showAdminMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Text(
+              'Admin Settings',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(Icons.dashboard, color: Colors.blue),
+              title: const Text('Dashboard'),
+              subtitle: const Text('View statistics and analytics'),
+              onTap: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Dashboard coming soon!')),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.people, color: Colors.green),
+              title: const Text('User Management'),
+              subtitle: const Text('Manage all users'),
+              onTap: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('User Management coming soon!')),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.block, color: Colors.red),
+              title: const Text('Banned Users'),
+              subtitle: const Text('View banned and suspended users'),
+              onTap: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Banned Users list coming soon!')),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.analytics, color: Colors.purple),
+              title: const Text('Analytics'),
+              subtitle: const Text('Report trends and statistics'),
+              onTap: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Analytics coming soon!')),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.settings, color: Colors.grey),
+              title: const Text('Admin Settings'),
+              subtitle: const Text('Configure admin panel'),
+              onTap: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Settings coming soon!')),
+                );
+              },
+            ),
+            const SizedBox(height: 10),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _updateReportStatus(ReportModel report, ReportStatus newStatus) async {
     try {
       await UserSafetyService.updateReportStatus(
@@ -209,6 +299,22 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: 'Admin Settings',
+            onPressed: () {
+              _showAdminMenu(context);
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh Reports',
+            onPressed: () {
+              setState(() {});
+            },
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           labelColor: Colors.pink,

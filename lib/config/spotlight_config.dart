@@ -19,7 +19,7 @@ class SpotlightConfig {
   static const int spotlightDurationDays = 1;
   
   // App name for payment
-  static const String appName = 'shooLuv';
+  static const String appName = 'ShooLuv';
   
   // Theme color for payment UI
   static const String themeColor = '#FF6B9D';

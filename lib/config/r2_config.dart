@@ -23,11 +23,11 @@ class R2Config {
   
   /// R2 API Access Key ID
   /// Get from: R2 → Manage R2 API Tokens → Create API Token
-  static const String accessKeyId = 'f2966d054b4af6fb7d2cdbf2e16a7fb0b';
+  static const String accessKeyId = 'dd689512f9524fa26687420ecaff7cab';
   
   /// R2 API Secret Access Key
   /// Get from: R2 → Manage R2 API Tokens → Create API Token
-  static const String secretAccessKey = 'c2d109e6022700e9d57aecb3d3191f31cc4e5dc1b64f4f977cbc024994ccd0ce';
+  static const String secretAccessKey = '8301d4908c9de40b59bf54441c7e79afecc9e6a1496b35e9161e72793a952b9e';
   
   /// Bucket Name
   /// Create in: R2 → Create Bucket
