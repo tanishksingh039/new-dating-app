@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/user_model.dart';
+import '../../constants/app_colors.dart';
 import '../../services/match_service.dart';
+import '../../utils/firestore_extensions.dart';
 import '../chat/chat_screen.dart';
 
 class LikesScreen extends StatefulWidget {
@@ -130,8 +132,10 @@ class _LikesScreenState extends State<LikesScreen>
           ),
           itemCount: likes.length,
           itemBuilder: (context, index) {
-            final likeData = likes[index].data() as Map<String, dynamic>;
-            final userId = likeData['userId'] as String;
+            final likeData = likes[index].safeData();
+            if (likeData == null) return const SizedBox.shrink();
+            final userId = likeData['userId'] as String?;
+            if (userId == null) return const SizedBox.shrink();
 
             return FutureBuilder<DocumentSnapshot>(
               future: FirebaseFirestore.instance
@@ -147,7 +151,7 @@ class _LikesScreenState extends State<LikesScreen>
                   );
                 }
 
-                final userData = userSnapshot.data!.data() as Map<String, dynamic>?;
+                final userData = userSnapshot.data?.safeData();
                 if (userData == null) return const SizedBox.shrink();
 
                 final user = UserModel.fromMap(userData);
@@ -225,7 +229,8 @@ class _LikesScreenState extends State<LikesScreen>
           ),
           itemCount: likes.length,
           itemBuilder: (context, index) {
-            final likeData = likes[index].data() as Map<String, dynamic>;
+            final likeData = likes[index].safeData();
+            if (likeData == null) return const SizedBox.shrink();
             final userId = likes[index].id;
 
             return FutureBuilder<DocumentSnapshot>(
@@ -242,7 +247,7 @@ class _LikesScreenState extends State<LikesScreen>
                   );
                 }
 
-                final userData = userSnapshot.data!.data() as Map<String, dynamic>?;
+                final userData = userSnapshot.data?.safeData();
                 if (userData == null) return const SizedBox.shrink();
 
                 final user = UserModel.fromMap(userData);

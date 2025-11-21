@@ -20,6 +20,8 @@ class FirebaseServices {
   }
 
   /// Save user data to Firestore after authentication
+  /// Creates a SINGLE user document with all fields on first signup
+  /// Updates only lastActive on subsequent logins
   static Future<void> saveUserData({
     String? phoneNumber,
     Map<String, dynamic>? additionalData,
@@ -30,21 +32,26 @@ class FirebaseServices {
         throw Exception('No user is currently signed in');
       }
 
+      _log('═══════════════════════════════════════');
       _log('Saving user data to Firestore...');
       _log('User ID: ${user.uid}');
+      _log('Email: ${user.email ?? "N/A"}');
+      _log('Phone: ${phoneNumber ?? user.phoneNumber ?? "N/A"}');
 
       final docRef = _firestore.collection('users').doc(user.uid);
       final doc = await docRef.get();
 
       final baseData = {
         'uid': user.uid,
+        'email': user.email ?? '',
         'phoneNumber': phoneNumber ?? user.phoneNumber ?? '',
         'lastActive': FieldValue.serverTimestamp(),
         if (additionalData != null) ...additionalData,
       };
 
       if (!doc.exists) {
-        // New user - initialize with defaults including Phase 2 settings
+        // NEW USER - Create complete document with all default fields
+        _log('🆕 Creating NEW user document...');
         final userData = {
           ...baseData,
           'name': '',
@@ -55,6 +62,9 @@ class FirebaseServices {
           'bio': '',
           'preferences': {},
           'isOnboardingComplete': false,
+          'onboardingCompleted': false,
+          'onboardingStep': 'welcome',
+          'profileComplete': 0,
           'createdAt': FieldValue.serverTimestamp(),
           'isVerified': false,
           'isPremium': false,
@@ -82,17 +92,25 @@ class FirebaseServices {
             'emailMessages': false,
             'emailPromotions': false,
           },
+          // Phase 3: Safety features (defaults)
+          'blockedUsers': [],
+          'blockedBy': [],
         };
 
         await docRef.set(userData, SetOptions(merge: true));
-        _log('New user data saved to Firestore');
+        _log('✅ New user document created successfully!');
+        _log('📋 Document ID: ${user.uid}');
+        _log('📧 Email: ${user.email ?? "N/A"}');
+        _log('📱 Phone: ${phoneNumber ?? user.phoneNumber ?? "N/A"}');
       } else {
-        // Existing user - merge without touching sensitive fields
+        // EXISTING USER - Only update lastActive and email/phone if changed
+        _log('👤 Existing user detected - updating lastActive only');
         await docRef.set(baseData, SetOptions(merge: true));
-        _log('Existing user data merged to Firestore');
+        _log('✅ Existing user data updated');
       }
+      _log('═══════════════════════════════════════');
     } catch (e) {
-      _log('Error saving user data to Firestore: $e');
+      _log('❌ Error saving user data to Firestore: $e');
       rethrow;
     }
   }
@@ -118,13 +136,20 @@ class FirebaseServices {
     required Map<String, dynamic> stepData,
   }) async {
     try {
+      _log('═══════════════════════════════════════');
+      _log('📝 Saving onboarding step...');
+      _log('User ID: $userId');
+      _log('Fields: ${stepData.keys.join(', ')}');
+      
       await _firestore
           .collection('users')
           .doc(userId)
           .set(stepData, SetOptions(merge: true));
-      _log('Onboarding step saved: ${stepData.keys.join(', ')}');
+      
+      _log('✅ Onboarding step saved successfully');
+      _log('═══════════════════════════════════════');
     } catch (e) {
-      _log('Error saving onboarding step: $e');
+      _log('❌ Error saving onboarding step: $e');
       rethrow;
     }
   }
@@ -132,10 +157,11 @@ class FirebaseServices {
   /// Complete onboarding (mark as done)
   static Future<void> completeOnboarding(String userId) async {
     try {
-      await _firestore.collection('users').doc(userId).update({
+      // Use set with merge to ensure we update the existing document
+      await _firestore.collection('users').doc(userId).set({
         'isOnboardingComplete': true,
         'profileCompletedAt': FieldValue.serverTimestamp(),
-      });
+      }, SetOptions(merge: true));
       _log('Onboarding completed for user: $userId');
     } catch (e) {
       _log('Error completing onboarding: $e');
@@ -185,10 +211,11 @@ class FirebaseServices {
     required List<String> photoUrls,
   }) async {
     try {
-      await _firestore.collection('users').doc(userId).update({
+      // Use set with merge to ensure we update the existing document
+      await _firestore.collection('users').doc(userId).set({
         'photos': photoUrls,
         'photoCount': photoUrls.length,
-      });
+      }, SetOptions(merge: true));
       _log('Photos saved to Firestore: ${photoUrls.length} photos');
     } catch (e) {
       _log('Error saving photos: $e');
@@ -216,10 +243,22 @@ class FirebaseServices {
     Map<String, dynamic> updates,
   ) async {
     try {
-      await _firestore.collection('users').doc(userId).update(updates);
-      _log('User profile updated successfully');
+      _log('═══════════════════════════════════════');
+      _log('📝 Updating user profile...');
+      _log('User ID: $userId');
+      _log('Fields: ${updates.keys.join(', ')}');
+      
+      // Use set with merge to update existing document OR create if doesn't exist
+      // This ensures we always update the SAME document created during signup
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .set(updates, SetOptions(merge: true));
+      
+      _log('✅ User profile updated successfully');
+      _log('═══════════════════════════════════════');
     } catch (e) {
-      _log('Error updating user profile: $e');
+      _log('❌ Error updating user profile: $e');
       rethrow;
     }
   }

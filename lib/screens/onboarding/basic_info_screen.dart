@@ -98,6 +98,14 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
         throw Exception('No user signed in');
       }
 
+      _log('═══════════════════════════════════════');
+      _log('📝 Saving basic info...');
+      _log('Current User ID: ${user.uid}');
+      _log('Email: ${user.email ?? "N/A"}');
+      _log('Name: ${_nameController.text.trim()}');
+      _log('Gender: $_selectedGender');
+      _log('═══════════════════════════════════════');
+
       final age = _calculateAge();
 
       // Save basic details to Firestore
@@ -113,7 +121,7 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
         },
       );
 
-      _log('Basic details saved successfully');
+      _log('✅ Basic details saved successfully');
 
       if (mounted) {
         Navigator.pushReplacementNamed(context, '/onboarding/detailed-profile');

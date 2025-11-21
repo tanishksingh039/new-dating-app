@@ -57,31 +57,45 @@ class _HomeScreenState extends State<HomeScreen> {
             .collection('users')
             .doc(userId)
             .get();
-        if (doc.exists) {
-          final user = UserModel.fromMap(doc.data()!);
-          setState(() {
-            _isFemale = user.gender.toLowerCase() == 'female';
-            _screens = _isFemale
-                ? [
-                    const SwipeableDiscoveryScreen(),
-                    const LikesScreen(),
-                    const MatchesScreen(),
-                    const ConversationsScreen(),
-                    const RewardsLeaderboardScreen(),
-                    const ProfileScreen(),
-                  ]
-                : [
-                    const SwipeableDiscoveryScreen(),
-                    const LikesScreen(),
-                    const MatchesScreen(),
-                    const ConversationsScreen(),
-                    const ProfileScreen(),
-                  ];
-            _isLoading = false;
-          });
+        
+        if (doc.exists && doc.data() != null) {
+          final data = doc.data();
+          if (data is Map<String, dynamic>) {
+            final user = UserModel.fromMap(data);
+            setState(() {
+              _isFemale = user.gender.toLowerCase() == 'female';
+              _screens = _isFemale
+                  ? [
+                      const SwipeableDiscoveryScreen(),
+                      const LikesScreen(),
+                      const MatchesScreen(),
+                      const ConversationsScreen(),
+                      const RewardsLeaderboardScreen(),
+                      const ProfileScreen(),
+                    ]
+                  : [
+                      const SwipeableDiscoveryScreen(),
+                      const LikesScreen(),
+                      const MatchesScreen(),
+                      const ConversationsScreen(),
+                      const ProfileScreen(),
+                    ];
+              _isLoading = false;
+            });
+          } else {
+            debugPrint('[HomeScreen] Document data is not a Map');
+            setState(() => _isLoading = false);
+          }
+        } else {
+          debugPrint('[HomeScreen] Document does not exist or data is null');
+          setState(() => _isLoading = false);
         }
+      } else {
+        debugPrint('[HomeScreen] User ID is null');
+        setState(() => _isLoading = false);
       }
     } catch (e) {
+      debugPrint('[HomeScreen] Error checking user gender: $e');
       setState(() => _isLoading = false);
     }
   }

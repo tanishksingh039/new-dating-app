@@ -1,10 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_model.dart';
-import 'user_safety_service.dart';
 import '../models/discovery_filters.dart';
-import '../firebase_services.dart';
+import '../utils/firestore_extensions.dart';
+import 'user_safety_service.dart';
 import 'notification_service.dart';
+import '../firebase_services.dart';
 
 class DiscoveryService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -25,6 +26,7 @@ class DiscoveryService {
 
       final currentUser = UserModel.fromMap(currentUserDoc.data()!);
       final prefs = currentUser.preferences;
+      final currentUserGender = currentUser.gender;
 
       // Get user's swipe history to exclude already swiped profiles
       final swipeHistory = await _getSwipeHistory(currentUserId);
@@ -34,12 +36,16 @@ class DiscoveryService {
           .collection('users')
           .where('uid', isNotEqualTo: currentUserId);
 
-      // Filter by interested in gender (only if specified and not "Everyone")
-      if (prefs['interestedIn'] != null && 
-          prefs['interestedIn'] != 'Everyone' && 
-          prefs['interestedIn'] != '') {
-        query = query.where('gender', isEqualTo: prefs['interestedIn']);
+      // AUTOMATIC FILTER: Show opposite gender only (Male sees Female, Female sees Male)
+      // This is ALWAYS applied by default
+      if (currentUserGender == 'Male') {
+        query = query.where('gender', isEqualTo: 'Female');
+        debugPrint('Gender filter: Male user, showing Females only');
+      } else if (currentUserGender == 'Female') {
+        query = query.where('gender', isEqualTo: 'Male');
+        debugPrint('Gender filter: Female user, showing Males only');
       }
+      // If gender is not Male/Female, show all (no gender filter)
 
       // Get potential matches
       debugPrint('Fetching users from Firestore...');
@@ -50,7 +56,11 @@ class DiscoveryService {
       List<UserModel> profiles = [];
       for (var doc in snapshot.docs) {
         try {
-          final data = doc.data() as Map<String, dynamic>;
+          final data = doc.safeData();
+          if (data == null) {
+            debugPrint('Skipping document ${doc.id}: null or invalid data');
+            continue;
+          }
           final user = UserModel.fromMap(data);
 
           // Check onboarding completion (check both possible field names)
@@ -73,18 +83,17 @@ class DiscoveryService {
             continue;
           }
 
-          // Filter by age range (use filters if provided, otherwise use preferences)
+          // Filter by age range ONLY if filters are explicitly provided
+          // Do NOT auto-apply user preferences - show all ages by default
           int minAge = 18;
           int maxAge = 100;
           
           if (filters != null) {
+            // Only apply age filter if explicitly set by user
             minAge = filters.minAge;
             maxAge = filters.maxAge;
-          } else if (prefs['ageRange'] != null) {
-            final ageRange = prefs['ageRange'] as Map<String, dynamic>;
-            minAge = ageRange['min'] ?? 18;
-            maxAge = ageRange['max'] ?? 100;
           }
+          // Removed: Do NOT use prefs['ageRange'] automatically
           
           final userAge = _calculateAge(user.dateOfBirth!);
           if (userAge < minAge || userAge > maxAge) {

@@ -51,6 +51,8 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
         'ageRangeMax': _ageRange.end.round(),
         'distance': _distance.round(),
         'onboardingCompleted': true,
+        'isOnboardingComplete': true,
+        'onboardingStep': 'completed',
         'profileComplete': 100,
       });
 

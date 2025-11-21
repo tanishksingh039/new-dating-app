@@ -100,28 +100,45 @@ class _OtpScreenState extends State<OtpScreen> {
       final user = userCredential.user;
 
       if (user != null) {
-        _log('OTP verified successfully!');
+        _log('OTP verified successfully! User ID: ${user.uid}');
         
-        // ✅ Save user data to Firestore with phone number
+        // Save user data to Firestore with phone number
         try {
           await FirebaseServices.saveUserData(phoneNumber: phoneNumber);
           _log('User data saved to Firestore with phone number');
+          
+          // Wait longer to ensure Firestore write completes and propagates
+          await Future.delayed(const Duration(milliseconds: 1000));
+          
+          // Verify the document was created
+          final doc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get();
+          
+          if (doc.exists) {
+            _log('User document verified in Firestore');
+          } else {
+            _log('WARNING: User document not found after save attempt');
+          }
         } catch (e) {
-          _log('Firestore error (non-critical): $e');
+          _log('Firestore error: $e');
+          // Continue anyway - wrapper will handle missing data gracefully
         }
       }
 
       if (mounted) {
         _showSnackBar(
-          "OTP verified successfully! 🎉",
+          "OTP verified successfully! ",
           Colors.green.shade400,
         );
 
         // Small delay to show success message
-        await Future.delayed(const Duration(milliseconds: 800));
+        await Future.delayed(const Duration(milliseconds: 500));
 
-        // Navigate to home
-        Navigator.pushReplacementNamed(context, '/home');
+        // Navigate to wrapper (not home directly) - wrapper will check onboarding status
+        _log('Navigating to wrapper screen...');
+        Navigator.pushReplacementNamed(context, '/');
       }
     } on FirebaseAuthException catch (e) {
       String errorMessage = "OTP verification failed";

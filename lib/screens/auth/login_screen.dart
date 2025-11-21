@@ -106,8 +106,9 @@ class _LoginScreenState extends State<LoginScreen> {
       
       _log('Location check passed. Distance: ${locationResult.distanceInKm?.toStringAsFixed(2)} km');
 
-      await _googleSignIn.signOut();
-      _log('Signed out from previous Google session');
+      // Don't sign out - this causes Firebase to create new accounts
+      // await _googleSignIn.signOut();
+      _log('Starting Google Sign-In flow...');
 
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       
@@ -143,7 +144,12 @@ class _LoginScreenState extends State<LoginScreen> {
         throw Exception('Failed to sign in to Firebase');
       }
 
-      _log('Signed in to Firebase: ${user.email}');
+      _log('═══════════════════════════════════════');
+      _log('✅ Signed in to Firebase successfully!');
+      _log('User ID: ${user.uid}');
+      _log('Email: ${user.email}');
+      _log('Display Name: ${user.displayName}');
+      _log('═══════════════════════════════════════');
 
       try {
         await FirebaseServices.saveUserData();

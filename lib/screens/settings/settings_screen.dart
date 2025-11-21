@@ -16,6 +16,7 @@ import '../legal/privacy_policy_screen.dart';
 import '../legal/terms_of_service_screen.dart';
 import '../legal/community_guidelines_screen.dart';
 import '../safety/my_reports_screen.dart';
+import '../../services/account_deletion_service.dart';
 
 // Add Timestamp import
 import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
@@ -30,6 +31,8 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   late final String currentUserId;
   bool _isLoading = false;
+  bool _isVerified = false;
+  DateTime? _verificationDate;
   
   // Admin user IDs
   final List<String> _adminUserIds = [
@@ -49,6 +52,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         Navigator.of(context).pushReplacementNamed('/login');
       });
+    } else {
+      _checkVerificationStatus();
+    }
+  }
+
+  Future<void> _checkVerificationStatus() async {
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserId)
+          .get();
+      
+      if (userDoc.exists) {
+        final data = userDoc.data();
+        setState(() {
+          _isVerified = data?['isVerified'] ?? false;
+          final verificationTimestamp = data?['verificationDate'] as Timestamp?;
+          _verificationDate = verificationTimestamp?.toDate();
+        });
+      }
+    } catch (e) {
+      debugPrint('Error checking verification status: $e');
     }
   }
 
@@ -189,12 +214,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _deleteAccount() async {
+    // First confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Account'),
         content: const Text(
-          'Are you sure you want to delete your account? This action cannot be undone. All your data, matches, and messages will be permanently deleted.',
+          'Are you sure you want to delete your account? This action cannot be undone.\n\n'
+          'The following will be permanently deleted:\n'
+          '• Your profile and photos\n'
+          '• All matches and messages\n'
+          '• Swipes and preferences\n'
+          '• Reports and blocks\n'
+          '• All other account data',
         ),
         actions: [
           TextButton(
@@ -214,86 +246,72 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (confirmed != true) return;
 
-    // Ask for password confirmation
-    final password = await showDialog<String>(
+    // Second confirmation dialog
+    final finalConfirmed = await showDialog<bool>(
       context: context,
-      builder: (context) {
-        final controller = TextEditingController();
-        return AlertDialog(
-          title: const Text('Confirm Password'),
-          content: TextField(
-            controller: controller,
-            obscureText: true,
-            decoration: const InputDecoration(
-              labelText: 'Enter your password',
-              border: OutlineInputBorder(),
-            ),
+      builder: (context) => AlertDialog(
+        title: const Text('Final Confirmation'),
+        content: const Text(
+          'This is your last chance to cancel.\n\n'
+          'Are you absolutely sure you want to delete your account?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
             ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, controller.text),
-              child: const Text('Confirm'),
-            ),
-          ],
-        );
-      },
+            child: const Text('Yes, Delete My Account'),
+          ),
+        ],
+      ),
     );
 
-    if (password == null || password.isEmpty) return;
+    if (finalConfirmed != true) return;
 
     setState(() => _isLoading = true);
 
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        setState(() => _isLoading = false);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('User not found. Please login again.')),
-          );
-        }
-        return;
-      }
-      
-      // Re-authenticate user
-      final credential = EmailAuthProvider.credential(
-        email: user.email ?? '',
-        password: password,
-      );
-      await user.reauthenticateWithCredential(credential);
-
-      // Delete user data from Firestore
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserId)
-          .delete();
-
-      // Delete swipes
-      final swipes = await FirebaseFirestore.instance
-          .collection('swipes')
-          .where('userId', isEqualTo: currentUserId)
-          .get();
-      for (var doc in swipes.docs) {
-        await doc.reference.delete();
-      }
-
-      // Delete matches
-      final matches = await FirebaseFirestore.instance
-          .collection('matches')
-          .where('users', arrayContains: currentUserId)
-          .get();
-      for (var doc in matches.docs) {
-        await doc.reference.delete();
-      }
-
-      // Delete Firebase Auth account
-      await user.delete();
-
+      // Show progress dialog
       if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const AlertDialog(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Deleting your account...\nThis may take a moment.'),
+              ],
+            ),
+          ),
+        );
+      }
+
+      // Use the comprehensive deletion service
+      await AccountDeletionService.deleteAccount();
+
+      // Close progress dialog
+      if (mounted) {
+        Navigator.pop(context);
+      }
+
+      // Show success message and navigate to login
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Account deleted successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
         Navigator.of(context).pushNamedAndRemoveUntil(
           '/login',
           (route) => false,
@@ -301,9 +319,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     } catch (e) {
       setState(() => _isLoading = false);
+      
+      // Close progress dialog if open
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error deleting account: $e')),
+        Navigator.pop(context);
+      }
+
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Error'),
+            content: Text(
+              'Failed to delete account:\n\n$e\n\n'
+              'Please try again or contact support if the problem persists.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
         );
       }
     }
@@ -323,20 +360,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _buildSection(
                   'Account',
                   [
-                    _buildSettingTile(
-                      Icons.verified_user,
-                      'Verify Profile',
-                      'Verify with liveness detection (anti-spoofing)',
-                      () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const LivenessVerificationScreen(),
-                          ),
-                        );
-                      },
-                      iconColor: Colors.blue,
-                    ),
+                    _buildVerificationTile(),
                     _buildSettingTile(
                       Icons.person,
                       'Account Settings',
@@ -575,6 +599,135 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
     );
+  }
+
+  Widget _buildVerificationTile() {
+    if (_isVerified) {
+      // User is already verified - show locked/completed state
+      return ListTile(
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.green.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(Icons.verified, color: Colors.green, size: 22),
+        ),
+        title: Row(
+          children: [
+            const Text(
+              'Profile Verified',
+              style: TextStyle(fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.check_circle, color: Colors.green, size: 18),
+          ],
+        ),
+        subtitle: Text(
+          _verificationDate != null
+              ? 'Verified on ${_formatDate(_verificationDate!)}'
+              : 'Your profile is verified',
+          style: TextStyle(color: Colors.grey[600], fontSize: 13),
+        ),
+        trailing: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.green.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.green.withOpacity(0.3)),
+          ),
+          child: const Text(
+            'VERIFIED',
+            style: TextStyle(
+              color: Colors.green,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        onTap: () {
+          // Show info dialog
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Row(
+                children: [
+                  Icon(Icons.verified, color: Colors.green, size: 28),
+                  SizedBox(width: 12),
+                  Text('Verified Profile'),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Your profile has been successfully verified with liveness detection.',
+                    style: TextStyle(fontSize: 15),
+                  ),
+                  const SizedBox(height: 16),
+                  if (_verificationDate != null) ...[
+                    Text(
+                      'Verified on: ${_formatDate(_verificationDate!)}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  const Text(
+                    '✓ Anti-spoofing verified\n'
+                    '✓ Liveness detection passed\n'
+                    '✓ Profile photo matched',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.green,
+                      height: 1.5,
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    } else {
+      // User is not verified - show verification option
+      return _buildSettingTile(
+        Icons.verified_user,
+        'Verify Profile',
+        'Verify with liveness detection (anti-spoofing)',
+        () async {
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const LivenessVerificationScreen(),
+            ),
+          );
+          
+          // Refresh verification status after returning
+          if (result == true || mounted) {
+            await _checkVerificationStatus();
+          }
+        },
+        iconColor: Colors.blue,
+      );
+    }
+  }
+
+  String _formatDate(DateTime date) {
+    final months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
 
   Widget _buildSection(String title, List<Widget> children) {

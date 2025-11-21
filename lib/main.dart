@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -58,16 +60,108 @@ import 'screens/verification/liveness_verification_screen.dart';
 // Models
 import 'models/user_model.dart';
 
+// Monitoring
+import 'utils/firestore_monitor.dart';
+
+// Providers
+import 'providers/premium_provider.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
   
-  // Initialize notification service
-  await NotificationService().initialize();
+  // CRITICAL: Catch ALL errors and prevent crashes
+  FlutterError.onError = (FlutterErrorDetails details) {
+    // Log the error but DON'T crash the app
+    debugPrint('═══════════════════════════════════════');
+    debugPrint('🚨 CAUGHT ERROR: ${details.exception}');
+    debugPrint('📍 Location: ${details.context}');
+    debugPrint('📚 Stack trace: ${details.stack}');
+    debugPrint('═══════════════════════════════════════');
+    
+    // Show error in debug mode but don't crash
+    if (kDebugMode) {
+      FlutterError.presentError(details);
+    }
+  };
   
-  runApp(const MyApp());
+  // Replace error widget with friendly message instead of red screen
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    return Material(
+      child: Container(
+        color: Colors.white,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.error_outline,
+                  color: Colors.orange,
+                  size: 64,
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Something went wrong',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Please restart the app',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.black54,
+                  ),
+                ),
+                if (kDebugMode) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    '${details.exception}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.red,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  };
+  
+  // Catch errors outside Flutter framework
+  runZonedGuarded(() async {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    
+    // Start Firestore monitoring (debug mode only)
+    if (kDebugMode) {
+      FirestoreMonitor.startMonitoring();
+      debugPrint('🔍 Firestore monitoring enabled');
+    }
+    
+    // Initialize notification service
+    try {
+      await NotificationService().initialize();
+    } catch (e) {
+      debugPrint('⚠️ Notification service init failed: $e');
+    }
+    
+    runApp(const MyApp());
+  }, (error, stackTrace) {
+    debugPrint('═══════════════════════════════════════');
+    debugPrint('🚨 UNCAUGHT ERROR: $error');
+    debugPrint('📚 Stack trace: $stackTrace');
+    debugPrint('═══════════════════════════════════════');
+  });
 }
 
 class MyApp extends StatelessWidget {
@@ -79,6 +173,7 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AppearanceProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => PremiumProvider()),
       ],
       child: MaterialApp(
       navigatorKey: NavigationService.navigatorKey,

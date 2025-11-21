@@ -2,6 +2,14 @@ import 'package:flutter/material.dart';
 import '../../models/discovery_filters.dart';
 import '../../constants/app_colors.dart';
 
+// Wrapper class to distinguish between "dismissed" and "reset clicked"
+class FilterDialogResult {
+  final DiscoveryFilters? filters;
+  final bool wasReset;
+  
+  FilterDialogResult({this.filters, this.wasReset = false});
+}
+
 class FiltersDialog extends StatefulWidget {
   final DiscoveryFilters currentFilters;
 
@@ -170,13 +178,8 @@ class _FiltersDialogState extends State<FiltersDialog> {
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () {
-                      setState(() {
-                        _ageRange = const RangeValues(18, 100);
-                        _maxDistance = null;
-                        _showVerifiedOnly = false;
-                        _selectedEducation = null;
-                        _selectedInterests.clear();
-                      });
+                      // Reset means "no filters" - return wrapper with wasReset=true
+                      Navigator.pop(context, FilterDialogResult(filters: null, wasReset: true));
                     },
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -204,7 +207,7 @@ class _FiltersDialogState extends State<FiltersDialog> {
                         education: _selectedEducation,
                         interests: _selectedInterests,
                       );
-                      Navigator.pop(context, updatedFilters);
+                      Navigator.pop(context, FilterDialogResult(filters: updatedFilters, wasReset: false));
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,

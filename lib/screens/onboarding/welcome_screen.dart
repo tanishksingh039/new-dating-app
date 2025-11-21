@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../constants/app_colors.dart';
 import '../../widgets/custom_button.dart';
 
@@ -70,6 +71,24 @@ class _WelcomeScreenState extends State<WelcomeScreen>
             padding: const EdgeInsets.all(24.0),
             child: Column(
               children: [
+                // Back button
+                Align(
+                  alignment: Alignment.topLeft,
+                  child: IconButton(
+                    icon: const Icon(
+                      Icons.arrow_back,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                    onPressed: () async {
+                      // Sign out and go back to login
+                      await FirebaseAuth.instance.signOut();
+                      if (context.mounted) {
+                        Navigator.pushReplacementNamed(context, '/login');
+                      }
+                    },
+                  ),
+                ),
                 Expanded(
                   child: FadeTransition(
                     opacity: _fadeAnimation,
@@ -170,6 +189,27 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                           fontSize: 12,
                           color: Colors.white.withOpacity(0.7),
                           height: 1.3,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // Already have account link
+                      GestureDetector(
+                        onTap: () async {
+                          // Sign out and go back to login
+                          await FirebaseAuth.instance.signOut();
+                          if (context.mounted) {
+                            Navigator.pushReplacementNamed(context, '/login');
+                          }
+                        },
+                        child: Text(
+                          'Already have an account? Login',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            decoration: TextDecoration.underline,
+                          ),
                         ),
                       ),
                     ],

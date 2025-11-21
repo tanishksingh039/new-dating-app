@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class UserModel {
   final String uid;
+  final String email;
   final String phoneNumber;
   final String name;
   final DateTime? dateOfBirth;
@@ -31,7 +32,8 @@ class UserModel {
 
   UserModel({
     required this.uid,
-    required this.phoneNumber,
+    this.email = '',
+    this.phoneNumber = '',
     this.name = '',
     this.dateOfBirth,
     this.gender = '',
@@ -77,6 +79,7 @@ class UserModel {
   Map<String, dynamic> toMap() {
     return {
       'uid': uid,
+      'email': email,
       'phoneNumber': phoneNumber,
       'name': name,
       'dateOfBirth': dateOfBirth?.toIso8601String(),
@@ -118,6 +121,7 @@ class UserModel {
 
     return UserModel(
       uid: map['uid'] ?? '',
+      email: map['email'] ?? '',
       phoneNumber: map['phoneNumber'] ?? '',
       name: map['name'] ?? '',
       dateOfBirth: parseDateOfBirth(map['dateOfBirth']),
@@ -148,6 +152,7 @@ class UserModel {
   // Create a copy of UserModel with updated fields
   UserModel copyWith({
     String? uid,
+    String? email,
     String? phoneNumber,
     String? name,
     DateTime? dateOfBirth,
@@ -171,6 +176,7 @@ class UserModel {
   }) {
     return UserModel(
       uid: uid ?? this.uid,
+      email: email ?? this.email,
       phoneNumber: phoneNumber ?? this.phoneNumber,
       name: name ?? this.name,
       dateOfBirth: dateOfBirth ?? this.dateOfBirth,

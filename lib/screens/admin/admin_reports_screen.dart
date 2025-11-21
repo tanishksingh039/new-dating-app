@@ -697,8 +697,11 @@ class _AdminReportsScreenState extends State<AdminReportsScreen>
           .doc(userId)
           .get();
       
-      if (doc.exists) {
-        return UserModel.fromMap(doc.data()!);
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data();
+        if (data is Map<String, dynamic>) {
+          return UserModel.fromMap(data);
+        }
       }
     } catch (e) {
       debugPrint('Error getting user info: $e');

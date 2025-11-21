@@ -6,6 +6,7 @@ import '../../models/discovery_filters.dart';
 import '../../services/discovery_service.dart';
 import '../../services/match_service.dart';
 import '../../services/swipe_limit_service.dart';
+import '../../utils/firestore_extensions.dart';
 import '../../widgets/profile_card.dart';
 import '../../widgets/action_buttons.dart';
 import '../../widgets/animated_card.dart'; // Import TinderSwipeCard
@@ -34,7 +35,7 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
   bool _isLoading = true;
   int _currentIndex = 0;
   String? _currentUserId;
-  DiscoveryFilters _filters = DiscoveryFilters();
+  DiscoveryFilters? _filters; // Start with null - no filters applied by default
   Set<String> _swipedProfileIds = {}; // Track swiped profiles in current session
   bool _isCurrentUserVerified = false;
   bool _isPremium = false;
@@ -148,9 +149,10 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
     setState(() => _isLoading = true);
     
     try {
+      // Pass null filters on first load to show ALL profiles
       final profiles = await _discoveryService.getDiscoveryProfiles(
         _currentUserId!,
-        filters: _filters,
+        filters: _filters, // Will be null initially, showing all profiles
       );
       
       setState(() {
@@ -208,25 +210,34 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
       
       final currentUser = UserModel.fromMap(currentUserDoc.data()!);
       final prefs = currentUser.preferences;
+      final currentUserGender = currentUser.gender;
       
       // Build query
       Query query = FirebaseFirestore.instance
           .collection('users')
           .where('uid', isNotEqualTo: _currentUserId);
       
-      // Filter by interested in gender
-      if (prefs['interestedIn'] != null && 
-          prefs['interestedIn'] != 'Everyone' && 
-          prefs['interestedIn'] != '') {
-        query = query.where('gender', isEqualTo: prefs['interestedIn']);
+      // AUTOMATIC FILTER: Show opposite gender only (Male sees Female, Female sees Male)
+      // This is ALWAYS applied
+      if (currentUserGender == 'Male') {
+        query = query.where('gender', isEqualTo: 'Female');
+        debugPrint('Fallback gender filter: Male user, showing Females only');
+      } else if (currentUserGender == 'Female') {
+        query = query.where('gender', isEqualTo: 'Male');
+        debugPrint('Fallback gender filter: Female user, showing Males only');
       }
+      // If gender is not Male/Female, show all (no gender filter)
       
       final snapshot = await query.limit(100).get();
       
       List<UserModel> profiles = [];
       for (var doc in snapshot.docs) {
         try {
-          final data = doc.data() as Map<String, dynamic>;
+          final data = doc.safeData();
+          if (data == null) {
+            debugPrint('Fallback: Skipping document ${doc.id}: null or invalid data');
+            continue;
+          }
           final user = UserModel.fromMap(data);
           
           // Only check onboarding and basic requirements
@@ -236,11 +247,13 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
           if (user.dateOfBirth == null) continue;
           if (user.photos.isEmpty) continue;
           
-          // Apply age filter
+          // Apply age filter only if filters are set
           int minAge = 18;
           int maxAge = 100;
-          if (_filters.minAge > 0) minAge = _filters.minAge;
-          if (_filters.maxAge > 0) maxAge = _filters.maxAge;
+          if (_filters != null) {
+            if (_filters!.minAge > 0) minAge = _filters!.minAge;
+            if (_filters!.maxAge > 0) maxAge = _filters!.maxAge;
+          }
           
           final userAge = _calculateAge(user.dateOfBirth!);
           if (userAge < minAge || userAge > maxAge) continue;
@@ -323,14 +336,16 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
   }
 
   Future<void> _openFiltersDialog() async {
-    final result = await showDialog<DiscoveryFilters>(
+    final result = await showDialog<FilterDialogResult>(
       context: context,
-      builder: (context) => FiltersDialog(currentFilters: _filters),
+      builder: (context) => FiltersDialog(currentFilters: _filters ?? DiscoveryFilters()),
     );
 
+    // result will be null if dialog was dismissed (X button or outside tap)
+    // result will be FilterDialogResult if Reset or Apply was clicked
     if (result != null) {
       setState(() {
-        _filters = result;
+        _filters = result.filters; // Can be null (reset) or DiscoveryFilters (apply)
         _allProfiles.clear(); // Clear cache when filters change
         _swipedProfileIds.clear();
       });
@@ -467,7 +482,7 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
                 icon: const Icon(Icons.filter_list, color: AppColors.textPrimary),
                 onPressed: _openFiltersDialog,
               ),
-              if (_filters.hasActiveFilters)
+              if (_filters != null && _filters!.hasActiveFilters)
                 Positioned(
                   right: 8,
                   top: 8,
@@ -578,7 +593,7 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
       child: Column(
         children: [
           // Active filters indicator
-          if (_filters.hasActiveFilters)
+          if (_filters != null && _filters!.hasActiveFilters)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               child: Container(
@@ -611,7 +626,7 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
                     GestureDetector(
                       onTap: () {
                         setState(() {
-                          _filters = DiscoveryFilters();
+                          _filters = null; // Reset to no filters
                         });
                         _loadProfiles();
                       },

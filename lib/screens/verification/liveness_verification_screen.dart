@@ -283,7 +283,6 @@ class _LivenessVerificationScreenState extends State<LivenessVerificationScreen>
       });
 
       if (mounted) {
-        Navigator.of(context).pop();
         _showSuccessDialog();
       }
     } catch (e) {
@@ -335,13 +334,13 @@ class _LivenessVerificationScreenState extends State<LivenessVerificationScreen>
         actions: [
           ElevatedButton(
             onPressed: () {
-              Navigator.of(context).pop();
-              Navigator.of(context).pop();
+              Navigator.of(context).pop(); // Close dialog
+              Navigator.of(context).pop(true); // Return to settings with success
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,
             ),
-            child: Text('Done'),
+            child: const Text('Done'),
           ),
         ],
       ),

@@ -1,20 +1,25 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
 import 'package:record/record.dart';
-import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:provider/provider.dart';
 import '../../firebase_services.dart';
 import '../../services/rewards_service.dart';
 import '../../services/r2_storage_service.dart';
 import '../../models/user_model.dart';
-import '../../widgets/premium_lock_overlay.dart';
+import '../../constants/app_colors.dart';
+import '../../utils/firestore_extensions.dart';
 import '../../mixins/screenshot_protection_mixin.dart';
+import '../../widgets/premium_lock_overlay.dart';
 import '../safety/report_user_screen.dart';
 import '../safety/block_user_screen.dart';
 import '../../services/user_safety_service.dart';
+import '../../providers/premium_provider.dart';
 
 class ChatScreen extends StatefulWidget {
   final String currentUserId;
@@ -672,17 +677,19 @@ class _ChatScreenState extends State<ChatScreen>
                     // Reverse the index since we're using reverse: true
                     final reversedIndex = messages.length - 1 - index;
                     final messageDoc = messages[reversedIndex];
-                    final message = messageDoc.data() as Map<String, dynamic>;
+                    final message = messageDoc.safeData();
+                    if (message == null) return const SizedBox.shrink();
                     final isMe = message['senderId'] == widget.currentUserId;
                     final timestamp = message['timestamp'] as Timestamp?;
 
                     bool showDateSeparator = false;
-                    if (reversedIndex == 0 ||
-                        _shouldShowDateSeparator(
-                          messages[reversedIndex - 1].data() as Map<String, dynamic>,
-                          message,
-                        )) {
+                    if (reversedIndex == 0) {
                       showDateSeparator = true;
+                    } else {
+                      final prevMessage = messages[reversedIndex - 1].safeData();
+                      if (prevMessage != null && _shouldShowDateSeparator(prevMessage, message)) {
+                        showDateSeparator = true;
+                      }
                     }
 
                     return Column(
@@ -718,8 +725,11 @@ class _ChatScreenState extends State<ChatScreen>
           .collection('users')
           .doc(widget.otherUserId)
           .get();
-      if (doc.exists) {
-        otherUser = UserModel.fromMap(doc.data()!);
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data();
+        if (data is Map<String, dynamic>) {
+          otherUser = UserModel.fromMap(data);
+        }
       }
     } catch (e) {
       debugPrint('Error fetching user data: $e');
@@ -1325,42 +1335,7 @@ class ConversationsScreen extends StatefulWidget {
 }
 
 class _ConversationsScreenState extends State<ConversationsScreen> {
-  bool _isPremium = false;
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkPremiumStatus();
-  }
-
-  Future<void> _checkPremiumStatus() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      setState(() => _loading = false);
-      return;
-    }
-
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-      
-      if (doc.exists) {
-        final userData = doc.data();
-        setState(() {
-          _isPremium = userData?['isPremium'] ?? false;
-          _loading = false;
-        });
-      }
-    } catch (e) {
-      setState(() => _loading = false);
-    }
-  }
-
   Future<void> _refreshChats() async {
-    await _checkPremiumStatus();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1419,20 +1394,27 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
   }
 
   Widget _buildBody(String currentUserId) {
-    if (_loading) {
-      return const Center(
-        child: CircularProgressIndicator(color: Color(0xFFFF6B9D)),
-      );
-    }
-
-    // Show lock overlay for free users
-    if (!_isPremium) {
-      return const PremiumLockOverlay(
-        featureName: 'Chat',
-        icon: Icons.chat_bubble,
-      );
-    }
-
+    // Use Consumer to listen to real-time premium status changes
+    return Consumer<PremiumProvider>(
+      builder: (context, premiumProvider, child) {
+        final isPremium = premiumProvider.isPremium;
+        
+        debugPrint('[ConversationsScreen] 🔄 Premium status: $isPremium');
+        
+        // Show lock overlay for free users
+        if (!isPremium) {
+          return const PremiumLockOverlay(
+            featureName: 'Chat',
+            icon: Icons.chat_bubble,
+          );
+        }
+        
+        return _buildChatsList(currentUserId);
+      },
+    );
+  }
+  
+  Widget _buildChatsList(String currentUserId) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('matches')
@@ -1480,7 +1462,8 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         return ListView.builder(
           itemCount: matches.length,
           itemBuilder: (context, index) {
-              final matchData = matches[index].data() as Map<String, dynamic>;
+              final matchData = matches[index].safeData();
+              if (matchData == null) return const SizedBox.shrink();
               final users = matchData['users'] as List<dynamic>;
               final otherUserId = users.firstWhere(
                 (id) => id != currentUserId,
@@ -1497,7 +1480,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                     return const SizedBox.shrink();
                   }
 
-                  final userData = userSnapshot.data!.data() as Map<String, dynamic>?;
+                  final userData = userSnapshot.data?.safeData();
                   if (userData == null) return const SizedBox.shrink();
 
                   final name = userData['name'] ?? 'Unknown';

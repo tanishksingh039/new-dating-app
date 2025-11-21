@@ -17,8 +17,11 @@ class RewardsService {
           .doc(userId)
           .get();
 
-      if (doc.exists) {
-        return UserRewardsStats.fromMap(doc.data()!);
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data();
+        if (data is Map<String, dynamic>) {
+          return UserRewardsStats.fromMap(data);
+        }
       }
       
       // Create initial stats if doesn't exist
@@ -519,9 +522,11 @@ class RewardsService {
       final docRef = _firestore.collection('rewards_stats').doc(userId);
       final doc = await docRef.get();
       
-      if (!doc.exists) return;
+      if (!doc.exists || doc.data() == null) return;
       
-      final data = doc.data()!;
+      final docData = doc.data();
+      if (docData is! Map<String, dynamic>) return;
+      final data = docData;
       final lastUpdated = (data['lastUpdated'] as Timestamp).toDate();
       final now = DateTime.now();
       
@@ -580,8 +585,11 @@ class RewardsService {
           .doc('${userId}_$conversationId')
           .get();
 
-      if (doc.exists) {
-        return MessageTracking.fromMap(doc.data()!);
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data();
+        if (data is Map<String, dynamic>) {
+          return MessageTracking.fromMap(data);
+        }
       }
       return null;
     } catch (e) {
@@ -621,7 +629,9 @@ class RewardsService {
         await docRef.set(tracking.toMap());
       } else {
         // Update existing tracking
-        final data = doc.data()!;
+        final docData = doc.data();
+        if (docData is! Map<String, dynamic>) return;
+        final data = docData;
         final lastMessageTime = (data['lastMessageTime'] as Timestamp).toDate();
         final hoursSinceLastMessage = now.difference(lastMessageTime).inHours;
 
@@ -664,8 +674,10 @@ class RewardsService {
       final doc = await docRef.get();
       final now = DateTime.now();
 
-      if (doc.exists) {
-        final data = doc.data()!;
+      if (doc.exists && doc.data() != null) {
+        final docData = doc.data();
+        if (docData is! Map<String, dynamic>) return;
+        final data = docData;
         final lastImageTime = (data['lastImageTime'] as Timestamp?)?.toDate() ?? now;
         final hoursSinceLastImage = now.difference(lastImageTime).inHours;
 

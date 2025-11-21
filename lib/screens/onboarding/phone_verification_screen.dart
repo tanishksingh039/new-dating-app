@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../constants/app_colors.dart';
 import '../../widgets/custom_button.dart';
 import '../../utils/constants.dart';
@@ -58,7 +59,17 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
         phoneNumber: phoneNumber,
         verificationCompleted: (PhoneAuthCredential credential) async {
           // Auto-verification (Android only)
-          await FirebaseAuth.instance.signInWithCredential(credential);
+          // LINK phone to existing Google account instead of creating new user
+          final user = FirebaseAuth.instance.currentUser;
+          if (user != null) {
+            try {
+              await user.linkWithCredential(credential);
+              debugPrint('[PhoneVerification] ✅ Phone linked to existing account: ${user.uid}');
+            } catch (e) {
+              debugPrint('[PhoneVerification] ❌ Error linking phone: $e');
+              // If already linked, just continue
+            }
+          }
           if (mounted) {
             Navigator.pushReplacementNamed(context, '/onboarding/basic-info');
           }
@@ -102,12 +113,45 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
         smsCode: _otpController.text.trim(),
       );
 
-      await FirebaseAuth.instance.signInWithCredential(credential);
+      // LINK phone to existing Google account instead of creating new user
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        debugPrint('[PhoneVerification] ═══════════════════════════════════════');
+        debugPrint('[PhoneVerification] 📱 Linking phone to existing account...');
+        debugPrint('[PhoneVerification] Current User ID: ${user.uid}');
+        debugPrint('[PhoneVerification] Email: ${user.email}');
+        
+        try {
+          await user.linkWithCredential(credential);
+          debugPrint('[PhoneVerification] ✅ Phone linked successfully!');
+          debugPrint('[PhoneVerification] Phone: +91${_phoneController.text.trim()}');
+          
+          // Update Firestore with phone number
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .set({
+            'phoneNumber': '+91${_phoneController.text.trim()}',
+            'lastActive': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+          
+          debugPrint('[PhoneVerification] ✅ Phone saved to Firestore');
+        } catch (linkError) {
+          debugPrint('[PhoneVerification] ⚠️ Error linking phone: $linkError');
+          // If already linked, just continue
+        }
+        debugPrint('[PhoneVerification] ═══════════════════════════════════════');
+      } else {
+        // Fallback: If no user signed in, sign in with phone
+        await FirebaseAuth.instance.signInWithCredential(credential);
+        debugPrint('[PhoneVerification] ⚠️ No existing user - signed in with phone');
+      }
       
       if (mounted) {
         Navigator.pushReplacementNamed(context, '/onboarding/basic-info');
       }
     } catch (e) {
+      debugPrint('[PhoneVerification] ❌ Error: $e');
       _showSnackBar('Invalid OTP. Please try again.', Colors.red);
     } finally {
       if (mounted) {
