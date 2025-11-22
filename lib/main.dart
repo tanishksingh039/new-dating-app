@@ -17,7 +17,6 @@ import 'screens/splash/splash_screen.dart';
 // Screens - Auth
 import 'screens/auth/wrapper_screen.dart';
 import 'screens/auth/login_screen.dart';
-import 'screens/auth/otp_screen.dart';
 
 // Screens - Onboarding
 import 'screens/onboarding/welcome_screen.dart';
@@ -233,8 +232,6 @@ class MyApp extends StatelessWidget {
             return MaterialPageRoute(builder: (_) => const WrapperScreen());
           case '/login':
             return MaterialPageRoute(builder: (_) => const LoginScreen());
-          case '/otp':
-            return MaterialPageRoute(builder: (_) => const OtpScreen());
           
           // Onboarding Routes - New Enhanced Flow
           case '/onboarding/welcome':

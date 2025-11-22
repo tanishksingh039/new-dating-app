@@ -54,7 +54,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   // Helper to normalize preference values
   String _normalizePreference(String key, String? value) {
     if (value == null || value.isEmpty) {
-      if (key == 'interestedIn') return 'Everyone';
+      if (key == 'interestedIn') return 'Male';
       if (key == 'lookingFor') return 'Long-term relationship';
       return '';
     }
@@ -64,8 +64,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final normalized = value.toLowerCase();
       if (normalized == 'male') return 'Male';
       if (normalized == 'female') return 'Female';
-      if (normalized == 'everyone') return 'Everyone';
-      return 'Everyone';
+      return 'Male';
     }
     
     // For lookingFor field - normalize common variations
@@ -509,7 +508,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               labelText: 'Interested in',
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
             ),
-            items: ['Male', 'Female', 'Everyone'].map((option) {
+            items: ['Male', 'Female'].map((option) {
               return DropdownMenuItem(value: option, child: Text(option));
             }).toList(),
             onChanged: (value) {

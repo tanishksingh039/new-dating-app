@@ -15,61 +15,55 @@ service cloud.firestore {
     }
     
     function isAdmin() {
-      // Any authenticated user is considered an admin
-      return isAuthenticated();
+      // Hardcoded list of 4 admin user IDs
+      return isAuthenticated() && 
+             (request.auth.uid == 'xZ4gVEGSW8VzK03vywKxWxDtewt1' ||  // Admin 1
+              request.auth.uid == 'mYCF1U576vM7BnQxNULaFkXQoRM2' ||  // Admin 2
+              request.auth.uid == 'jwt1l3TLlLS1X6lGuMshBsW7fpf1' ||  // Admin 3
+              request.auth.uid == 'PL60f1VkBcf8N1Wfm2ON1HnLX1Yb');   // Admin 4
     }
     
     // Users collection
     match /users/{userId} {
-      // Allow anyone to read user profiles (for admin panel and discovery)
-      // TEMPORARY: Open read access for admin panel testing
-      allow read: if true;
+      // Anyone authenticated can read user profiles (for discovery and admin)
+      allow read: if isAuthenticated();
       
-      // Allow user creation if:
-      // 1. User is creating their own profile (normal case), OR
-      // 2. User is authenticated and creating a document with matching uid (handles timing issues)
+      // Allow user creation
       allow create: if isOwner(userId) || 
                        (isAuthenticated() && 
                         request.resource.data.uid == request.auth.uid);
       
-      // Allow updates if:
-      // 1. User is updating their own profile, OR
-      // 2. User is updating match-related fields (for mutual matching), OR
-      // 3. User is an admin
+      // Allow updates
       allow update: if isOwner(userId) || 
                        (isAuthenticated() && 
                         request.resource.data.diff(resource.data).affectedKeys()
                           .hasOnly(['matches', 'matchCount', 'lastActive', 'isPremium', 'premiumActivatedAt', 'lastPaymentId', 'blockedBy'])) ||
                        isAdmin();
       
-      // Only the user can delete their own profile, or admins can delete
+      // Allow delete
       allow delete: if isOwner(userId) || isAdmin();
       
-      // Likes subcollection - tracks who this user liked
+      // Subcollections
       match /likes/{targetUserId} {
         allow read: if isOwner(userId);
         allow write: if isOwner(userId);
       }
       
-      // Received likes subcollection - tracks who liked this user
       match /receivedLikes/{senderId} {
         allow read: if isOwner(userId);
-        allow write: if isAuthenticated(); // Others can write when they like
+        allow write: if isAuthenticated();
       }
       
-      // Super likes subcollection
       match /superLikes/{targetUserId} {
         allow read: if isOwner(userId);
         allow write: if isOwner(userId);
       }
       
-      // Received super likes subcollection
       match /receivedSuperLikes/{senderId} {
         allow read: if isOwner(userId);
         allow write: if isAuthenticated();
       }
       
-      // Passes subcollection - tracks who this user passed on
       match /passes/{targetUserId} {
         allow read: if isOwner(userId);
         allow write: if isOwner(userId);
@@ -78,37 +72,26 @@ service cloud.firestore {
     
     // Matches collection
     match /matches/{matchId} {
-      // Helper to check if user is participant in the match
       function isMatchParticipant() {
         return request.auth.uid in resource.data.users;
       }
       
-      // Helper to check if user will be participant (for creates)
       function willBeParticipant() {
         return request.auth.uid in request.resource.data.users;
       }
       
-      // Allow reading if:
-      // 1. Document exists and user is a participant, OR
-      // 2. User is authenticated (to check if match exists before creating)
       allow read: if isAuthenticated();
-      
-      // Allow creating if user will be a participant in the new match
       allow create: if isAuthenticated() && willBeParticipant();
-      
-      // Allow updating/deleting only if user is a participant
       allow update: if isAuthenticated() && isMatchParticipant();
       allow delete: if isAuthenticated() && isMatchParticipant();
     }
     
     // Chats collection
     match /chats/{chatId} {
-      // Extract user IDs from chatId (format: userId1_userId2)
       function getChatUsers() {
         return chatId.split('_');
       }
       
-      // Check if current user is part of this chat
       function isParticipant() {
         return isAuthenticated() && 
                request.auth.uid in getChatUsers();
@@ -117,68 +100,58 @@ service cloud.firestore {
       allow read: if isParticipant();
       allow write: if isParticipant();
       
-      // Messages subcollection
       match /messages/{messageId} {
         allow read: if isParticipant();
         allow create: if isParticipant();
-        allow update: if false; // Messages cannot be edited
-        allow delete: if isParticipant(); // Allow deletion for account cleanup
+        allow update: if false;
+        allow delete: if isParticipant();
       }
     }
     
-    // Swipes collection (centralized tracking)
+    // Swipes collection
     match /swipes/{swipeId} {
       allow read: if isAuthenticated() && 
                      (request.auth.uid == resource.data.userId || 
                       request.auth.uid == resource.data.targetUserId);
       allow create: if isAuthenticated() && 
                        request.auth.uid == request.resource.data.userId;
-      allow update: if false; // Swipes cannot be modified
+      allow update: if false;
       allow delete: if isAuthenticated() && 
                        (request.auth.uid == resource.data.userId || 
-                        request.auth.uid == resource.data.targetUserId); // Allow deletion for account cleanup
+                        request.auth.uid == resource.data.targetUserId);
     }
     
-    // Payment orders collection
+    // Payment orders
     match /payment_orders/{orderId} {
-      // Open read access for admin panel
-      allow read: if true;
-      // Users can create payment orders for themselves
+      allow read: if isAuthenticated() && 
+                     resource.data.userId == request.auth.uid;
       allow create: if isAuthenticated() && 
                        request.resource.data.userId == request.auth.uid;
-      // Users can update their own payment orders (for status updates)
       allow update: if isAuthenticated() && 
                        resource.data.userId == request.auth.uid;
-      // Allow deletion for account cleanup
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
-    // ========================================
-    // SWIPE LIMIT SYSTEM
-    // ========================================
     
-    // Swipe stats - Users can read/write their own stats
+    // Swipe stats
     match /swipe_stats/{userId} {
       allow read: if isOwner(userId);
       allow create: if isOwner(userId);
       allow update: if isOwner(userId);
-      allow delete: if isOwner(userId); // Allow deletion for account cleanup
+      allow delete: if isOwner(userId);
     }
     
-    // ========================================
-    // SAFETY & REPORTING SYSTEM
-    // ========================================
-    
-    // User reports - Users can create reports, only view their own
+    // Reports
     match /reports/{reportId} {
-      allow read: if isAuthenticated() && resource.data.reporterId == request.auth.uid;
+      allow read: if isAuthenticated() && 
+                     (resource.data.reporterId == request.auth.uid || isAdmin());
       allow create: if isAuthenticated() && request.resource.data.reporterId == request.auth.uid;
-      allow update: if false; // Reports cannot be modified
+      allow update: if isAdmin();
       allow delete: if isAuthenticated() && 
                        (request.auth.uid == resource.data.reporterId || 
-                        request.auth.uid == resource.data.reportedUserId); // Allow deletion for account cleanup
+                        request.auth.uid == resource.data.reportedUserId);
     }
     
-    // Blocks collection - Users can manage their own blocks
+    // Blocks
     match /blocks/{blockId} {
       allow read: if isAuthenticated() && 
                      (resource.data.blockerId == request.auth.uid || 
@@ -186,14 +159,11 @@ service cloud.firestore {
       allow create: if isAuthenticated() && request.resource.data.blockerId == request.auth.uid;
       allow delete: if isAuthenticated() && 
                        (request.auth.uid == resource.data.blockerId || 
-                        request.auth.uid == resource.data.blockedUserId); // Allow deletion for account cleanup
+                        request.auth.uid == resource.data.blockedUserId);
       allow update: if false;
     }
     
-    // ========================================
-    // REWARDS SYSTEM
-    // ========================================
-    
+    // Rewards
     match /rewards_stats/{userId} {
       allow read: if isOwner(userId);
       allow write: if isOwner(userId);
@@ -201,14 +171,14 @@ service cloud.firestore {
     
     match /reward_incentives/{incentiveId} {
       allow read: if isAuthenticated();
-      allow write: if false; // Only backend can create incentives
+      allow write: if false;
     }
     
     match /reward_history/{historyId} {
       allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update: if false;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid; // Allow deletion for account cleanup
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
     
     match /daily_conversations/{userId}/{document=**} {
@@ -216,10 +186,7 @@ service cloud.firestore {
       allow write: if isOwner(userId);
     }
     
-    // ========================================
-    // NOTIFICATIONS SYSTEM
-    // ========================================
-    
+    // Notifications
     match /notifications/{notificationId} {
       allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow create: if isAuthenticated();
@@ -227,70 +194,57 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
     
-    // ========================================
-    // PAYMENT & SUBSCRIPTION SYSTEM
-    // ========================================
-    
+    // Payments
     match /payment_transactions/{transactionId} {
-      // Open read access for admin panel
-      allow read: if true;
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid; // Allow deletion for account cleanup
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
     
     match /subscriptions/{userId} {
       allow read: if isOwner(userId);
       allow create: if isOwner(userId);
       allow update: if isOwner(userId);
-      allow delete: if isOwner(userId); // Allow deletion for account cleanup
+      allow delete: if isOwner(userId);
     }
     
-    // ========================================
-    // SPOTLIGHT SYSTEM
-    // ========================================
-    
+    // Spotlight
     match /spotlight_bookings/{bookingId} {
-      // Open read access for admin panel
-      allow read: if true;
+      allow read: if isAuthenticated() || isAdmin();
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid; // Allow deletion for account cleanup
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
     
     match /spotlight_transactions/{transactionId} {
-      // Open read access for admin panel
-      allow read: if true;
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if false;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid; // Allow deletion for account cleanup
-    }
-    
-    // ========================================
-    // VERIFICATION SYSTEM
-    // ========================================
-    
-    match /verification_requests/{requestId} {
       allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid; // Allow deletion for account cleanup
+      allow update: if false;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+    
+    // Verification
+    match /verification_requests/{requestId} {
+      allow read: if isAuthenticated() && 
+                     (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && 
+                       (resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
     
     match /verification_photos/{photoId} {
       allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update: if false;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid; // Allow deletion for account cleanup
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
     
-    // ========================================
-    // LEADERBOARD SYSTEM (Public Read)
-    // ========================================
-    
+    // Leaderboard
     match /leaderboard/{document=**} {
       allow read: if isAuthenticated();
-      allow write: if false; // Only backend updates leaderboard
+      allow write: if false;
     }
     
     match /monthly_leaderboard/{document=**} {
@@ -298,40 +252,21 @@ service cloud.firestore {
       allow write: if false;
     }
     
-    // ========================================
-    // ADMIN COLLECTIONS (Restricted)
-    // ========================================
-    
+    // Admin collections
     match /admin_logs/{logId} {
-      allow read, write: if false; // Only backend/admin SDK
+      allow read, write: if false;
     }
     
     match /admin_sessions/{sessionId} {
-      allow read, write: if false; // Only backend/admin SDK
+      allow read, write: if false;
     }
     
     match /system_stats/{statId} {
-      allow read: if isAuthenticated(); // Users can view stats
-      allow write: if false; // Only backend updates
+      allow read: if isAuthenticated();
+      allow write: if false;
     }
     
-    // ========================================
-    // ADMIN PANEL COLLECTIONS (Open Read)
-    // ========================================
-    
-    // Payments collection for admin panel
-    match /payments/{paymentId} {
-      allow read: if true; // Open read for admin panel
-      allow write: if isAuthenticated();
-    }
-    
-    // Messages collection for admin panel
-    match /messages/{messageId} {
-      allow read: if true; // Open read for admin panel
-      allow write: if isAuthenticated();
-    }
-    
-    // Block any other collections by default
+    // Block everything else
     match /{document=**} {
       allow read, write: if false;
     }

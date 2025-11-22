@@ -429,18 +429,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
             'Preview Profile',
             'See how others view your profile',
             () {
-              // Scroll to preview section
+              if (_currentUser != null) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ProfilePreviewScreen(
+                      user: _currentUser!,
+                    ),
+                  ),
+                );
+              }
             },
           ),
-          _buildActionTile(
-            Icons.verified_user,
-            'Get Verified',
-            _currentUser?.isVerified == true ? 'Verified ✓' : 'Verify your profile',
-            () {
-              // Navigate to liveness verification in settings
-              Navigator.pushNamed(context, '/settings/verification');
-            },
-          ),
+          _buildVerificationTile(),
           if (_currentUser?.isPremium != true)
             _buildActionTile(
               Icons.star,
@@ -458,6 +459,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
         ],
       ),
+    );
+  }
+
+  Widget _buildVerificationTile() {
+    final isVerified = _currentUser?.isVerified == true;
+    
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: isVerified 
+              ? Colors.green.withOpacity(0.1) 
+              : Colors.pink.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(
+          isVerified ? Icons.verified : Icons.verified_user,
+          color: isVerified ? Colors.green : Colors.pink,
+        ),
+      ),
+      title: Text(
+        isVerified ? 'Verified' : 'Get Verified',
+        style: const TextStyle(fontWeight: FontWeight.w500),
+      ),
+      subtitle: Text(
+        isVerified ? 'Your profile is verified ✓' : 'Verify your profile',
+        style: TextStyle(
+          fontSize: 12,
+          color: isVerified ? Colors.green[700] : Colors.grey[600],
+        ),
+      ),
+      trailing: isVerified
+          ? Icon(Icons.check_circle, color: Colors.green, size: 24)
+          : Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+      onTap: isVerified
+          ? null // Make it non-clickable when verified
+          : () {
+              // Navigate to liveness verification in settings
+              Navigator.pushNamed(context, '/settings/verification');
+            },
     );
   }
 

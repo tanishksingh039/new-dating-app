@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:record/record.dart';
 import 'dart:io';
+import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
@@ -16,6 +17,7 @@ import '../../constants/app_colors.dart';
 import '../../utils/firestore_extensions.dart';
 import '../../mixins/screenshot_protection_mixin.dart';
 import '../../widgets/premium_lock_overlay.dart';
+import '../../widgets/recording_overlay_widget.dart';
 import '../safety/report_user_screen.dart';
 import '../safety/block_user_screen.dart';
 import '../../services/user_safety_service.dart';
@@ -54,6 +56,16 @@ class _ChatScreenState extends State<ChatScreen>
   bool _isCurrentUserVerified = false;
   DateTime? _otherUserLastActive;
   bool _otherUserShowOnlineStatus = true;
+  
+  // Audio recording UI state
+  final ValueNotifier<Duration> _recordingDurationNotifier = ValueNotifier(Duration.zero);
+  final ValueNotifier<List<double>> _waveformDataNotifier = ValueNotifier([]);
+  Timer? _recordingTimer;
+  double _slideOffset = 0.0;
+  
+  // Audio player state
+  final Map<String, bool> _audioPlayingStates = {};
+  final Map<String, AudioPlayer> _audioPlayers = {};
 
   @override
   void initState() {
@@ -477,9 +489,34 @@ class _ChatScreenState extends State<ChatScreen>
         final String filePath = '${appDocDir.path}/audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
         
         await _audioRecorder.start(const RecordConfig(), path: filePath);
-        if (!_isRecording) {
-          setState(() => _isRecording = true);
-        }
+        
+        setState(() {
+          _isRecording = true;
+          _slideOffset = 0.0;
+        });
+        
+        // Reset notifiers
+        _recordingDurationNotifier.value = Duration.zero;
+        _waveformDataNotifier.value = [];
+        
+        // Start timer and waveform generation (NO setState!)
+        _recordingTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+          if (_isRecording) {
+            // Update waveform data via notifier (no setState!)
+            final newWaveform = List<double>.from(_waveformDataNotifier.value);
+            newWaveform.add(0.3 + (timer.tick % 7) * 0.1);
+            if (newWaveform.length > 40) {
+              newWaveform.removeAt(0);
+            }
+            _waveformDataNotifier.value = newWaveform;
+            
+            // Update duration every second via notifier (no setState!)
+            if (timer.tick % 10 == 0) {
+              _recordingDurationNotifier.value = Duration(seconds: timer.tick ~/ 10);
+            }
+          }
+        });
+        
         debugPrint('🎤 Recording started: $filePath');
       } else {
         if (mounted) {
@@ -501,10 +538,17 @@ class _ChatScreenState extends State<ChatScreen>
   // Stop recording and send audio
   Future<void> _stopRecordingAndSend() async {
     try {
+      _recordingTimer?.cancel();
       final String? audioPath = await _audioRecorder.stop();
-      if (_isRecording) {
-        setState(() => _isRecording = false);
-      }
+      
+      setState(() {
+        _isRecording = false;
+        _slideOffset = 0.0;
+      });
+      
+      // Reset notifiers
+      _recordingDurationNotifier.value = Duration.zero;
+      _waveformDataNotifier.value = [];
       
       if (audioPath != null) {
         debugPrint('🎤 Recording stopped: $audioPath');
@@ -512,9 +556,13 @@ class _ChatScreenState extends State<ChatScreen>
       }
     } catch (e) {
       debugPrint('❌ Error stopping recording: $e');
-      if (_isRecording) {
-        setState(() => _isRecording = false);
-      }
+      _recordingTimer?.cancel();
+      setState(() {
+        _isRecording = false;
+        _slideOffset = 0.0;
+      });
+      _recordingDurationNotifier.value = Duration.zero;
+      _waveformDataNotifier.value = [];
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error stopping recording: $e')),
@@ -526,10 +574,18 @@ class _ChatScreenState extends State<ChatScreen>
   // Cancel recording
   Future<void> _cancelRecording() async {
     try {
+      _recordingTimer?.cancel();
       await _audioRecorder.stop();
-      if (_isRecording) {
-        setState(() => _isRecording = false);
-      }
+      
+      setState(() {
+        _isRecording = false;
+        _slideOffset = 0.0;
+      });
+      
+      // Reset notifiers
+      _recordingDurationNotifier.value = Duration.zero;
+      _waveformDataNotifier.value = [];
+      
       debugPrint('🎤 Recording cancelled');
     } catch (e) {
       debugPrint('❌ Error cancelling recording: $e');
@@ -619,15 +675,17 @@ class _ChatScreenState extends State<ChatScreen>
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: _buildAppBar(),
-      body: Column(
+      body: Stack(
         children: [
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseServices.getMessages(
-                widget.currentUserId,
-                widget.otherUserId,
-              ),
-              builder: (context, snapshot) {
+          Column(
+            children: [
+              Expanded(
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseServices.getMessages(
+                    widget.currentUserId,
+                    widget.otherUserId,
+                  ),
+                  builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
                     child: CircularProgressIndicator(
@@ -712,6 +770,31 @@ class _ChatScreenState extends State<ChatScreen>
             ),
           ),
           _buildMessageInput(),
+            ],
+          ),
+          // Recording overlay (separate from main column to prevent rebuilds)
+          if (_isRecording)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: ValueListenableBuilder<Duration>(
+                valueListenable: _recordingDurationNotifier,
+                builder: (context, duration, child) {
+                  return ValueListenableBuilder<List<double>>(
+                    valueListenable: _waveformDataNotifier,
+                    builder: (context, waveformData, child) {
+                      return RecordingOverlayWidget(
+                        recordingDuration: duration,
+                        waveformData: waveformData,
+                        onCancel: _cancelRecording,
+                        onSend: _stopRecordingAndSend,
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
         ],
       ),
     );
@@ -993,186 +1076,109 @@ class _ChatScreenState extends State<ChatScreen>
 
   Widget _buildMessageInput() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        child: Row(
-          children: [
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF5F7FA),
-                  borderRadius: BorderRadius.circular(24),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, -2),
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _messageController,
-                        decoration: const InputDecoration(
-                          hintText: 'Type a message...',
-                          border: InputBorder.none,
-                          hintStyle: TextStyle(
-                            color: Color(0xFFADB5BD),
-                            fontSize: 15,
-                          ),
-                        ),
-                        style: const TextStyle(
-                          fontSize: 15,
-                          color: Color(0xFF2D3142),
-                        ),
-                        maxLines: null,
-                        textCapitalization: TextCapitalization.sentences,
-                        onChanged: (value) {
-                          final isTyping = value.trim().isNotEmpty;
-                          // Only update state if typing status actually changed
-                          if (_isTyping != isTyping) {
-                            setState(() {
-                              _isTyping = isTyping;
-                            });
-                          }
-                        },
-                        onSubmitted: (_) => _sendMessage(),
-                      ),
-                    ),
-                    IconButton(
-                      icon: _isUploading
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Icon(
-                              Icons.image_outlined,
-                              color: _isCurrentUserFemale 
-                                  ? const Color(0xFFFF6B9D)
-                                  : Colors.grey.shade400,
-                              size: 24,
-                            ),
-                      onPressed: _isUploading ? null : _pickAndSendImage,
-                    ),
-                  ],
-                ),
-              ),
+              ],
             ),
-            const SizedBox(width: 8),
-            // Microphone or Send button
-            _isRecording
-                ? Row(
-                    children: [
-                      // Cancel button
-                      GestureDetector(
-                        onTap: _cancelRecording,
-                        child: Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: Colors.red.shade400,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.close,
-                            color: Colors.white,
-                            size: 24,
-                          ),
-                        ),
+            child: SafeArea(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF5F7FA),
+                        borderRadius: BorderRadius.circular(24),
                       ),
-                      const SizedBox(width: 8),
-                      // Recording indicator
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.red.shade50,
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 12,
-                              height: 12,
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                shape: BoxShape.circle,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _messageController,
+                              decoration: const InputDecoration(
+                                hintText: 'Type a message...',
+                                border: InputBorder.none,
+                                hintStyle: TextStyle(
+                                  color: Color(0xFFADB5BD),
+                                  fontSize: 15,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'Recording...',
-                              style: TextStyle(
-                                color: Colors.red,
-                                fontWeight: FontWeight.w600,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                color: Color(0xFF2D3142),
                               ),
+                              maxLines: null,
+                              textCapitalization: TextCapitalization.sentences,
+                              onChanged: (value) {
+                                final isTyping = value.trim().isNotEmpty;
+                                if (_isTyping != isTyping) {
+                                  setState(() {
+                                    _isTyping = isTyping;
+                                  });
+                                }
+                              },
+                              onSubmitted: (_) => _sendMessage(),
                             ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      // Send button
-                      GestureDetector(
-                        onTap: _stopRecordingAndSend,
-                        child: Container(
-                          width: 48,
-                          height: 48,
-                          decoration: const BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [Color(0xFFFF6B9D), Color(0xFFFFA07A)],
-                            ),
-                            shape: BoxShape.circle,
                           ),
-                          child: const Icon(
-                            Icons.send,
-                            color: Colors.white,
-                            size: 20,
+                          IconButton(
+                            icon: _isUploading
+                                ? const SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : Icon(
+                                    Icons.image_outlined,
+                                    color: _isCurrentUserFemale 
+                                        ? const Color(0xFFFF6B9D)
+                                        : Colors.grey.shade400,
+                                    size: 24,
+                                  ),
+                            onPressed: _isUploading ? null : _pickAndSendImage,
                           ),
-                        ),
+                        ],
                       ),
-                    ],
-                  )
-                : GestureDetector(
-              onTap: _isTyping ? _sendMessage : null,
-              onLongPress: !_isTyping && !_isUploading ? _startRecording : null,
-              child: Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  gradient: _isTyping
-                      ? const LinearGradient(
-                          colors: [Color(0xFFFF6B9D), Color(0xFFC06C84)],
-                        )
-                      : null,
-                  color: _isTyping ? null : Colors.grey.shade300,
-                  shape: BoxShape.circle,
-                  boxShadow: _isTyping
-                      ? [
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Microphone or Send button
+                  GestureDetector(
+                    onTap: _isTyping ? _sendMessage : null,
+                    onLongPress: !_isTyping && !_isUploading ? _startRecording : null,
+                    child: Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: _isTyping 
+                            ? const Color(0xFF128C7E)
+                            : const Color(0xFF128C7E),
+                        shape: BoxShape.circle,
+                        boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFFFF6B9D).withOpacity(0.3),
+                            color: const Color(0xFF128C7E).withOpacity(0.3),
                             blurRadius: 8,
-                            offset: const Offset(0, 4),
+                            offset: const Offset(0, 2),
                           ),
-                        ]
-                      : null,
-                ),
-                child: Icon(
-                  _isTyping ? Icons.send_rounded : Icons.mic_outlined,
-                  color: Colors.white,
-                  size: 22,
-                ),
+                        ],
+                      ),
+                      child: Icon(
+                        _isTyping ? Icons.send_rounded : Icons.mic,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
-    );
+          );
   }
 
   Widget _buildEmptyState() {
@@ -1288,39 +1294,120 @@ class _ChatScreenState extends State<ChatScreen>
     return ids.join('_');
   }
 
-  // Build audio player widget
+  // Build audio player widget with waveform
   Widget _buildAudioPlayer(String audioUrl, bool isMe) {
+    final isPlaying = _audioPlayingStates[audioUrl] ?? false;
+    
     return Container(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      constraints: const BoxConstraints(minWidth: 200),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          IconButton(
-            icon: Icon(
-              Icons.play_arrow,
-              color: isMe ? Colors.white : const Color(0xFFFF6B9D),
-              size: 32,
+          // Play/Pause button
+          GestureDetector(
+            onTap: () => _toggleAudioPlayback(audioUrl),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: isMe ? Colors.white.withOpacity(0.2) : const Color(0xFF128C7E).withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                isPlaying ? Icons.pause : Icons.play_arrow,
+                color: isMe ? Colors.white : const Color(0xFF128C7E),
+                size: 24,
+              ),
             ),
-            onPressed: () async {
-              final player = AudioPlayer();
-              await player.play(UrlSource(audioUrl));
-            },
+          ),
+          const SizedBox(width: 12),
+          // Waveform visualization
+          Expanded(
+            child: _buildStaticWaveform(isMe, isPlaying),
           ),
           const SizedBox(width: 8),
-          Icon(
-            Icons.graphic_eq,
-            color: isMe ? Colors.white70 : Colors.grey,
-            size: 24,
-          ),
-          const SizedBox(width: 8),
+          // Duration text
           Text(
-            'Voice message',
+            '0:06',
             style: TextStyle(
-              color: isMe ? Colors.white : const Color(0xFF2D3142),
-              fontSize: 14,
+              color: isMe ? Colors.white.withOpacity(0.8) : Colors.grey.shade600,
+              fontSize: 12,
             ),
           ),
         ],
+      ),
+    );
+  }
+  
+  // Toggle audio playback
+  Future<void> _toggleAudioPlayback(String audioUrl) async {
+    try {
+      final isCurrentlyPlaying = _audioPlayingStates[audioUrl] ?? false;
+      
+      if (isCurrentlyPlaying) {
+        // Pause
+        await _audioPlayers[audioUrl]?.pause();
+        setState(() {
+          _audioPlayingStates[audioUrl] = false;
+        });
+      } else {
+        // Stop all other audio
+        for (var player in _audioPlayers.values) {
+          await player.stop();
+        }
+        _audioPlayingStates.updateAll((key, value) => false);
+        
+        // Play this audio
+        final player = _audioPlayers[audioUrl] ?? AudioPlayer();
+        _audioPlayers[audioUrl] = player;
+        
+        player.onPlayerComplete.listen((_) {
+          if (mounted) {
+            setState(() {
+              _audioPlayingStates[audioUrl] = false;
+            });
+          }
+        });
+        
+        await player.play(UrlSource(audioUrl));
+        setState(() {
+          _audioPlayingStates[audioUrl] = true;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error playing audio: $e');
+    }
+  }
+  
+  // Build static waveform for audio messages
+  Widget _buildStaticWaveform(bool isMe, bool isPlaying) {
+    final waveformBars = List.generate(25, (index) {
+      final heights = [0.3, 0.5, 0.7, 0.9, 0.6, 0.4, 0.8, 0.5, 0.6, 0.7, 0.5, 0.4, 0.6, 0.8, 0.5, 0.7, 0.4, 0.6, 0.5, 0.8, 0.6, 0.4, 0.7, 0.5, 0.6];
+      return heights[index % heights.length];
+    });
+    
+    return SizedBox(
+      height: 24,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: List.generate(
+          waveformBars.length,
+          (index) {
+            final height = waveformBars[index];
+            return Container(
+              width: 2,
+              height: 4 + (height * 16),
+              decoration: BoxDecoration(
+                color: isMe 
+                    ? Colors.white.withOpacity(isPlaying ? 0.9 : 0.5)
+                    : const Color(0xFF128C7E).withOpacity(isPlaying ? 0.9 : 0.5),
+                borderRadius: BorderRadius.circular(1),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -1335,6 +1422,25 @@ class ConversationsScreen extends StatefulWidget {
 }
 
 class _ConversationsScreenState extends State<ConversationsScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  bool _isSearching = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Refresh premium status on screen load to ensure real-time display
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<PremiumProvider>(context, listen: false).refreshPremiumStatus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _refreshChats() async {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1345,6 +1451,16 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         ),
       );
     }
+  }
+
+  void _toggleSearch() {
+    setState(() {
+      _isSearching = !_isSearching;
+      if (!_isSearching) {
+        _searchController.clear();
+        _searchQuery = '';
+      }
+    });
   }
 
   @override
@@ -1376,12 +1492,12 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
             tooltip: 'Refresh',
           ),
           IconButton(
-            icon: const Icon(Icons.search, color: Color(0xFF2D3142)),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Search coming soon!')),
-              );
-            },
+            icon: Icon(
+              _isSearching ? Icons.close : Icons.search,
+              color: const Color(0xFF2D3142),
+            ),
+            onPressed: _toggleSearch,
+            tooltip: _isSearching ? 'Close Search' : 'Search',
           ),
         ],
       ),
@@ -1409,8 +1525,40 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
           );
         }
         
-        return _buildChatsList(currentUserId);
+        return Column(
+          children: [
+            if (_isSearching) _buildSearchField(),
+            Expanded(child: _buildChatsList(currentUserId)),
+          ],
+        );
       },
+    );
+  }
+
+  Widget _buildSearchField() {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: TextField(
+        controller: _searchController,
+        autofocus: true,
+        decoration: InputDecoration(
+          hintText: 'Search conversations...',
+          prefixIcon: const Icon(Icons.search, color: Color(0xFFFF6B9D)),
+          filled: true,
+          fillColor: const Color(0xFFF5F7FA),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(25),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        ),
+        onChanged: (value) {
+          setState(() {
+            _searchQuery = value.toLowerCase();
+          });
+        },
+      ),
     );
   }
   
@@ -1490,6 +1638,12 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                       : null;
                   final lastMessage = matchData['lastMessage'] ?? '';
                   final unreadCount = matchData['unreadCount_$currentUserId'] ?? 0;
+
+                  // Filter by search query
+                  if (_searchQuery.isNotEmpty && 
+                      !name.toLowerCase().contains(_searchQuery)) {
+                    return const SizedBox.shrink();
+                  }
 
                   return _buildConversationTile(
                     context,

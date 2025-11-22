@@ -25,15 +25,24 @@ class _AdminStorageTabState extends State<AdminStorageTab> {
   }
 
   Future<void> _calculateStorage() async {
+    print('═══════════════════════════════════════');
+    print('[AdminStorageTab] 🔄 Calculating storage...');
+    print('═══════════════════════════════════════');
+    
     try {
       // Calculate user photos storage
+      print('[AdminStorageTab] 📊 Fetching users...');
       final usersSnapshot = await _firestore.collection('users').get();
+      print('[AdminStorageTab] ✅ Got ${usersSnapshot.docs.length} users');
+      
       int photoCount = 0;
       for (var doc in usersSnapshot.docs) {
         final data = doc.data();
         final photos = data['photos'] as List<dynamic>? ?? [];
         photoCount += photos.length;
       }
+      
+      print('[AdminStorageTab] 📸 Total user photos: $photoCount');
 
       // Estimate storage (assuming average 500KB per photo)
       final photosStorage = photoCount * 0.0005; // GB
@@ -41,15 +50,19 @@ class _AdminStorageTabState extends State<AdminStorageTab> {
       // Calculate chat images (if collection exists)
       int chatImageCount = 0;
       try {
+        print('[AdminStorageTab] 💬 Fetching messages...');
         final messagesSnapshot = await _firestore.collection('messages').get();
+        print('[AdminStorageTab] ✅ Got ${messagesSnapshot.docs.length} messages');
+        
         for (var doc in messagesSnapshot.docs) {
           final data = doc.data();
           if (data['imageUrl'] != null && data['imageUrl'].toString().isNotEmpty) {
             chatImageCount++;
           }
         }
+        print('[AdminStorageTab] 🖼️ Total chat images: $chatImageCount');
       } catch (e) {
-        // Messages collection might not exist
+        print('[AdminStorageTab] ⚠️ Messages collection error: $e');
       }
 
       final chatStorage = chatImageCount * 0.0003; // GB
@@ -63,9 +76,18 @@ class _AdminStorageTabState extends State<AdminStorageTab> {
           _totalStorage = photosStorage + chatStorage;
           _totalFiles = photoCount + chatImageCount;
         });
+        
+        print('═══════════════════════════════════════');
+        print('[AdminStorageTab] ✅ Storage calculated:');
+        print('[AdminStorageTab] Total: ${_totalStorage.toStringAsFixed(2)} GB');
+        print('[AdminStorageTab] Files: $_totalFiles');
+        print('═══════════════════════════════════════');
       }
     } catch (e) {
-      debugPrint('Error calculating storage: $e');
+      print('═══════════════════════════════════════');
+      print('[AdminStorageTab] ❌ ERROR calculating storage:');
+      print('[AdminStorageTab] Error: $e');
+      print('═══════════════════════════════════════');
     }
   }
 

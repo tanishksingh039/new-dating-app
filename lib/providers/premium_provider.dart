@@ -42,8 +42,11 @@ class PremiumProvider with ChangeNotifier {
           final newPremiumStatus = data?['isPremium'] ?? false;
           final newActivatedAt = (data?['premiumActivatedAt'] as Timestamp?)?.toDate();
           
-          // Only notify if status changed
-          if (newPremiumStatus != _isPremium) {
+          debugPrint('[PremiumProvider] 📊 Premium status update received');
+          debugPrint('[PremiumProvider] Current: $_isPremium → New: $newPremiumStatus');
+          
+          // Update status and notify listeners
+          if (newPremiumStatus != _isPremium || _premiumActivatedAt != newActivatedAt) {
             debugPrint('[PremiumProvider] ═══════════════════════════════════════');
             debugPrint('[PremiumProvider] 🎉 Premium status changed!');
             debugPrint('[PremiumProvider] Old status: $_isPremium');
@@ -55,6 +58,14 @@ class PremiumProvider with ChangeNotifier {
             _premiumActivatedAt = newActivatedAt;
             
             // Notify all listeners (screens) to rebuild
+            notifyListeners();
+          }
+        } else {
+          // User document doesn't exist, default to non-premium
+          debugPrint('[PremiumProvider] ⚠️ User document does not exist, setting premium to false');
+          if (_isPremium != false) {
+            _isPremium = false;
+            _premiumActivatedAt = null;
             notifyListeners();
           }
         }

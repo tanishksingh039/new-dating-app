@@ -138,7 +138,6 @@ class AppConstants {
   static const List<Map<String, dynamic>> genderOptions = [
     {'value': 'male', 'label': 'Male', 'icon': '👨'},
     {'value': 'female', 'label': 'Female', 'icon': '👩'},
-    {'value': 'other', 'label': 'Other', 'icon': '🧑'},
   ];
   
   // ==================== LOOKING FOR OPTIONS ====================

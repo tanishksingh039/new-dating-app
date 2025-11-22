@@ -16,7 +16,7 @@ import '../legal/privacy_policy_screen.dart';
 import '../legal/terms_of_service_screen.dart';
 import '../legal/community_guidelines_screen.dart';
 import '../safety/my_reports_screen.dart';
-import '../../services/account_deletion_service.dart';
+import '../../services/account_deletion_service_v2.dart';
 
 // Add Timestamp import
 import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
@@ -295,8 +295,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       }
 
-      // Use the comprehensive deletion service
-      await AccountDeletionService.deleteAccount();
+      // Use the comprehensive deletion service V2
+      await AccountDeletionServiceV2.deleteAccount();
 
       // Close progress dialog
       if (mounted) {
@@ -432,29 +432,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         );
                       },
                       iconColor: Colors.orange,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                _buildSection(
-                  'Preferences',
-                  [
-                    _buildSettingTile(
-                      Icons.straighten,
-                      'Distance Unit',
-                      'Kilometers',
-                      () {
-                        _showDistanceUnitDialog();
-                      },
-                    ),
-                    _buildSettingTile(
-                      Icons.cake,
-                      'Show Age',
-                      'Display age on profile',
-                      () {
-                        // TODO: Toggle age display
-                      },
-                      hasSwitch: true,
                     ),
                   ],
                 ),
@@ -794,39 +771,4 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _showDistanceUnitDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Distance Unit'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            RadioListTile<String>(
-              title: const Text('Kilometers (km)'),
-              value: 'km',
-              groupValue: 'km',
-              onChanged: (value) {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Distance unit updated')),
-                );
-              },
-            ),
-            RadioListTile<String>(
-              title: const Text('Miles (mi)'),
-              value: 'mi',
-              groupValue: 'km',
-              onChanged: (value) {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Distance unit updated')),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

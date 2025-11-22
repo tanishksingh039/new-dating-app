@@ -17,7 +17,6 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
   bool _showAge = true;
   bool _showLastActive = false;
   bool _allowMessagesFromMatches = true;
-  bool _incognitoMode = false;
   bool _isLoading = true;
 
   @override
@@ -42,7 +41,6 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
           _showAge = privacy['showAge'] ?? true;
           _showLastActive = privacy['showLastActive'] ?? false;
           _allowMessagesFromMatches = privacy['allowMessagesFromMatches'] ?? true;
-          _incognitoMode = privacy['incognitoMode'] ?? false;
           _isLoading = false;
         });
       } else {
@@ -145,26 +143,6 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                         setState(() => _allowMessagesFromMatches = value);
                         _updatePrivacySetting('allowMessagesFromMatches', value);
                       },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                _buildSection(
-                  'Advanced',
-                  [
-                    _buildSwitchTile(
-                      'Incognito Mode',
-                      'Browse profiles without appearing in discovery (Premium)',
-                      _incognitoMode,
-                      (value) {
-                        // TODO: Check if user has premium
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Incognito mode is a premium feature'),
-                          ),
-                        );
-                      },
-                      isPremium: true,
                     ),
                   ],
                 ),

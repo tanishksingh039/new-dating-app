@@ -24,44 +24,65 @@ class _AdminPaymentsTabState extends State<AdminPaymentsTab> {
   }
 
   void _setupRealTimeListeners() {
-    _firestore.collection('payments').snapshots().listen((snapshot) {
-      if (!mounted) return;
+    print('═══════════════════════════════════════');
+    print('[AdminPaymentsTab] 🔄 Setting up payment listeners...');
+    print('[AdminPaymentsTab] 📊 Listening to: payment_orders collection');
+    print('═══════════════════════════════════════');
+    
+    _firestore.collection('payment_orders').snapshots().listen(
+      (snapshot) {
+        if (!mounted) return;
 
-      int revenue = 0;
-      int total = 0;
-      int successful = 0;
-      int spotlight = 0;
-      int premium = 0;
+        print('═══════════════════════════════════════');
+        print('[AdminPaymentsTab] ✅ Received ${snapshot.docs.length} payments');
+        print('═══════════════════════════════════════');
 
-      for (var doc in snapshot.docs) {
-        try {
-          final data = doc.data();
-          total++;
+        int revenue = 0;
+        int total = 0;
+        int successful = 0;
+        int spotlight = 0;
+        int premium = 0;
 
-          if (data['status'] == 'success' || data['status'] == 'completed') {
-            successful++;
-            revenue += (data['amount'] as num?)?.toInt() ?? 0;
+        for (var doc in snapshot.docs) {
+          try {
+            final data = doc.data();
+            total++;
 
-            final type = data['type'] ?? '';
-            if (type == 'spotlight') {
-              spotlight++;
-            } else if (type == 'premium') {
-              premium++;
+            if (data['status'] == 'success' || data['status'] == 'completed') {
+              successful++;
+              // Divide by 100 to convert from paise to rupees
+              final amountInPaise = (data['amount'] as num?)?.toInt() ?? 0;
+              revenue += (amountInPaise / 100).round();
+
+              final type = data['type'] ?? '';
+              if (type == 'spotlight') {
+                spotlight++;
+              } else if (type == 'premium') {
+                premium++;
+              }
             }
+          } catch (e) {
+            print('[AdminPaymentsTab] ❌ Error processing payment: $e');
           }
-        } catch (e) {
-          debugPrint('Error processing payment: $e');
         }
-      }
 
-      setState(() {
-        _totalRevenue = revenue;
-        _totalPayments = total;
-        _successfulPayments = successful;
-        _spotlightPayments = spotlight;
-        _premiumPayments = premium;
-      });
-    });
+        setState(() {
+          _totalRevenue = revenue;
+          _totalPayments = total;
+          _successfulPayments = successful;
+          _spotlightPayments = spotlight;
+          _premiumPayments = premium;
+        });
+        
+        print('[AdminPaymentsTab] 💰 Revenue: ₹$revenue, Total: $total, Success: $successful');
+      },
+      onError: (error) {
+        print('═══════════════════════════════════════');
+        print('[AdminPaymentsTab] ❌ ERROR listening to payments:');
+        print('[AdminPaymentsTab] Error: $error');
+        print('═══════════════════════════════════════');
+      },
+    );
   }
 
   @override

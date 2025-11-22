@@ -5,6 +5,7 @@ import '../../models/user_model.dart';
 import '../../constants/app_colors.dart';
 import '../../services/match_service.dart';
 import '../../utils/firestore_extensions.dart';
+import '../../firebase_services.dart';
 import '../chat/chat_screen.dart';
 
 class LikesScreen extends StatefulWidget {
@@ -476,9 +477,15 @@ class _LikesScreenState extends State<LikesScreen>
 
   Future<void> _likeBack(UserModel user) async {
     try {
+      debugPrint('[LikesScreen] ═══════════════════════════════════════');
+      debugPrint('[LikesScreen] 💝 Liking back user: ${user.name}');
+      debugPrint('[LikesScreen] Current User: $currentUserId');
+      debugPrint('[LikesScreen] Target User: ${user.uid}');
+      
       // Check if already matched
       final isMatched = await _checkIfMatched(user.uid);
       if (isMatched) {
+        debugPrint('[LikesScreen] ✅ Already matched! Navigating to chat...');
         if (mounted) {
           // Navigate to chat
           Navigator.push(
@@ -496,21 +503,22 @@ class _LikesScreenState extends State<LikesScreen>
         return;
       }
 
-      // Create the like and check for match
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserId)
-          .collection('likes')
-          .doc(user.uid)
-          .set({
-        'timestamp': FieldValue.serverTimestamp(),
-      });
+      // Use FirebaseServices.recordLike for bidirectional recording
+      // This adds to BOTH 'likes' and 'receivedLikes' collections
+      debugPrint('[LikesScreen] 📝 Recording bidirectional like...');
+      await FirebaseServices.recordLike(
+        currentUserId: currentUserId,
+        likedUserId: user.uid,
+      );
+      debugPrint('[LikesScreen] ✅ Like recorded successfully!');
 
       // Check if it's a match
+      debugPrint('[LikesScreen] 🔍 Checking for match...');
       final newMatch = await _matchService.checkAndCreateMatch(
         currentUserId,
         user.uid,
       );
+      debugPrint('[LikesScreen] Match result: $newMatch');
 
       if (mounted) {
         if (newMatch) {
@@ -600,6 +608,7 @@ class _LikesScreenState extends State<LikesScreen>
             ),
           );
         } else {
+          debugPrint('[LikesScreen] ℹ️ Like sent, no match yet');
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('You liked ${user.name}!'),
@@ -609,7 +618,10 @@ class _LikesScreenState extends State<LikesScreen>
           );
         }
       }
+      debugPrint('[LikesScreen] ═══════════════════════════════════════');
     } catch (e) {
+      debugPrint('[LikesScreen] ❌ Error in _likeBack: $e');
+      debugPrint('[LikesScreen] ═══════════════════════════════════════');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

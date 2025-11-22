@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/admin_users_service.dart';
 import 'new_admin_dashboard.dart';
 
 class AdminLoginScreen extends StatefulWidget {
@@ -15,12 +16,11 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   bool _showError = false;
   String _errorMessage = '';
 
-  // Admin credentials
+  // Simple admin credentials - Fresh start!
   final Map<String, String> _adminCredentials = {
-    'admin_master': 'admin123',
-    'admin_analytics': 'analytics123',
-    'admin_support': 'support123',
-    'admin_finance': 'finance123',
+    'admin': 'admin123',
+    'campusbound': 'campus2025',
+    'shooluvadmin': 'shoo123',
   };
 
   @override
@@ -44,7 +44,11 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
 
     if (_adminCredentials.containsKey(username) &&
         _adminCredentials[username] == password) {
-      // Successful login
+      // Successful login - Set admin status
+      AdminUsersService.setAdminLoggedIn(true);
+      
+      print('✅ Admin login successful: $username');
+      
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(

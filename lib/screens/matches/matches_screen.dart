@@ -26,6 +26,10 @@ class _MatchesScreenState extends State<MatchesScreen> {
   void initState() {
     super.initState();
     _loadMatches();
+    // Refresh premium status on screen load to ensure real-time display
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<PremiumProvider>(context, listen: false).refreshPremiumStatus();
+    });
   }
 
   Future<void> _loadMatches() async {

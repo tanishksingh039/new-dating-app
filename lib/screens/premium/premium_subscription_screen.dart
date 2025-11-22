@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
 import '../../services/payment_service.dart';
 import '../../services/swipe_limit_service.dart';
 import '../../widgets/premium_options_dialog.dart';
+import '../../providers/premium_provider.dart';
 
 class PremiumSubscriptionScreen extends StatefulWidget {
   const PremiumSubscriptionScreen({Key? key}) : super(key: key);
@@ -47,6 +49,11 @@ class _PremiumSubscriptionScreenState extends State<PremiumSubscriptionScreen> {
 
       if (mounted) {
         setState(() => _isProcessing = false);
+        
+        // Immediately refresh premium status for real-time update
+        await Provider.of<PremiumProvider>(context, listen: false).refreshPremiumStatus();
+        
+        print('✅ Premium status refreshed - all features should unlock now');
         
         // Show success dialog
         _showSuccessDialog();

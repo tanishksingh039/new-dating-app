@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/user_model.dart';
+import '../../utils/firestore_logger.dart';
+import '../../services/admin_users_service.dart';
 import 'user_details_screen.dart';
 
 class AdminUsersTab extends StatefulWidget {
@@ -12,8 +15,71 @@ class AdminUsersTab extends StatefulWidget {
 
 class _AdminUsersTabState extends State<AdminUsersTab> {
   final TextEditingController _searchController = TextEditingController();
+  final AdminUsersService _adminService = AdminUsersService();
+  
   String _searchQuery = '';
   String _selectedFilter = 'All'; // All, Premium, Verified, Flagged
+  
+  List<UserModel> _allUsers = [];
+  List<UserModel> _filteredUsers = [];
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUsers();
+  }
+
+  Future<void> _loadUsers({bool forceRefresh = false}) async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      print('═══════════════════════════════════════');
+      print('[AdminUsersTab] 🔍 Loading users...');
+      print('[AdminUsersTab] Admin Status: ${_adminService.isCurrentUserAdmin()}');
+      print('═══════════════════════════════════════');
+
+      final users = await _adminService.getAllUsers(forceRefresh: forceRefresh);
+      
+      setState(() {
+        _allUsers = users;
+        _applyFilters();
+        _isLoading = false;
+      });
+      
+      print('[AdminUsersTab] ✅ Loaded ${users.length} users successfully');
+    } catch (e) {
+      print('[AdminUsersTab] ❌ Error: $e');
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _applyFilters() {
+    List<UserModel> filtered = _allUsers;
+
+    // Apply category filter
+    if (_selectedFilter != 'All') {
+      filtered = _adminService.filterUsers(_selectedFilter);
+    }
+
+    // Apply search filter
+    if (_searchQuery.isNotEmpty) {
+      filtered = filtered.where((user) {
+        final name = user.name.toLowerCase();
+        final phone = user.phoneNumber?.toLowerCase() ?? '';
+        return name.contains(_searchQuery) || phone.contains(_searchQuery);
+      }).toList();
+    }
+
+    _filteredUsers = filtered;
+  }
 
   @override
   void dispose() {
@@ -58,6 +124,7 @@ class _AdminUsersTabState extends State<AdminUsersTab> {
                 onChanged: (value) {
                   setState(() {
                     _searchQuery = value.toLowerCase();
+                    _applyFilters();
                   });
                 },
               ),
@@ -83,88 +150,111 @@ class _AdminUsersTabState extends State<AdminUsersTab> {
         
         // Users list
         Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('users')
-                .orderBy('createdAt', descending: true)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              if (snapshot.hasError) {
-                return Center(
-                  child: Text('Error: ${snapshot.error}'),
-                );
-              }
-
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return const Center(
+          child: _isLoading
+              ? const Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.people_outline, size: 64, color: Colors.grey),
+                      CircularProgressIndicator(),
                       SizedBox(height: 16),
-                      Text('No users found'),
+                      Text('Loading users...'),
                     ],
                   ),
-                );
-              }
-
-              // Filter users
-              var users = snapshot.data!.docs.where((doc) {
-                try {
-                  final data = doc.data() as Map<String, dynamic>;
-                  
-                  // Search filter
-                  if (_searchQuery.isNotEmpty) {
-                    final name = (data['name'] ?? '').toString().toLowerCase();
-                    final phone = (data['phoneNumber'] ?? '').toString().toLowerCase();
-                    if (!name.contains(_searchQuery) && !phone.contains(_searchQuery)) {
-                      return false;
-                    }
-                  }
-                  
-                  // Category filter
-                  if (_selectedFilter == 'Premium') {
-                    return data['isPremium'] == true;
-                  } else if (_selectedFilter == 'Verified') {
-                    return data['isVerified'] == true;
-                  } else if (_selectedFilter == 'Flagged') {
-                    // Check if user has been reported or flagged
-                    return data['isFlagged'] == true || (data['reportCount'] ?? 0) > 0;
-                  }
-                  
-                  return true;
-                } catch (e) {
-                  return false;
-                }
-              }).toList();
-
-              if (users.isEmpty) {
-                return const Center(
-                  child: Text('No users match your search'),
-                );
-              }
-
-              return ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: users.length,
-                itemBuilder: (context, index) {
-                  final doc = users[index];
-                  final data = doc.data() as Map<String, dynamic>;
-                  
-                  try {
-                    final user = UserModel.fromMap(data);
-                    return _buildUserCard(user);
-                  } catch (e) {
-                    return const SizedBox.shrink();
-                  }
-                },
-              );
-            },
-          ),
+                )
+              : _error != null
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Error Loading Users',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              _error!,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                            const SizedBox(height: 16),
+                            ElevatedButton.icon(
+                              onPressed: () => _loadUsers(forceRefresh: true),
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : _filteredUsers.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.people_outline, size: 64, color: Colors.grey),
+                              const SizedBox(height: 16),
+                              Text(
+                                _searchQuery.isNotEmpty || _selectedFilter != 'All'
+                                    ? 'No users match your filters'
+                                    : 'No users found',
+                              ),
+                              if (_searchQuery.isNotEmpty || _selectedFilter != 'All')
+                                TextButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _searchQuery = '';
+                                      _selectedFilter = 'All';
+                                      _searchController.clear();
+                                      _applyFilters();
+                                    });
+                                  },
+                                  child: const Text('Clear Filters'),
+                                ),
+                            ],
+                          ),
+                        )
+                      : RefreshIndicator(
+                          onRefresh: () => _loadUsers(forceRefresh: true),
+                          child: ListView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: _filteredUsers.length + 1,
+                            itemBuilder: (context, index) {
+                              if (index == 0) {
+                                // Header with count and refresh button
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 16),
+                                  child: Row(
+                                    children: [
+                                      Text(
+                                        '${_filteredUsers.length} users',
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      IconButton(
+                                        icon: const Icon(Icons.refresh),
+                                        onPressed: () => _loadUsers(forceRefresh: true),
+                                        tooltip: 'Refresh',
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+                              
+                              final user = _filteredUsers[index - 1];
+                              return _buildUserCard(user);
+                            },
+                          ),
+                        ),
         ),
       ],
     );
@@ -309,6 +399,7 @@ class _AdminUsersTabState extends State<AdminUsersTab> {
       onSelected: (selected) {
         setState(() {
           _selectedFilter = label;
+          _applyFilters();
         });
       },
       backgroundColor: Colors.white,

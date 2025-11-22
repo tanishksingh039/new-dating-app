@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
 import '../../models/user_model.dart';
 import '../../models/discovery_filters.dart';
 import '../../services/discovery_service.dart';
@@ -14,6 +15,7 @@ import '../../widgets/swipe_limit_indicator.dart';
 import '../../widgets/purchase_swipes_dialog.dart';
 import '../../constants/app_colors.dart';
 import '../../mixins/screenshot_protection_mixin.dart';
+import '../../providers/premium_provider.dart';
 import 'match_dialog.dart';
 import 'filters_dialog.dart';
 
@@ -38,7 +40,6 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
   DiscoveryFilters? _filters; // Start with null - no filters applied by default
   Set<String> _swipedProfileIds = {}; // Track swiped profiles in current session
   bool _isCurrentUserVerified = false;
-  bool _isPremium = false;
 
   @override
   void initState() {
@@ -61,15 +62,12 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
       if (userDoc.exists) {
         final userData = userDoc.data();
         final isVerified = userData?['isVerified'] ?? false;
-        final isPremium = userData?['isPremium'] ?? false;
         
         setState(() {
           _isCurrentUserVerified = isVerified;
-          _isPremium = isPremium;
         });
         
         debugPrint('User verified status: $_isCurrentUserVerified');
-        debugPrint('User premium status: $_isPremium');
       }
     } catch (e) {
       debugPrint('Error checking verification: $e');
@@ -136,10 +134,11 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
 
   // Show purchase swipes dialog for both premium and non-premium users when swipes reach zero
   void _showPurchaseSwipesDialog() async {
+    final isPremium = Provider.of<PremiumProvider>(context, listen: false).isPremium;
     showDialog(
       context: context,
       barrierDismissible: false, // User must take action
-      builder: (context) => PurchaseSwipesDialog(isPremium: _isPremium),
+      builder: (context) => PurchaseSwipesDialog(isPremium: isPremium),
     );
   }
 
@@ -378,7 +377,8 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
     _swipedProfileIds.add(currentProfile.uid);
 
     // Show verification popup on like (right swipe) if not verified AND non-premium
-    if (action == 'like' && !_isCurrentUserVerified && !_isPremium) {
+    final isPremium = Provider.of<PremiumProvider>(context, listen: false).isPremium;
+    if (action == 'like' && !_isCurrentUserVerified && !isPremium) {
       Future.delayed(const Duration(milliseconds: 300), () {
         if (mounted) {
           _showVerificationDialog();

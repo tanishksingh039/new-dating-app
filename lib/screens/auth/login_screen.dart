@@ -19,11 +19,8 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
-  final TextEditingController _phoneController = TextEditingController();
   final LocationService _locationService = LocationService();
-  bool _isPhoneLoading = false;
   bool _isGoogleLoading = false;
-  String _countryCode = "+91";
   
   // Admin access
   int _logoTapCount = 0;
@@ -106,8 +103,9 @@ class _LoginScreenState extends State<LoginScreen> {
       
       _log('Location check passed. Distance: ${locationResult.distanceInKm?.toStringAsFixed(2)} km');
 
-      // Don't sign out - this causes Firebase to create new accounts
-      // await _googleSignIn.signOut();
+      // Sign out to force account picker
+      await _googleSignIn.signOut();
+      _log('Signed out from Google to show account picker');
       _log('Starting Google Sign-In flow...');
 
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
@@ -331,126 +329,9 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Future<void> signInWithPhone() async {
-    if (_phoneController.text.trim().isEmpty) {
-      _showErrorSnackBar("Enter a valid phone number");
-      return;
-    }
-
-    setState(() => _isPhoneLoading = true);
-
-    try {
-      // Check location before allowing login
-      _log('Checking user location...');
-      final locationResult = await _locationService.checkLoginLocation();
-      
-      if (!locationResult.isAllowed) {
-        _log('Location check failed: ${locationResult.errorMessage}');
-        if (mounted) {
-          setState(() => _isPhoneLoading = false);
-          _showLocationErrorDialog(
-            locationResult.errorMessage ?? 'Location check failed',
-            locationResult.distanceInKm,
-          );
-        }
-        return;
-      }
-      
-      _log('Location check passed. Distance: ${locationResult.distanceInKm?.toStringAsFixed(2)} km');
-    } catch (e) {
-      _log('Location check error: $e');
-      if (mounted) {
-        setState(() => _isPhoneLoading = false);
-        _showErrorSnackBar('Unable to verify location. Please enable location services.');
-      }
-      return;
-    }
-
-    final phone = '$_countryCode${_phoneController.text.trim()}';
-
-    _log('Starting phone verification for: $phone');
-
-    await _auth.verifyPhoneNumber(
-      phoneNumber: phone,
-      verificationCompleted: (PhoneAuthCredential credential) async {
-        _log('Phone verification completed automatically');
-        try {
-          await _auth.signInWithCredential(credential);
-          _log('Signed in with phone');
-          
-          try {
-            await FirebaseServices.saveUserData(phoneNumber: phone);
-            _log('User data saved to Firestore with phone number');
-          } catch (e) {
-            _log('Firestore error (non-critical): $e');
-          }
-          
-          if (mounted) {
-            setState(() => _isPhoneLoading = false);
-            Navigator.pushReplacementNamed(context, '/');
-          }
-        } catch (e) {
-          _log('Auto sign-in error: $e');
-          if (mounted) {
-            setState(() => _isPhoneLoading = false);
-            _showErrorSnackBar("Auto-verification failed");
-          }
-        }
-      },
-      verificationFailed: (FirebaseAuthException e) {
-        _log('Phone verification failed: ${e.code} - ${e.message}');
-        if (mounted) {
-          String errorMessage = e.message ?? "Phone verification failed";
-          
-          if (e.code == 'invalid-phone-number') {
-            errorMessage = "Invalid phone number format";
-          } else if (e.code == 'too-many-requests') {
-            errorMessage = "Too many attempts. Try again later.";
-          }
-          
-          _showErrorSnackBar(errorMessage);
-          setState(() => _isPhoneLoading = false);
-        }
-      },
-      codeSent: (String verificationId, int? resendToken) {
-        _log('OTP sent to $phone');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.check_circle, color: Colors.white),
-                  const SizedBox(width: 12),
-                  Text("OTP sent to $phone"),
-                ],
-              ),
-              backgroundColor: Colors.green.shade400,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          );
-          setState(() => _isPhoneLoading = false);
-          Navigator.pushNamed(context, '/otp', arguments: {
-            'verificationId': verificationId,
-            'phone': phone,
-          });
-        }
-      },
-      codeAutoRetrievalTimeout: (String verificationId) {
-        _log('Code auto-retrieval timeout');
-        if (mounted) {
-          setState(() => _isPhoneLoading = false);
-        }
-      },
-      timeout: const Duration(seconds: 60),
-    );
-  }
 
   @override
   void dispose() {
-    _phoneController.dispose();
     super.dispose();
   }
 
@@ -537,208 +418,67 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 50),
 
-                  // Animated form container
+                  // Animated Google Sign-In button
                   FadeInUp(
                     delay: const Duration(milliseconds: 800),
                     duration: const Duration(milliseconds: 1000),
                     child: SlideInLeft(
                       delay: const Duration(milliseconds: 900),
                       child: Container(
-                        padding: const EdgeInsets.all(28),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.15),
-                              blurRadius: 30,
-                              offset: const Offset(0, 15),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          children: [
-                            TextField(
-                              controller: _phoneController,
-                              keyboardType: TextInputType.phone,
-                              enabled: !_isPhoneLoading && !_isGoogleLoading,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                              ),
-                              decoration: InputDecoration(
-                                filled: true,
-                                fillColor: const Color(0xFFF5F7FA),
-                                prefixText: "$_countryCode ",
-                                prefixStyle: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.primary,
-                                ),
-                                prefixIcon: Container(
-                                  margin: const EdgeInsets.all(12),
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primary.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Icon(
-                                    Icons.phone_android_rounded,
-                                    color: AppColors.primary,
-                                    size: 20,
-                                  ),
-                                ),
-                                labelText: "Phone Number",
-                                labelStyle: TextStyle(
-                                  color: Colors.grey.shade600,
-                                  fontSize: 14,
-                                ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                  borderSide: BorderSide.none,
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                  borderSide: BorderSide.none,
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                  borderSide: const BorderSide(
-                                    color: AppColors.primary,
-                                    width: 2,
-                                  ),
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                  vertical: 18,
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: SizedBox(
+                          height: 56,
+                          child: ElevatedButton(
+                            onPressed: _isGoogleLoading ? null : signInWithGoogle,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: Colors.grey.shade800,
+                              elevation: 2,
+                              shadowColor: Colors.black.withOpacity(0.1),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                side: BorderSide(
+                                  color: Colors.grey.shade300,
+                                  width: 1.5,
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 24),
-
-                            SizedBox(
-                              width: double.infinity,
-                              height: 56,
-                              child: ElevatedButton(
-                                onPressed: (_isPhoneLoading || _isGoogleLoading) ? null : signInWithPhone,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  foregroundColor: Colors.white,
-                                  elevation: 0,
-                                  shadowColor: Colors.transparent,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  disabledBackgroundColor:
-                                      AppColors.primary.withOpacity(0.6),
-                                ),
-                                child: _isPhoneLoading
-                                    ? const SizedBox(
-                                        width: 24,
+                            child: _isGoogleLoading
+                                ? const SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                    ),
+                                  )
+                                : Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Image.network(
+                                        'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
                                         height: 24,
-                                        child: CircularProgressIndicator(
-                                          color: Colors.white,
-                                          strokeWidth: 2.5,
+                                        width: 24,
+                                        errorBuilder:
+                                            (context, error, stackTrace) =>
+                                                const Icon(
+                                          Icons.g_mobiledata,
+                                          size: 28,
+                                          color: Colors.red,
                                         ),
-                                      )
-                                    : const Text(
-                                        "Continue with Phone",
+                                      ),
+                                      const SizedBox(width: 12),
+                                      const Text(
+                                        "Continue with Google",
                                         style: TextStyle(
                                           fontSize: 16,
                                           fontWeight: FontWeight.w600,
                                           letterSpacing: 0.3,
                                         ),
                                       ),
-                              ),
-                            ),
-
-                            const SizedBox(height: 28),
-
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Divider(
-                                    color: Colors.grey.shade300,
-                                    thickness: 1,
+                                    ],
                                   ),
-                                ),
-                                Padding(
-                                  padding:
-                                      const EdgeInsets.symmetric(horizontal: 16),
-                                  child: Text(
-                                    "OR",
-                                    style: TextStyle(
-                                      color: Colors.grey.shade600,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      letterSpacing: 1,
-                                    ),
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Divider(
-                                    color: Colors.grey.shade300,
-                                    thickness: 1,
-                                  ),
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(height: 28),
-
-                            SizedBox(
-                              width: double.infinity,
-                              height: 56,
-                              child: OutlinedButton(
-                                onPressed: (_isPhoneLoading || _isGoogleLoading) ? null : signInWithGoogle,
-                                style: OutlinedButton.styleFrom(
-                                  side: BorderSide(
-                                    color: Colors.grey.shade300,
-                                    width: 1.5,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  backgroundColor: Colors.white,
-                                ),
-                                child: _isGoogleLoading
-                                    ? const SizedBox(
-                                        width: 24,
-                                        height: 24,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2.5,
-                                        ),
-                                      )
-                                    : Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Image.network(
-                                            'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
-                                            height: 24,
-                                            width: 24,
-                                            errorBuilder:
-                                                (context, error, stackTrace) =>
-                                                    const Icon(
-                                              Icons.g_mobiledata,
-                                              size: 28,
-                                              color: Colors.red,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Text(
-                                            "Continue with Google",
-                                            style: TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.grey.shade800,
-                                              letterSpacing: 0.3,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
