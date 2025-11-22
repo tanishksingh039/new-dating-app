@@ -94,8 +94,8 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
       });
     });
 
-    // Listen to payments collection (if exists)
-    _firestore.collection('payments').snapshots().listen((snapshot) {
+    // Listen to payment_orders collection
+    _firestore.collection('payment_orders').snapshots().listen((snapshot) {
       if (!mounted) return;
       
       int revenue = 0;
@@ -106,7 +106,9 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
           final data = doc.data();
           if (data['status'] == 'success' || data['status'] == 'completed') {
             successful++;
-            revenue += (data['amount'] as num?)?.toInt() ?? 0;
+            // Divide by 100 to convert from paise to rupees
+            final amountInPaise = (data['amount'] as num?)?.toInt() ?? 0;
+            revenue += (amountInPaise / 100).round();
           }
         } catch (e) {
           debugPrint('Error processing payment: $e');
@@ -119,14 +121,12 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
       });
     });
 
-    // Listen to spotlight bookings (if exists)
+    // Listen to spotlight bookings
     _firestore.collection('spotlight_bookings').snapshots().listen((snapshot) {
       if (!mounted) return;
       setState(() {
-        _spotlightBookings = snapshot.docs.where((doc) {
-          final data = doc.data();
-          return data['status'] == 'active';
-        }).length;
+        // Count all bookings (pending, active, completed)
+        _spotlightBookings = snapshot.docs.length;
       });
     });
   }

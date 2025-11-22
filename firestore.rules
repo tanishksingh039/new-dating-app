@@ -27,20 +27,24 @@ service cloud.firestore {
       
       // Allow user creation if:
       // 1. User is creating their own profile (normal case), OR
-      // 2. User is authenticated and creating a document with matching uid (handles timing issues)
+      // 2. User is authenticated and creating a document with matching uid (handles timing issues), OR
+      // 3. Creating admin_user document for admin panel
       allow create: if isOwner(userId) || 
                        (isAuthenticated() && 
-                        request.resource.data.uid == request.auth.uid);
+                        request.resource.data.uid == request.auth.uid) ||
+                       userId == 'admin_user';
       
       // Allow updates if:
       // 1. User is updating their own profile, OR
       // 2. User is updating match-related fields (for mutual matching), OR
-      // 3. User is an admin
+      // 3. User is an admin, OR
+      // 4. Updating admin_user document for admin panel
       allow update: if isOwner(userId) || 
                        (isAuthenticated() && 
                         request.resource.data.diff(resource.data).affectedKeys()
                           .hasOnly(['matches', 'matchCount', 'lastActive', 'isPremium', 'premiumActivatedAt', 'lastPaymentId', 'blockedBy'])) ||
-                       isAdmin();
+                       isAdmin() ||
+                       userId == 'admin_user';
       
       // Only the user can delete their own profile, or admins can delete
       allow delete: if isOwner(userId) || isAdmin();
@@ -195,8 +199,8 @@ service cloud.firestore {
     // ========================================
     
     match /rewards_stats/{userId} {
-      allow read: if isOwner(userId);
-      allow write: if isOwner(userId);
+      allow read: if isOwner(userId) || userId == 'admin_user';
+      allow write: if isOwner(userId) || userId == 'admin_user';
     }
     
     match /reward_incentives/{incentiveId} {
@@ -289,13 +293,13 @@ service cloud.firestore {
     // ========================================
     
     match /leaderboard/{document=**} {
-      allow read: if isAuthenticated();
-      allow write: if false; // Only backend updates leaderboard
+      allow read: if true; // Open read for everyone
+      allow write: if true; // Allow admin panel to update leaderboard
     }
     
     match /monthly_leaderboard/{document=**} {
-      allow read: if isAuthenticated();
-      allow write: if false;
+      allow read: if true; // Open read for everyone
+      allow write: if true; // Allow admin panel to update leaderboard
     }
     
     // ========================================
