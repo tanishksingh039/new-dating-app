@@ -9,6 +9,7 @@ import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:http/http.dart' as http;
 import '../../firebase_services.dart';
 import '../../services/rewards_service.dart';
 import '../../services/r2_storage_service.dart';
@@ -22,6 +23,7 @@ import '../safety/report_user_screen.dart';
 import '../safety/block_user_screen.dart';
 import '../../services/user_safety_service.dart';
 import '../../providers/premium_provider.dart';
+import '../../models/rewards_model.dart'; // Add import for ScoringRules from rewards_model
 
 class ChatScreen extends StatefulWidget {
   final String currentUserId;
@@ -389,7 +391,17 @@ class _ChatScreenState extends State<ChatScreen>
                 final userData = userDoc.data();
                 final photos = userData?['photos'] as List<dynamic>?;
                 if (photos != null && photos.isNotEmpty) {
-                  profilePhotoPath = photos[0] as String;
+                  final profilePhotoUrl = photos[0] as String;
+                  final Directory appDocDir = await getApplicationDocumentsDirectory();
+                  final String filePath = '${appDocDir.path}/profile_photo_${DateTime.now().millisecondsSinceEpoch}.jpg';
+                  final File file = File(filePath);
+                  final http.Response response = await http.get(Uri.parse(profilePhotoUrl)).timeout(const Duration(seconds: 10));
+                  if (response.statusCode == 200) {
+                    await file.writeAsBytes(response.bodyBytes);
+                    profilePhotoPath = filePath;
+                  } else {
+                    debugPrint('⚠️ Could not fetch profile photo: ${response.statusCode}');
+                  }
                 }
               }
             } catch (e) {
@@ -409,11 +421,11 @@ class _ChatScreenState extends State<ChatScreen>
 
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Image sent! +30 points earned ✅'),
+                SnackBar(
+                  content: Text('Image sent! +${ScoringRules.imageSentPoints} points earned ✅'),
                   backgroundColor: Colors.green,
                   behavior: SnackBarBehavior.floating,
-                  duration: Duration(seconds: 3),
+                  duration: const Duration(seconds: 3),
                 ),
               );
             }
@@ -434,11 +446,11 @@ class _ChatScreenState extends State<ChatScreen>
           debugPrint('⚠️ No points for image: User not verified');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Image sent! Verify your account to earn 30 points'),
+              SnackBar(
+                content: Text('Image sent! Verify your account to earn ${ScoringRules.imageSentPoints} points'),
                 backgroundColor: Colors.orange,
                 behavior: SnackBarBehavior.floating,
-                duration: Duration(seconds: 3),
+                duration: const Duration(seconds: 3),
               ),
             );
           }
@@ -447,11 +459,11 @@ class _ChatScreenState extends State<ChatScreen>
         debugPrint('⏭️ No points for image: Not female→male conversation');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Text('Image sent successfully'),
               backgroundColor: Colors.blue,
               behavior: SnackBarBehavior.floating,
-              duration: Duration(seconds: 2),
+              duration: const Duration(seconds: 2),
             ),
           );
         }

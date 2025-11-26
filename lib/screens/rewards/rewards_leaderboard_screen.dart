@@ -4,10 +4,10 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import '../../models/rewards_model.dart';
-import '../../services/rewards_service.dart';
-import 'rewards_history_screen.dart';
-import 'rewards_rules_screen.dart';
+import '../../models/rewards_model.dart'; 
+import '../../services/rewards_service.dart'; 
+import './rewards_history_screen.dart';
+import './rewards_rules_screen.dart';
 
 class RewardsLeaderboardScreen extends StatefulWidget {
   const RewardsLeaderboardScreen({Key? key}) : super(key: key);
@@ -29,6 +29,8 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
   
   // Real-time stats stream
   Stream<UserRewardsStats?>? _userStatsStream;
+  // Real-time leaderboard stream
+  Stream<List<LeaderboardEntry>>? _leaderboardStream;
 
   @override
   void initState() {
@@ -36,22 +38,8 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
     _tabController = TabController(length: 2, vsync: this);
     _loadCachedStats(); // Load cached stats first for instant display
     _userStatsStream = _rewardsService.getUserStatsStream(currentUserId);
+    _leaderboardStream = _rewardsService.getMonthlyLeaderboardStream();
     _loadData();
-    
-    // Refresh stats every 5 seconds to catch updates
-    _startAutoRefresh();
-  }
-
-  void _startAutoRefresh() {
-    Future.delayed(const Duration(seconds: 5), () {
-      if (mounted) {
-        // Recreate stream to force refresh
-        setState(() {
-          _userStatsStream = _rewardsService.getUserStatsStream(currentUserId);
-        });
-        _startAutoRefresh(); // Continue refreshing
-      }
-    });
   }
 
   // Load cached stats from local storage for instant display
@@ -225,24 +213,24 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.history, color: Colors.white),
+          icon: Icon(Icons.history, color: Colors.white),
           onPressed: () {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => const RewardsHistoryScreen(),
+                builder: (context) => RewardsHistoryScreen(),
               ),
             );
           },
           tooltip: 'Reward History',
         ),
         IconButton(
-          icon: const Icon(Icons.info_outline, color: Colors.white),
+          icon: Icon(Icons.info_outline, color: Colors.white),
           onPressed: () {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => const RewardsRulesScreen(),
+                builder: (context) => RewardsRulesScreen(),
               ),
             );
           },
@@ -892,83 +880,79 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
   }
 
   Widget _buildLeaderboardTab() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        FadeInUp(
-          delay: const Duration(milliseconds: 200),
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
+    return StreamBuilder(
+      stream: _leaderboardStream,
+      builder: (context, snapshot) {
+        if (snapshot.hasData) {
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              FadeInUp(
+                delay: const Duration(milliseconds: 200),
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
                       ),
-                      child: const Icon(
-                        Icons.leaderboard,
-                        color: Colors.amber,
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'Top 20 This Month',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                _isLoading
-                    ? const Padding(
-                        padding: EdgeInsets.all(20),
-                        child: Center(
-                          child: SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ),
-                      )
-                    : _leaderboard.isEmpty
-                        ? const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(20),
-                              child: Text(
-                                'No leaderboard data yet',
-                                style: TextStyle(color: Colors.grey),
-                              ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                          )
-                        : Column(
-                            children: _leaderboard
-                                .map((entry) => _buildLeaderboardEntry(entry))
-                                .toList(),
+                            child: const Icon(
+                              Icons.leaderboard,
+                              color: Colors.amber,
+                              size: 24,
+                            ),
                           ),
-              ],
+                          const SizedBox(width: 12),
+                          const Text(
+                            'Top 20 This Month',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Column(
+                        children: snapshot.data!
+                            .map((entry) => _buildLeaderboardEntry(entry))
+                            .toList(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        } else {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Text(
+                'No leaderboard data yet',
+                style: TextStyle(color: Colors.grey),
+              ),
             ),
-          ),
-        ),
-      ],
+          );
+        }
+      },
     );
   }
 

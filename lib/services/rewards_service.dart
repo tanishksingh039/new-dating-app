@@ -67,20 +67,25 @@ class RewardsService {
     });
   }
 
-  // Get monthly leaderboard (top 20)
+  // Get monthly leaderboard (top 20) - ONE TIME
   Future<List<LeaderboardEntry>> getMonthlyLeaderboard() async {
+    print('[RewardsService] 🔄 getMonthlyLeaderboard STARTED');
     try {
+      print('[RewardsService] 📊 Querying rewards_stats (top 20 by monthlyScore)...');
       final snapshot = await _firestore
           .collection('rewards_stats')
           .orderBy('monthlyScore', descending: true)
           .limit(20)
           .get();
 
+      print('[RewardsService] ✅ Query returned ${snapshot.docs.length} documents');
       List<LeaderboardEntry> leaderboard = [];
       int rank = 1;
+      int skipped = 0;
 
       for (var doc in snapshot.docs) {
         final stats = UserRewardsStats.fromMap(doc.data());
+        print('[RewardsService] 👤 Processing user: ${stats.userId}, monthlyScore: ${stats.monthlyScore}');
         
         // Get user details
         final userDoc = await _firestore
@@ -98,15 +103,71 @@ class RewardsService {
             rank: rank,
             isVerified: user.isVerified,
           ));
+          print('[RewardsService] ✅ Added to leaderboard: ${user.name} (rank $rank, score ${stats.monthlyScore})');
           rank++;
+        } else {
+          print('[RewardsService] ⚠️ User document not found for userId: ${stats.userId}');
+          skipped++;
         }
       }
 
+      print('[RewardsService] 🎉 getMonthlyLeaderboard COMPLETED: ${leaderboard.length} entries, $skipped skipped');
       return leaderboard;
-    } catch (e) {
-      print('Error getting leaderboard: $e');
+    } catch (e, stackTrace) {
+      print('[RewardsService] ❌ EXCEPTION in getMonthlyLeaderboard: $e');
+      print('[RewardsService] ❌ Stack trace: $stackTrace');
       return [];
     }
+  }
+  
+  // Get monthly leaderboard REAL-TIME stream (updates automatically)
+  Stream<List<LeaderboardEntry>> getMonthlyLeaderboardStream() {
+    print('[RewardsService] 🔄 getMonthlyLeaderboardStream CREATED');
+    return _firestore
+        .collection('rewards_stats')
+        .orderBy('monthlyScore', descending: true)
+        .limit(20)
+        .snapshots()
+        .asyncMap((snapshot) async {
+          print('[RewardsService] 📡 Real-time update received: ${snapshot.docs.length} documents');
+          List<LeaderboardEntry> leaderboard = [];
+          int rank = 1;
+          int skipped = 0;
+
+          for (var doc in snapshot.docs) {
+            final stats = UserRewardsStats.fromMap(doc.data());
+            
+            // Get user details
+            final userDoc = await _firestore
+                .collection('users')
+                .doc(stats.userId)
+                .get();
+                
+            if (userDoc.exists) {
+              final user = UserModel.fromMap(userDoc.data()!);
+              leaderboard.add(LeaderboardEntry(
+                userId: stats.userId,
+                userName: user.name,
+                photoUrl: user.photos.isNotEmpty ? user.photos[0] : null,
+                score: stats.monthlyScore,
+                rank: rank,
+                isVerified: user.isVerified,
+              ));
+              rank++;
+            } else {
+              print('[RewardsService] ⚠️ User document not found: ${stats.userId}');
+              skipped++;
+            }
+          }
+
+          print('[RewardsService] ✅ Real-time leaderboard updated: ${leaderboard.length} entries');
+          return leaderboard;
+        })
+        .handleError((e, stackTrace) {
+          print('[RewardsService] ❌ ERROR in leaderboard stream: $e');
+          print('[RewardsService] ❌ Stack trace: $stackTrace');
+          return [];
+        });
   }
 
   // Get weekly leaderboard (top 20)
@@ -192,25 +253,40 @@ class RewardsService {
     String conversationId,
     String messageText,
   ) async {
+    print('═══════════════════════════════════════════════════════════');
+    print('[RewardsService] 🔄 awardMessagePoints STARTED');
+    print('[RewardsService] userId: $userId');
+    print('[RewardsService] conversationId: $conversationId');
+    print('[RewardsService] messageText: $messageText');
+    print('═══════════════════════════════════════════════════════════');
+    
     try {
       // Check rate limits
+      print('[RewardsService] 📊 Fetching message tracking...');
       final tracking = await _getMessageTracking(userId, conversationId);
+      print('[RewardsService] ✅ Tracking fetched: ${tracking != null}');
+      
       if (tracking != null) {
         if (tracking.hasExceededMessageLimit()) {
+          print('[RewardsService] ❌ RATE LIMIT EXCEEDED: Message rate limit exceeded for user: $userId');
           debugPrint('❌ Message rate limit exceeded for user: $userId');
           return;
         }
         if (tracking.isTooQuick()) {
+          print('[RewardsService] ❌ TOO QUICK: Messages sent too quickly for user: $userId');
           debugPrint('❌ Messages sent too quickly for user: $userId');
           return;
         }
       }
 
       // Analyze message quality
+      print('[RewardsService] 🔍 Analyzing message quality...');
       final quality = MessageContentAnalyzer.analyzeMessage(messageText);
+      print('[RewardsService] ✅ Quality score: ${quality.score}, isSpam: ${quality.isSpam}, isGibberish: ${quality.isGibberish}');
       
       // Check for spam/gibberish
       if (quality.isSpam || quality.isGibberish) {
+        print('[RewardsService] ❌ SPAM/GIBBERISH: Spam/gibberish detected - no points awarded');
         debugPrint('❌ Spam/gibberish detected - no points awarded');
         await _applyPenalty(userId, ScoringRules.spamPenalty);
         return;
@@ -218,6 +294,7 @@ class RewardsService {
 
       // Check for duplicates
       if (tracking != null && MessageContentAnalyzer.isDuplicate(messageText, tracking.recentMessages)) {
+        print('[RewardsService] ❌ DUPLICATE: Duplicate message detected - penalty applied');
         debugPrint('❌ Duplicate message detected - penalty applied');
         await _applyPenalty(userId, ScoringRules.duplicatePenalty);
         return;
@@ -226,16 +303,30 @@ class RewardsService {
       // Calculate points with quality multiplier
       final multiplier = MessageContentAnalyzer.getPointsMultiplier(quality.score);
       final points = (ScoringRules.messageSentPoints * multiplier).toInt();
+      print('[RewardsService] 💰 Points calculated: $points (multiplier: $multiplier, base: ${ScoringRules.messageSentPoints})');
 
       if (points > 0) {
+        print('[RewardsService] 📝 Calling _updateScore with $points points...');
         await _updateScore(userId, points, 'messagesSent');
+        print('[RewardsService] ✅ _updateScore completed');
+        
+        print('[RewardsService] 📝 Updating message tracking...');
         await _updateMessageTracking(userId, conversationId, messageText, quality.score);
+        print('[RewardsService] ✅ Message tracking updated');
+        
         debugPrint('✅ Awarded $points points (quality: ${quality.score})');
+        print('[RewardsService] 🎉 awardMessagePoints COMPLETED SUCCESSFULLY');
       } else {
+        print('[RewardsService] ⚠️ ZERO POINTS: Low quality message - no points awarded (quality: ${quality.score})');
         debugPrint('⚠️ Low quality message - no points awarded');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('═══════════════════════════════════════════════════════════');
+      print('[RewardsService] ❌ EXCEPTION in awardMessagePoints: $e');
+      print('[RewardsService] ❌ Stack trace: $stackTrace');
+      print('═══════════════════════════════════════════════════════════');
       debugPrint('❌ Error awarding message points: $e');
+      rethrow;
     }
   }
 
@@ -245,11 +336,14 @@ class RewardsService {
     String conversationId,
     String messageText,
   ) async {
+    print('[RewardsService] 🔄 awardReplyPoints STARTED for user: $userId');
     try {
       // Analyze message quality
       final quality = MessageContentAnalyzer.analyzeMessage(messageText);
+      print('[RewardsService] ✅ Reply quality score: ${quality.score}');
       
       if (quality.isSpam || quality.isGibberish) {
+        print('[RewardsService] ❌ SPAM REPLY: Spam reply detected - no points awarded');
         debugPrint('❌ Spam reply detected - no points awarded');
         return;
       }
@@ -257,13 +351,18 @@ class RewardsService {
       // Calculate points with quality multiplier
       final multiplier = MessageContentAnalyzer.getPointsMultiplier(quality.score);
       final points = (ScoringRules.replyGivenPoints * multiplier).toInt();
+      print('[RewardsService] 💰 Reply points: $points');
 
       if (points > 0) {
         await _updateScore(userId, points, 'repliesGiven');
         debugPrint('✅ Awarded $points reply points (quality: ${quality.score})');
+        print('[RewardsService] ✅ awardReplyPoints COMPLETED');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('[RewardsService] ❌ EXCEPTION in awardReplyPoints: $e');
+      print('[RewardsService] ❌ Stack trace: $stackTrace');
       debugPrint('❌ Error awarding reply points: $e');
+      rethrow;
     }
   }
 
@@ -274,21 +373,32 @@ class RewardsService {
     String imagePath, {
     String? profileImagePath,
   }) async {
+    print('═══════════════════════════════════════════════════════════');
+    print('[RewardsService] 🔄 awardImagePoints STARTED');
+    print('[RewardsService] userId: $userId');
+    print('[RewardsService] imagePath: $imagePath');
+    print('═══════════════════════════════════════════════════════════');
+    
     try {
       // Check image rate limits
+      print('[RewardsService] 📊 Checking image rate limits...');
       final tracking = await _getMessageTracking(userId, conversationId);
       if (tracking != null && tracking.hasExceededImageLimit()) {
+        print('[RewardsService] ❌ IMAGE RATE LIMIT: Image rate limit exceeded for user: $userId');
         debugPrint('❌ Image rate limit exceeded for user: $userId');
         return;
       }
 
+      print('[RewardsService] 🎯 Verifying face in image for user: $userId');
       debugPrint('🎯 Verifying face in image for user: $userId');
       
       // Verify that image contains a face
       final faceDetectionService = FaceDetectionService();
       final faceResult = await faceDetectionService.detectFacesInImage(imagePath);
+      print('[RewardsService] ✅ Face detection result: success=${faceResult.success}, faceCount=${faceResult.faceCount}');
       
       if (!faceResult.success || faceResult.faceCount == 0) {
+        print('[RewardsService] ❌ NO FACE: No face detected in image - no points awarded');
         debugPrint('❌ No face detected in image - no points awarded');
         faceDetectionService.dispose();
         return;
@@ -296,30 +406,52 @@ class RewardsService {
 
       // If profile image is provided, compare faces for similarity
       if (profileImagePath != null && profileImagePath.isNotEmpty) {
-        final comparisonResult = await faceDetectionService.compareFaces(
-          profileImagePath,
-          imagePath,
-        );
-        
-        if (!comparisonResult.isMatch) {
-          debugPrint('❌ Face does not match profile - no points awarded');
-          debugPrint('   Similarity: ${comparisonResult.similarity}');
+        try {
+          print('[RewardsService] 🔍 Comparing faces with profile image...');
+          final comparisonResult = await faceDetectionService.compareFaces(
+            profileImagePath,
+            imagePath,
+          );
+          print('[RewardsService] ✅ Face comparison result: isMatch=${comparisonResult.isMatch}, similarity=${comparisonResult.similarity}');
+          
+          if (!comparisonResult.isMatch) {
+            print('[RewardsService] ❌ FACE MISMATCH: Face does not match profile - no points awarded (similarity: ${comparisonResult.similarity})');
+            debugPrint('❌ Face does not match profile - no points awarded');
+            debugPrint('   Similarity: ${comparisonResult.similarity}');
+            faceDetectionService.dispose();
+            return;
+          }
+          
+          print('[RewardsService] ✅ FACE MATCH: Face matches profile! Similarity: ${comparisonResult.similarity}');
+          debugPrint('✅ Face matches profile! Similarity: ${comparisonResult.similarity}');
+        } catch (e) {
+          print('[RewardsService] ❌ FACE COMPARISON ERROR: Error comparing faces - no points awarded');
+          debugPrint('❌ Error comparing faces - no points awarded: $e');
           faceDetectionService.dispose();
           return;
         }
-        
-        debugPrint('✅ Face matches profile! Similarity: ${comparisonResult.similarity}');
       } else {
+        print('[RewardsService] ✅ Face detected in image (${faceResult.faceCount} face(s))');
         debugPrint('✅ Face detected in image (${faceResult.faceCount} face(s))');
       }
 
       faceDetectionService.dispose();
 
+      print('[RewardsService] 💰 Awarding image points to user: $userId');
       debugPrint('🎯 Awarding image points to user: $userId');
       await _updateScore(userId, ScoringRules.imageSentPoints, 'imagesSent');
+      print('[RewardsService] ✅ Score updated');
+      
       await _updateImageTracking(userId, conversationId);
+      print('[RewardsService] ✅ Image tracking updated');
+      
       debugPrint('✅ Image points awarded successfully!');
-    } catch (e) {
+      print('[RewardsService] 🎉 awardImagePoints COMPLETED SUCCESSFULLY');
+    } catch (e, stackTrace) {
+      print('═══════════════════════════════════════════════════════════');
+      print('[RewardsService] ❌ EXCEPTION in awardImagePoints: $e');
+      print('[RewardsService] ❌ Stack trace: $stackTrace');
+      print('═══════════════════════════════════════════════════════════');
       debugPrint('❌ Error awarding image points: $e');
       rethrow;
     }
@@ -343,6 +475,8 @@ class RewardsService {
   // Update score helper
   Future<void> _updateScore(String userId, int points, String? statField) async {
     try {
+      print('[RewardsService] 📝 Starting score update for user: $userId');
+      print('[RewardsService] 📝 Points: $points, Field: $statField');
       debugPrint('📝 Starting score update for user: $userId');
       debugPrint('📝 Points: $points, Field: $statField');
       
@@ -352,13 +486,18 @@ class RewardsService {
         final snapshot = await transaction.get(docRef);
         
         if (!snapshot.exists) {
+          print('[RewardsService] 🆕 Creating new stats document');
           debugPrint('🆕 Creating new stats document');
+          
+          // ✅ ENSURE SCORES NEVER GO BELOW 0
+          final finalScore = points < 0 ? 0 : points;
+          
           // Create new stats
           final newStats = UserRewardsStats(
             userId: userId,
-            totalScore: points,
-            weeklyScore: points,
-            monthlyScore: points,
+            totalScore: finalScore,
+            weeklyScore: finalScore,
+            monthlyScore: finalScore,
             messagesSent: statField == 'messagesSent' ? 1 : 0,
             repliesGiven: statField == 'repliesGiven' ? 1 : 0,
             imagesSent: statField == 'imagesSent' ? 1 : 0,
@@ -370,17 +509,24 @@ class RewardsService {
             lastUpdated: DateTime.now(),
           );
           transaction.set(docRef, newStats.toMap());
+          print('[RewardsService] ✅ New stats created with score: $finalScore');
           debugPrint('✅ New stats created: ${newStats.toMap()}');
         } else {
+          print('[RewardsService] 📊 Updating existing stats');
           debugPrint('📊 Updating existing stats');
           final data = snapshot.data()!;
           final oldTotal = data['totalScore'] ?? 0;
           final oldMonthly = data['monthlyScore'] ?? 0;
           
+          // ✅ ENSURE SCORES NEVER GO BELOW 0
+          final newTotal = (oldTotal + points) < 0 ? 0 : (oldTotal + points);
+          final newMonthly = (oldMonthly + points) < 0 ? 0 : (oldMonthly + points);
+          final newWeekly = ((data['weeklyScore'] ?? 0) + points) < 0 ? 0 : ((data['weeklyScore'] ?? 0) + points);
+          
           final updates = {
-            'totalScore': oldTotal + points,
-            'weeklyScore': (data['weeklyScore'] ?? 0) + points,
-            'monthlyScore': oldMonthly + points,
+            'totalScore': newTotal,
+            'weeklyScore': newWeekly,
+            'monthlyScore': newMonthly,
             'lastUpdated': Timestamp.now(),
           };
           
@@ -388,20 +534,27 @@ class RewardsService {
             updates[statField] = (data[statField] ?? 0) + 1;
           }
           
-          debugPrint('📈 Old total: $oldTotal, New total: ${oldTotal + points}');
-          debugPrint('📈 Old monthly: $oldMonthly, New monthly: ${oldMonthly + points}');
+          print('[RewardsService] 📈 Old total: $oldTotal → New total: $newTotal');
+          print('[RewardsService] 📈 Old monthly: $oldMonthly → New monthly: $newMonthly');
+          print('[RewardsService] 📝 Updates: $updates');
+          debugPrint('📈 Old total: $oldTotal, New total: $newTotal');
+          debugPrint('📈 Old monthly: $oldMonthly, New monthly: $newMonthly');
           debugPrint('📝 Updates: $updates');
           
           transaction.update(docRef, updates);
+          print('[RewardsService] ✅ Stats updated successfully');
           debugPrint('✅ Stats updated successfully');
         }
       });
       
+      print('[RewardsService] 🎉 Transaction completed successfully');
       debugPrint('🎉 Transaction completed successfully');
       
       // Check for milestones and send notifications
       await _checkMilestones(userId);
     } catch (e, stackTrace) {
+      print('[RewardsService] ❌ ERROR updating score: $e');
+      print('[RewardsService] ❌ Stack trace: $stackTrace');
       debugPrint('❌ ERROR updating score: $e');
       debugPrint('❌ Stack trace: $stackTrace');
       rethrow;
