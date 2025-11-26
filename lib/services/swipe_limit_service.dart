@@ -98,11 +98,13 @@ class SwipeLimitService {
     return stats;
   }
 
-  /// Reset weekly free swipes (for premium users only)
+  /// Reset weekly swipes to 50 (for premium users only)
+  /// Premium users get 50 swipes reset every week during their premium period
   Future<SwipeStats> _resetWeeklySwipes(SwipeStats stats) async {
     final now = DateTime.now();
     final updatedStats = stats.copyWith(
       freeSwipesUsed: 0,
+      purchasedSwipesRemaining: 50, // Reset to 50 swipes every week
       lastResetDate: now,
       updatedAt: now,
     );
@@ -112,7 +114,7 @@ class SwipeLimitService {
         .doc(stats.userId)
         .update(updatedStats.toFirestore());
 
-    print('✅ Weekly swipes reset for premium user ${stats.userId}');
+    print('✅ Weekly swipes reset to 50 for premium user ${stats.userId}');
     return updatedStats;
   }
 
@@ -166,6 +168,7 @@ class SwipeLimitService {
         updatedStats = stats.copyWith(
           totalSwipes: stats.totalSwipes + 1,
           freeSwipesUsed: stats.freeSwipesUsed + 1,
+          updatedAt: DateTime.now(),
         );
         print('✅ Used free swipe (${stats.freeSwipesUsed + 1}/$freeSwipesLimit)');
       } else {
@@ -173,6 +176,7 @@ class SwipeLimitService {
         updatedStats = stats.copyWith(
           totalSwipes: stats.totalSwipes + 1,
           purchasedSwipesRemaining: stats.purchasedSwipesRemaining - 1,
+          updatedAt: DateTime.now(),
         );
         print('✅ Used purchased swipe (${stats.purchasedSwipesRemaining - 1} remaining)');
       }
@@ -232,6 +236,7 @@ class SwipeLimitService {
 
       final updatedStats = stats.copyWith(
         purchasedSwipesRemaining: stats.purchasedSwipesRemaining + count,
+        updatedAt: DateTime.now(),
       );
 
       await _firestore
@@ -242,6 +247,60 @@ class SwipeLimitService {
       print('✅ Added $count purchased swipes');
     } catch (e) {
       print('Error adding purchased swipes: $e');
+      rethrow;
+    }
+  }
+
+  /// Upgrade to premium
+  /// Properly handles remaining free swipes conversion
+  Future<void> upgradeToPremium() async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return;
+
+      final stats = await getSwipeStats();
+      if (stats == null) return;
+
+      // Calculate remaining free swipes from non-premium allocation (8 swipes)
+      final nonPremiumFreeSwipes = SwipeConfig.getFreeSwipes(false); // Should be 8
+      final remainingFreeSwipes = nonPremiumFreeSwipes - stats.freeSwipesUsed;
+      
+      // Only add remaining free swipes if positive
+      final remainingToAdd = remainingFreeSwipes > 0 ? remainingFreeSwipes : 0;
+      
+      // Premium upgrade: 50 swipes + remaining free swipes from non-premium
+      final premiumBonusSwipes = 50;
+      final totalPurchasedSwipes = stats.purchasedSwipesRemaining + premiumBonusSwipes + remainingToAdd-50;
+
+      print('🎉 Premium Upgrade Calculation:');
+      print('  - Non-premium free swipes used: ${stats.freeSwipesUsed}/$nonPremiumFreeSwipes');
+      print('  - Remaining free swipes to convert: $remainingToAdd');
+      print('  - Premium bonus swipes: $premiumBonusSwipes');
+      print('  - Existing purchased swipes: ${stats.purchasedSwipesRemaining}');
+      print('  - Total purchased swipes after upgrade: $totalPurchasedSwipes');
+
+      // Reset free swipes counter to 0 since user is now premium
+      // Premium users get weekly free swipes that reset, starting fresh
+      final updatedStats = stats.copyWith(
+        freeSwipesUsed: 0, // Reset to 0 for premium weekly tracking
+        purchasedSwipesRemaining: totalPurchasedSwipes,
+        lastResetDate: DateTime.now(), // Start weekly reset cycle
+        updatedAt: DateTime.now(),
+      );
+
+      await _firestore
+          .collection('swipe_stats')
+          .doc(user.uid)
+          .update(updatedStats.toFirestore());
+
+      await _firestore.collection('users').doc(user.uid).update({
+        'isPremium': true,
+        'premiumUpgradedAt': FieldValue.serverTimestamp(),
+      });
+
+      print('✅ Upgraded to premium - User now has $totalPurchasedSwipes purchased swipes');
+    } catch (e) {
+      print('Error upgrading to premium: $e');
       rethrow;
     }
   }
@@ -286,6 +345,7 @@ class SwipeLimitService {
         'totalRemaining': totalRemaining,
         'isPremium': isPremium,
         'freeSwipesLimit': freeSwipesLimit,
+        'freeSwipesUsed': stats.freeSwipesUsed,
       };
     } catch (e) {
       print('Error getting swipe summary: $e');

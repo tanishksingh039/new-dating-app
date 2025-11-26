@@ -62,24 +62,6 @@ class SwipeLimitIndicator extends StatelessWidget {
                   fontSize: 14,
                 ),
               ),
-              if (purchasedSwipesRemaining > 0) ...[
-                const SizedBox(width: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.purple.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    '+$purchasedSwipesRemaining',
-                    style: const TextStyle(
-                      color: Colors.purple,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 11,
-                    ),
-                  ),
-                ),
-              ],
             ],
           ),
         );

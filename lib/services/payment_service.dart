@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:crypto/crypto.dart';
 import '../config/razorpay_config.dart';
+import '../services/swipe_limit_service.dart'; // Add import for SwipeLimitService
 
 /// Service to handle Razorpay payment integration
 class PaymentService {
@@ -180,6 +181,12 @@ class PaymentService {
         'completedAt': FieldValue.serverTimestamp(),
       });
 
+      // Add call to upgradeToPremium() to add 50 bonus swipes when payment succeeds
+      await SwipeLimitService().upgradeToPremium();
+
+      if (kDebugMode) {
+        print('Premium activated successfully');
+      }
       if (kDebugMode) {
         print('Payment successful: $paymentId');
       }

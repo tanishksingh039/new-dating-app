@@ -3,8 +3,10 @@ import 'package:flutter/foundation.dart';
 import '../models/rewards_model.dart';
 import '../models/user_model.dart';
 import '../models/message_tracking_model.dart';
+import '../models/conversation_health_score_model.dart';
 import 'message_content_analyzer.dart';
 import 'face_detection_service.dart';
+import 'conversation_health_service.dart';
 
 class RewardsService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;

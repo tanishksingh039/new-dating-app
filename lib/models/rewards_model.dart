@@ -236,6 +236,46 @@ class RewardHistory {
   }
 }
 
+class ConversationHealthScore {
+  final String conversationId;
+  final double score;
+  final DateTime timestamp;
+  final double engagementScore;
+  final double relevanceScore;
+  final double sentimentScore;
+
+  ConversationHealthScore({
+    required this.conversationId,
+    required this.score,
+    required this.timestamp,
+    required this.engagementScore,
+    required this.relevanceScore,
+    required this.sentimentScore,
+  });
+
+  factory ConversationHealthScore.fromMap(Map<String, dynamic> map) {
+    return ConversationHealthScore(
+      conversationId: map['conversationId'] ?? '',
+      score: (map['score'] ?? 0.0).toDouble(),
+      timestamp: (map['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      engagementScore: (map['engagementScore'] ?? 0.0).toDouble(),
+      relevanceScore: (map['relevanceScore'] ?? 0.0).toDouble(),
+      sentimentScore: (map['sentimentScore'] ?? 0.0).toDouble(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'conversationId': conversationId,
+      'score': score,
+      'timestamp': Timestamp.fromDate(timestamp),
+      'engagementScore': engagementScore,
+      'relevanceScore': relevanceScore,
+      'sentimentScore': sentimentScore,
+    };
+  }
+}
+
 class ScoringRules {
   // Base points (before quality multiplier)
   static const int messageSentPoints = 5;
@@ -255,6 +295,7 @@ class ScoringRules {
   static const int streakBonusPerConversation = 5;
   static const int maxDailyConversationBonus = 50;
   static const int genuineConversationBonus = 10; // Bonus for high-quality conversations
+  static const int conversationHealthScoreBonus = 20; // Bonus for high CHS
   
   // Penalties
   static const int spamPenalty = -10; // Penalty for detected spam

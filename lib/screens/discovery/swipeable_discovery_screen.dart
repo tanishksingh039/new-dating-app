@@ -476,6 +476,10 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
           // Swipe limit indicator
           SwipeLimitIndicator(),
           const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.refresh, color: AppColors.textPrimary),
+            onPressed: _refreshProfiles,
+          ),
           Stack(
             children: [
               IconButton(
@@ -484,14 +488,20 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
               ),
               if (_filters != null && _filters!.hasActiveFilters)
                 Positioned(
-                  right: 8,
-                  top: 8,
+                  top: 0,
+                  right: 0,
                   child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
-                      color: AppColors.primary,
-                      shape: BoxShape.circle,
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF6B9D),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      '!',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
