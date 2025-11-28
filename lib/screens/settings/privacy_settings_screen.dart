@@ -14,9 +14,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
   
   bool _showOnlineStatus = true;
   bool _showDistance = true;
-  bool _showAge = true;
   bool _showLastActive = false;
-  bool _allowMessagesFromMatches = true;
   bool _isLoading = true;
 
   @override
@@ -38,9 +36,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
         setState(() {
           _showOnlineStatus = privacy['showOnlineStatus'] ?? true;
           _showDistance = privacy['showDistance'] ?? true;
-          _showAge = privacy['showAge'] ?? true;
           _showLastActive = privacy['showLastActive'] ?? false;
-          _allowMessagesFromMatches = privacy['allowMessagesFromMatches'] ?? true;
           _isLoading = false;
         });
       } else {
@@ -112,36 +108,12 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                       },
                     ),
                     _buildSwitchTile(
-                      'Show Age',
-                      'Display your age on your profile',
-                      _showAge,
-                      (value) {
-                        setState(() => _showAge = value);
-                        _updatePrivacySetting('showAge', value);
-                      },
-                    ),
-                    _buildSwitchTile(
                       'Show Last Active',
                       'Let matches see when you were last active',
                       _showLastActive,
                       (value) {
                         setState(() => _showLastActive = value);
                         _updatePrivacySetting('showLastActive', value);
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                _buildSection(
-                  'Messaging',
-                  [
-                    _buildSwitchTile(
-                      'Allow Messages from Matches',
-                      'Only matched users can message you',
-                      _allowMessagesFromMatches,
-                      (value) {
-                        setState(() => _allowMessagesFromMatches = value);
-                        _updatePrivacySetting('allowMessagesFromMatches', value);
                       },
                     ),
                   ],

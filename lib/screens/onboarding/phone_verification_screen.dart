@@ -51,6 +51,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
+    debugPrint('[PhoneVerification] 🔄 Loading started - isLoading: $_isLoading');
 
     try {
       final phoneNumber = '+91${_phoneController.text.trim()}';
@@ -75,15 +76,27 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
           }
         },
         verificationFailed: (FirebaseAuthException e) {
+          debugPrint('[PhoneVerification] ❌ Verification failed: ${e.message}');
+          if (mounted) {
+            setState(() => _isLoading = false);
+            debugPrint('[PhoneVerification] ✅ Loading stopped - isLoading: $_isLoading');
+          }
           _showSnackBar('Verification failed: ${e.message}', Colors.red);
         },
-        codeSent: (String verificationId, int? resendToken) {
+        codeSent: (String verificationId, int? resendToken) async {
+          debugPrint('[PhoneVerification] 📨 Code sent callback triggered');
           setState(() {
             _verificationId = verificationId;
             _otpSent = true;
           });
           _startResendTimer();
           _showSnackBar('OTP sent successfully!', AppConstants.successColor);
+          // Keep loading animation visible until UI transitions to OTP screen
+          await Future.delayed(const Duration(milliseconds: 3000));
+          if (mounted) {
+            setState(() => _isLoading = false);
+            debugPrint('[PhoneVerification] ✅ Loading stopped - isLoading: $_isLoading');
+          }
         },
         codeAutoRetrievalTimeout: (String verificationId) {
           _verificationId = verificationId;
@@ -92,7 +105,6 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
       );
     } catch (e) {
       _showSnackBar('Failed to send OTP. Please try again.', Colors.red);
-    } finally {
       if (mounted) {
         setState(() => _isLoading = false);
       }

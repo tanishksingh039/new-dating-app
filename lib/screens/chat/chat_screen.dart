@@ -1162,7 +1162,21 @@ class _ChatScreenState extends State<ChatScreen>
                   const SizedBox(width: 8),
                   // Microphone or Send button
                   GestureDetector(
-                    onTap: _isTyping ? _sendMessage : null,
+                    onTap: () {
+                      if (_isTyping) {
+                        _sendMessage();
+                      } else if (!_isUploading) {
+                        // Show toast to inform user about long-hold
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Long hold to record audio 🎤'),
+                            backgroundColor: Color(0xFF128C7E),
+                            duration: Duration(milliseconds: 1500),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    },
                     onLongPress: !_isTyping && !_isUploading ? _startRecording : null,
                     child: Container(
                       width: 48,
