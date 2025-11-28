@@ -65,6 +65,10 @@ import 'utils/firestore_monitor.dart';
 // Providers
 import 'providers/premium_provider.dart';
 
+// Admin Action Enforcement
+import 'widgets/admin_action_checker.dart';
+import 'screens/banned_screen.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
@@ -227,6 +231,14 @@ class MyApp extends StatelessWidget {
           case '/':
             return MaterialPageRoute(builder: (_) => const SplashScreen());
           
+          // Home Route with Admin Action Enforcement
+          case '/home-protected':
+            return MaterialPageRoute(
+              builder: (_) => AdminActionChecker(
+                child: const HomeScreen(),
+              ),
+            );
+          
           // Auth Routes
           case '/wrapper':
             return MaterialPageRoute(builder: (_) => const WrapperScreen());
@@ -265,7 +277,11 @@ class MyApp extends StatelessWidget {
           
           // Main App Routes
           case '/home':
-            return MaterialPageRoute(builder: (_) => const HomeScreen());
+            return MaterialPageRoute(
+              builder: (_) => AdminActionChecker(
+                child: const HomeScreen(),
+              ),
+            );
           
           // Phase 1 Routes (Optional - accessed via bottom nav)
           case '/discovery':
@@ -288,6 +304,11 @@ class MyApp extends StatelessWidget {
           // Verification Routes
           case '/settings/verification':
             return MaterialPageRoute(builder: (_) => const LivenessVerificationScreen());
+          
+          // Admin Action Enforcement Routes
+          case '/banned':
+            final banStatus = settings.arguments as Map<String, dynamic>;
+            return MaterialPageRoute(builder: (_) => BannedScreen(banStatus: banStatus));
           
           // Handle chat screen with arguments
           case '/chat':

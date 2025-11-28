@@ -228,7 +228,7 @@ class NotificationService {
       await _sendNotificationToUser(
         userId: targetUserId,
         title: '💕 New Like!',
-        body: '$likerName liked you!',
+        body: 'Someone has liked you!',
         data: {
           'type': 'like',
           'screen': 'likes',
@@ -268,7 +268,7 @@ class NotificationService {
       await _sendNotificationToUser(
         userId: targetUserId,
         title: '⭐ Super Like!',
-        body: '$likerName super liked you!',
+        body: 'Someone super liked you!',
         data: {
           'type': 'super_like',
           'screen': 'likes',

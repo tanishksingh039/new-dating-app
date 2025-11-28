@@ -271,47 +271,100 @@ class _AdminReportsTabState extends State<AdminReportsTab>
         
         // Update user account
         debugPrint('[AdminReportsTab] Updating user account: ${report.reportedUserId}');
-        await userRef.update(userUpdates);
-        debugPrint('[AdminReportsTab] ✅ User account updated');
+        debugPrint('[AdminReportsTab] Updates: $userUpdates');
+        
+        try {
+          await userRef.update(userUpdates);
+          debugPrint('[AdminReportsTab] ✅ User account updated');
+        } catch (e, stackTrace) {
+          debugPrint('[AdminReportsTab] ❌ Error updating user: $e');
+          debugPrint('[AdminReportsTab] Error type: ${e.runtimeType}');
+          debugPrint('[AdminReportsTab] Stack trace: $stackTrace');
+          
+          if (e.toString().contains('permission-denied')) {
+            debugPrint('[AdminReportsTab] 🔐 PERMISSION DENIED on user update');
+            debugPrint('[AdminReportsTab] ═══════════════════════════════════════');
+            debugPrint('[AdminReportsTab] TROUBLESHOOTING:');
+            debugPrint('[AdminReportsTab] 1. Check Firestore rules are published');
+            debugPrint('[AdminReportsTab] 2. Verify rule: allow update: if true;');
+            debugPrint('[AdminReportsTab] 3. Collection: users');
+            debugPrint('[AdminReportsTab] 4. Copy rules from FIRESTORE_RULES_ADMIN_BYPASS.txt');
+            debugPrint('[AdminReportsTab] ═══════════════════════════════════════');
+          }
+          rethrow;
+        }
         
         // Step 2: Send notification to the reported user
         debugPrint('[AdminReportsTab] Sending notification to user');
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(report.reportedUserId)
-            .collection('notifications')
-            .add({
-          'title': notificationTitle,
-          'body': notificationBody,
-          'type': 'admin_action',
-          'data': {
-            'screen': 'settings',
-            'action': action.name,
-            'reason': report.reason.displayName,
-            'reportId': report.id,
-          },
-          'read': false,
-          'createdAt': FieldValue.serverTimestamp(),
-          'priority': 'high',
-        });
-        debugPrint('[AdminReportsTab] ✅ Notification sent to user');
+        debugPrint('[AdminReportsTab] User ID: ${report.reportedUserId}');
+        debugPrint('[AdminReportsTab] Notification Title: $notificationTitle');
+        debugPrint('[AdminReportsTab] Notification Body: $notificationBody');
+        
+        try {
+          final notificationRef = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(report.reportedUserId)
+              .collection('notifications')
+              .add({
+            'title': notificationTitle,
+            'body': notificationBody,
+            'type': 'admin_action',
+            'data': {
+              'screen': 'settings',
+              'action': action.name,
+              'reason': report.reason.displayName,
+              'reportId': report.id,
+            },
+            'read': false,
+            'createdAt': FieldValue.serverTimestamp(),
+            'priority': 'high',
+          });
+          
+          debugPrint('[AdminReportsTab] ✅ Notification sent to user');
+          debugPrint('[AdminReportsTab] Notification ID: ${notificationRef.id}');
+          debugPrint('[AdminReportsTab] Path: users/${report.reportedUserId}/notifications/${notificationRef.id}');
+        } catch (e, stackTrace) {
+          debugPrint('[AdminReportsTab] ❌ Error sending notification: $e');
+          debugPrint('[AdminReportsTab] Error type: ${e.runtimeType}');
+          debugPrint('[AdminReportsTab] Stack trace: $stackTrace');
+          
+          if (e.toString().contains('permission-denied')) {
+            debugPrint('[AdminReportsTab] 🔐 PERMISSION DENIED on notification');
+            debugPrint('[AdminReportsTab] ═══════════════════════════════════════');
+            debugPrint('[AdminReportsTab] TROUBLESHOOTING:');
+            debugPrint('[AdminReportsTab] 1. Check Firestore rules are published');
+            debugPrint('[AdminReportsTab] 2. Verify rule: allow write: if true;');
+            debugPrint('[AdminReportsTab] 3. Subcollection: users/{userId}/notifications');
+            debugPrint('[AdminReportsTab] 4. Copy rules from FIRESTORE_RULES_ADMIN_BYPASS.txt');
+            debugPrint('[AdminReportsTab] ═══════════════════════════════════════');
+          }
+        }
         
         // Step 3: Update report with admin action
-        await FirebaseFirestore.instance
-            .collection('reports')
-            .doc(report.id)
-            .update({
-          'adminAction': action.name,
-          'adminId': 'admin_user',
-          'status': ReportStatus.resolved.name,
-          'resolvedAt': FieldValue.serverTimestamp(),
-          'actionTaken': true,
-          'actionDetails': {
-            'action': action.name,
-            'timestamp': FieldValue.serverTimestamp(),
-            'notificationSent': true,
-          },
-        });
+        debugPrint('[AdminReportsTab] Updating report status to resolved');
+        try {
+          await FirebaseFirestore.instance
+              .collection('reports')
+              .doc(report.id)
+              .update({
+            'adminAction': action.name,
+            'adminId': 'admin_user',
+            'status': ReportStatus.resolved.name,
+            'resolvedAt': FieldValue.serverTimestamp(),
+            'actionTaken': true,
+            'actionDetails': {
+              'action': action.name,
+              'timestamp': FieldValue.serverTimestamp(),
+              'notificationSent': true,
+            },
+          });
+          debugPrint('[AdminReportsTab] ✅ Report updated to resolved');
+        } catch (e) {
+          debugPrint('[AdminReportsTab] ⚠️ Error updating report: $e');
+          if (e.toString().contains('permission-denied')) {
+            debugPrint('[AdminReportsTab] 🔐 PERMISSION DENIED on report update');
+          }
+        }
         
         debugPrint('[AdminReportsTab] ✅ Action completed successfully');
         

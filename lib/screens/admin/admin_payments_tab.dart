@@ -54,11 +54,19 @@ class _AdminPaymentsTabState extends State<AdminPaymentsTab> {
               final amountInPaise = (data['amount'] as num?)?.toInt() ?? 0;
               revenue += (amountInPaise / 100).round();
 
-              final type = data['type'] ?? '';
-              if (type == 'spotlight') {
+              // Check multiple field names for payment type
+              final type = (data['type'] ?? data['paymentType'] ?? data['productType'] ?? '').toString().toLowerCase();
+              
+              print('[AdminPaymentsTab] 📋 Payment Type: $type, Data keys: ${data.keys.toList()}');
+              
+              if (type.contains('spotlight')) {
                 spotlight++;
-              } else if (type == 'premium') {
+                print('[AdminPaymentsTab] ✅ Spotlight payment detected');
+              } else if (type.contains('premium')) {
                 premium++;
+                print('[AdminPaymentsTab] ✅ Premium payment detected');
+              } else {
+                print('[AdminPaymentsTab] ⚠️ Unknown payment type: $type');
               }
             }
           } catch (e) {
@@ -66,15 +74,57 @@ class _AdminPaymentsTabState extends State<AdminPaymentsTab> {
           }
         }
 
-        setState(() {
-          _totalRevenue = revenue;
-          _totalPayments = total;
-          _successfulPayments = successful;
-          _spotlightPayments = spotlight;
-          _premiumPayments = premium;
-        });
-        
-        print('[AdminPaymentsTab] 💰 Revenue: ₹$revenue, Total: $total, Success: $successful');
+        // If no premium payments found, count premium users from users collection
+        if (premium == 0) {
+          print('[AdminPaymentsTab] ℹ️ No premium payments found, counting premium users...');
+          _firestore.collection('users').snapshots().listen((userSnapshot) {
+            int premiumUserCount = 0;
+            for (var doc in userSnapshot.docs) {
+              try {
+                final data = doc.data() as Map<String, dynamic>;
+                if (data['isPremium'] == true) {
+                  premiumUserCount++;
+                }
+              } catch (e) {
+                print('[AdminPaymentsTab] ⚠️ Error checking user: $e');
+              }
+            }
+            
+            print('[AdminPaymentsTab] 👑 Found $premiumUserCount premium users');
+            
+            setState(() {
+              _totalRevenue = revenue;
+              _totalPayments = total;
+              _successfulPayments = successful;
+              _spotlightPayments = spotlight;
+              _premiumPayments = premiumUserCount; // Use premium user count as fallback
+            });
+            
+            print('═══════════════════════════════════════');
+            print('[AdminPaymentsTab] 💰 Revenue: ₹$revenue');
+            print('[AdminPaymentsTab] 📊 Total Payments: $total');
+            print('[AdminPaymentsTab] ✅ Successful: $successful');
+            print('[AdminPaymentsTab] 🎯 Spotlight: $spotlight');
+            print('[AdminPaymentsTab] 👑 Premium (Users): $premiumUserCount');
+            print('═══════════════════════════════════════');
+          });
+        } else {
+          setState(() {
+            _totalRevenue = revenue;
+            _totalPayments = total;
+            _successfulPayments = successful;
+            _spotlightPayments = spotlight;
+            _premiumPayments = premium;
+          });
+          
+          print('═══════════════════════════════════════');
+          print('[AdminPaymentsTab] 💰 Revenue: ₹$revenue');
+          print('[AdminPaymentsTab] 📊 Total Payments: $total');
+          print('[AdminPaymentsTab] ✅ Successful: $successful');
+          print('[AdminPaymentsTab] 🎯 Spotlight: $spotlight');
+          print('[AdminPaymentsTab] 👑 Premium (Payments): $premium');
+          print('═══════════════════════════════════════');
+        }
       },
       onError: (error) {
         print('═══════════════════════════════════════');
