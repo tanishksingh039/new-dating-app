@@ -261,7 +261,7 @@ class CommunityGuidelinesScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'support@shooluv.com',
+                    'shooluvbusiness07@gmail.com',
                     style: TextStyle(
                       fontSize: 14,
                       color: Color(0xFFFF6B9D),

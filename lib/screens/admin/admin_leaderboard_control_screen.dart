@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/admin_profile_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'bulk_leaderboard_control_screen.dart';
 
 class AdminLeaderboardControlScreen extends StatefulWidget {
   final String adminUserId;
@@ -158,6 +159,18 @@ class _AdminLeaderboardControlScreenState
       appBar: AppBar(
         title: const Text('Leaderboard Control'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.group),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const BulkLeaderboardControlScreen(),
+                ),
+              );
+            },
+            tooltip: 'Bulk Control',
+          ),
           if (_currentEntry != null)
             IconButton(
               icon: const Icon(Icons.delete),

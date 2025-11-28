@@ -497,11 +497,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _buildSettingTile(
                       Icons.help,
                       'Help & Support',
-                      'Contact: support@shooluv.com',
+                      'Contact: shooluvbusiness07@gmail.com',
                       () {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Email us at: support@shooluv.com'),
+                            content: Text('Email us at: shooluvbusiness07@gmail.com'),
                             duration: Duration(seconds: 3),
                           ),
                         );

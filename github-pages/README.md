@@ -117,7 +117,7 @@ To update your policies:
 ## 📧 Contact Information
 
 The policies include these contact emails:
-- **Support:** support@shooluv.com
+- **Support:** shooluvbusiness07@gmail.com
 - **Privacy:** privacy@shooluv.com
 - **Legal:** legal@shooluv.com
 

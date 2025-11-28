@@ -230,7 +230,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
               children: [
                 const SizedBox(height: 8),
                 _buildContactInfo('Email', 'privacy@shooluv.com'),
-                _buildContactInfo('Support', 'support@shooluv.com'),
+                _buildContactInfo('Support', 'shooluvbusiness07@gmail.com'),
                 _buildContactInfo('Address', 'Shoolini University, Solan, Himachal Pradesh, India'),
               ],
             ),

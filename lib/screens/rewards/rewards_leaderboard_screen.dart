@@ -31,6 +31,8 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
   Stream<UserRewardsStats?>? _userStatsStream;
   // Real-time leaderboard stream
   Stream<List<LeaderboardEntry>>? _leaderboardStream;
+  // Real-time rank among girls stream
+  Stream<int>? _rankAmongGirlsStream;
 
   @override
   void initState() {
@@ -39,6 +41,7 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
     _loadCachedStats(); // Load cached stats first for instant display
     _userStatsStream = _rewardsService.getUserStatsStream(currentUserId);
     _leaderboardStream = _rewardsService.getMonthlyLeaderboardStream();
+    _rankAmongGirlsStream = _rewardsService.getUserRankAmongGirlsStream(currentUserId);
     _loadData();
   }
 
@@ -120,15 +123,66 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
   }
 
   Future<void> _refreshData() async {
+    debugPrint('[RewardsLeaderboard] Refreshing data...');
+    
+    // Clear cache first
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('user_stats_$currentUserId');
+      debugPrint('[RewardsLeaderboard] ✅ Cache cleared');
+    } catch (e) {
+      debugPrint('[RewardsLeaderboard] Error clearing cache: $e');
+    }
+    
+    // Force reload from Firestore
     await _loadData();
+    
+    debugPrint('[RewardsLeaderboard] ✅ Data refreshed from Firestore');
+    
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Rewards refreshed!'),
-          duration: Duration(seconds: 1),
+          content: Text('Rewards refreshed from server!'),
+          duration: Duration(seconds: 2),
           backgroundColor: Colors.purple,
         ),
       );
+    }
+  }
+  
+  Future<void> _forceRefreshLeaderboard() async {
+    debugPrint('[RewardsLeaderboard] Force refreshing leaderboard...');
+    
+    try {
+      // Reload leaderboard data directly from Firestore
+      final leaderboard = await _rewardsService.getMonthlyLeaderboard();
+      
+      setState(() {
+        _leaderboard = leaderboard;
+      });
+      
+      debugPrint('[RewardsLeaderboard] ✅ Leaderboard refreshed: ${leaderboard.length} entries');
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Leaderboard updated!'),
+            duration: Duration(seconds: 1),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[RewardsLeaderboard] ❌ Error refreshing leaderboard: $e');
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error refreshing: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -323,7 +377,7 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'My Score',
+                      'ShooScore',
                       style: TextStyle(
                         color: Colors.white70,
                         fontSize: 14,
@@ -347,37 +401,43 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
                     ),
                   ],
                 ),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Column(
-                    children: [
-                      const Icon(
-                        Icons.emoji_events,
-                        color: Colors.amber,
-                        size: 32,
+                StreamBuilder<int>(
+                  stream: _rankAmongGirlsStream,
+                  builder: (context, snapshot) {
+                    final rankAmongGirls = snapshot.data ?? 0;
+                    return Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        shape: BoxShape.circle,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '#${stats.monthlyRank > 0 ? stats.monthlyRank : '--'}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      child: Column(
+                        children: [
+                          const Icon(
+                            Icons.emoji_events,
+                            color: Colors.amber,
+                            size: 32,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '#${rankAmongGirls > 0 ? rankAmongGirls : '--'}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const Text(
+                            'Among Girls',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ],
                       ),
-                      const Text(
-                        'Rank',
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 10,
-                        ),
-                      ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
               ],
             ),
@@ -394,11 +454,6 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
                   Icons.trending_up,
                   '${stats.weeklyScore}',
                   'This Week',
-                ),
-                _buildMiniStat(
-                  Icons.star,
-                  '${(stats.positiveFeedbackRatio * 100).toInt()}%',
-                  'Positive',
                 ),
               ],
             ),
@@ -906,26 +961,37 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: Colors.amber.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(
-                              Icons.leaderboard,
-                              color: Colors.amber,
-                              size: 24,
-                            ),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(
+                                  Icons.leaderboard,
+                                  color: Colors.amber,
+                                  size: 24,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Text(
+                                'Top 20 This Month',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 12),
-                          const Text(
-                            'Top 20 This Month',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          // Refresh button
+                          IconButton(
+                            icon: const Icon(Icons.refresh, color: Colors.purple),
+                            onPressed: _forceRefreshLeaderboard,
+                            tooltip: 'Refresh leaderboard',
                           ),
                         ],
                       ),

@@ -848,4 +848,99 @@ class RewardsService {
       debugPrint('Error updating image tracking: $e');
     }
   }
+
+  // Get user's rank among girls (female users)
+  Future<int> getUserRankAmongGirls(String userId) async {
+    try {
+      // Get current user's gender
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      if (!userDoc.exists) return 0;
+      
+      final user = UserModel.fromMap(userDoc.data()!);
+      
+      // Get all female users sorted by monthly score
+      final snapshot = await _firestore
+          .collection('rewards_stats')
+          .orderBy('monthlyScore', descending: true)
+          .get();
+
+      int rank = 1;
+      
+      for (var doc in snapshot.docs) {
+        final stats = UserRewardsStats.fromMap(doc.data());
+        
+        // Get user details to check gender
+        final userDetailsDoc = await _firestore
+            .collection('users')
+            .doc(stats.userId)
+            .get();
+            
+        if (userDetailsDoc.exists) {
+          final userDetails = UserModel.fromMap(userDetailsDoc.data()!);
+          
+          // Only count female users
+          if (userDetails.gender?.toLowerCase() == 'female' || userDetails.gender?.toLowerCase() == 'woman') {
+            if (stats.userId == userId) {
+              return rank;
+            }
+            rank++;
+          }
+        }
+      }
+      
+      return 0; // User not found
+    } catch (e) {
+      print('Error getting user rank among girls: $e');
+      return 0;
+    }
+  }
+
+  // Get real-time stream of user's rank among girls
+  Stream<int> getUserRankAmongGirlsStream(String userId) {
+    return _firestore
+        .collection('users')
+        .doc(userId)
+        .snapshots()
+        .asyncMap((userSnapshot) async {
+          if (!userSnapshot.exists) return 0;
+          
+          final user = UserModel.fromMap(userSnapshot.data()!);
+          
+          // Get all female users sorted by monthly score
+          final snapshot = await _firestore
+              .collection('rewards_stats')
+              .orderBy('monthlyScore', descending: true)
+              .get();
+
+          int rank = 1;
+          
+          for (var doc in snapshot.docs) {
+            final stats = UserRewardsStats.fromMap(doc.data());
+            
+            // Get user details to check gender
+            final userDetailsDoc = await _firestore
+                .collection('users')
+                .doc(stats.userId)
+                .get();
+                
+            if (userDetailsDoc.exists) {
+              final userDetails = UserModel.fromMap(userDetailsDoc.data()!);
+              
+              // Only count female users
+              if (userDetails.gender?.toLowerCase() == 'female' || userDetails.gender?.toLowerCase() == 'woman') {
+                if (stats.userId == userId) {
+                  return rank;
+                }
+                rank++;
+              }
+            }
+          }
+          
+          return 0;
+        })
+        .handleError((e, stackTrace) {
+          print('Error in rank stream: $e');
+          return 0;
+        });
+  }
 }

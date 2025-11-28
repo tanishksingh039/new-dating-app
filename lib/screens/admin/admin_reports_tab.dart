@@ -29,24 +29,38 @@ class _AdminReportsTabState extends State<AdminReportsTab>
 
   Future<void> _updateReportStatus(ReportModel report, ReportStatus newStatus) async {
     try {
+      debugPrint('[AdminReportsTab] Updating report status: ${report.id}');
+      debugPrint('[AdminReportsTab] New status: ${newStatus.name}');
+      
       await UserSafetyService.updateReportStatus(
         reportId: report.id,
         status: newStatus,
         adminId: 'admin_user',
       );
       
+      debugPrint('[AdminReportsTab] ✅ Status updated successfully');
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Report status updated to ${newStatus.displayName}'),
             backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('[AdminReportsTab] ❌ Error updating report: $e');
+      debugPrint('[AdminReportsTab] Error type: ${e.runtimeType}');
+      debugPrint('[AdminReportsTab] Stack trace: $stackTrace');
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error updating report: $e')),
+          SnackBar(
+            content: Text('Error updating report: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
         );
       }
     }
@@ -185,7 +199,104 @@ class _AdminReportsTabState extends State<AdminReportsTab>
 
     if (confirm == true) {
       try {
-        // Update report with admin action
+        debugPrint('[AdminReportsTab] Taking action: ${action.name} on report: ${report.id}');
+        debugPrint('[AdminReportsTab] Report ID: ${report.id}');
+        debugPrint('[AdminReportsTab] Reported User: ${report.reportedUserName}');
+        debugPrint('[AdminReportsTab] Reported User ID: ${report.reportedUserId}');
+        
+        // Step 1: Update the reported user's account based on action
+        final userRef = FirebaseFirestore.instance
+            .collection('users')
+            .doc(report.reportedUserId);
+        
+        Map<String, dynamic> userUpdates = {};
+        String notificationTitle = '';
+        String notificationBody = '';
+        
+        switch (action) {
+          case AdminAction.warning:
+            userUpdates = {
+              'accountStatus': 'warned',
+              'warningCount': FieldValue.increment(1),
+              'lastWarningAt': FieldValue.serverTimestamp(),
+              'lastWarningReason': report.reason.displayName,
+            };
+            notificationTitle = '⚠️ Warning Issued';
+            notificationBody = 'You have received a warning for ${report.reason.displayName}. Please review our community guidelines.';
+            break;
+            
+          case AdminAction.tempBan7Days:
+            final banUntil = DateTime.now().add(const Duration(days: 7));
+            userUpdates = {
+              'accountStatus': 'banned',
+              'isBanned': true,
+              'bannedUntil': Timestamp.fromDate(banUntil),
+              'bannedAt': FieldValue.serverTimestamp(),
+              'banReason': report.reason.displayName,
+              'banType': 'temporary',
+            };
+            notificationTitle = '🚫 Account Temporarily Suspended';
+            notificationBody = 'Your account has been suspended for 7 days due to ${report.reason.displayName}. You can access your account again after ${banUntil.day}/${banUntil.month}/${banUntil.year}.';
+            break;
+            
+          case AdminAction.permanentBan:
+            userUpdates = {
+              'accountStatus': 'banned',
+              'isBanned': true,
+              'bannedAt': FieldValue.serverTimestamp(),
+              'banReason': report.reason.displayName,
+              'banType': 'permanent',
+            };
+            notificationTitle = '⛔ Account Permanently Banned';
+            notificationBody = 'Your account has been permanently banned due to ${report.reason.displayName}. This action cannot be reversed.';
+            break;
+            
+          case AdminAction.accountDeleted:
+            userUpdates = {
+              'accountStatus': 'deleted',
+              'isDeleted': true,
+              'deletedAt': FieldValue.serverTimestamp(),
+              'deletedReason': report.reason.displayName,
+              'deletedBy': 'admin',
+            };
+            notificationTitle = '🗑️ Account Deleted';
+            notificationBody = 'Your account has been permanently deleted due to ${report.reason.displayName}. All your data will be removed.';
+            break;
+            
+          case AdminAction.none:
+            // No action taken, just return
+            debugPrint('[AdminReportsTab] No action selected');
+            return;
+        }
+        
+        // Update user account
+        debugPrint('[AdminReportsTab] Updating user account: ${report.reportedUserId}');
+        await userRef.update(userUpdates);
+        debugPrint('[AdminReportsTab] ✅ User account updated');
+        
+        // Step 2: Send notification to the reported user
+        debugPrint('[AdminReportsTab] Sending notification to user');
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(report.reportedUserId)
+            .collection('notifications')
+            .add({
+          'title': notificationTitle,
+          'body': notificationBody,
+          'type': 'admin_action',
+          'data': {
+            'screen': 'settings',
+            'action': action.name,
+            'reason': report.reason.displayName,
+            'reportId': report.id,
+          },
+          'read': false,
+          'createdAt': FieldValue.serverTimestamp(),
+          'priority': 'high',
+        });
+        debugPrint('[AdminReportsTab] ✅ Notification sent to user');
+        
+        // Step 3: Update report with admin action
         await FirebaseFirestore.instance
             .collection('reports')
             .doc(report.id)
@@ -194,20 +305,43 @@ class _AdminReportsTabState extends State<AdminReportsTab>
           'adminId': 'admin_user',
           'status': ReportStatus.resolved.name,
           'resolvedAt': FieldValue.serverTimestamp(),
+          'actionTaken': true,
+          'actionDetails': {
+            'action': action.name,
+            'timestamp': FieldValue.serverTimestamp(),
+            'notificationSent': true,
+          },
         });
+        
+        debugPrint('[AdminReportsTab] ✅ Action completed successfully');
         
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Action taken: ${action.displayName}'),
+              content: Text('Action taken: ${action.displayName}\nUser has been notified'),
               backgroundColor: Colors.green,
+              duration: const Duration(seconds: 4),
             ),
           );
         }
-      } catch (e) {
+      } catch (e, stackTrace) {
+        debugPrint('[AdminReportsTab] ❌ Error taking action: $e');
+        debugPrint('[AdminReportsTab] Error type: ${e.runtimeType}');
+        debugPrint('[AdminReportsTab] Stack trace: $stackTrace');
+        
+        if (e.toString().contains('permission-denied')) {
+          debugPrint('[AdminReportsTab] 🔐 PERMISSION DENIED');
+          debugPrint('[AdminReportsTab] Check Firestore rules for reports collection');
+          debugPrint('[AdminReportsTab] Rule should be: allow update: if true;');
+        }
+        
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error taking action: $e')),
+            SnackBar(
+              content: Text('Error taking action: $e'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
+            ),
           );
         }
       }
@@ -248,6 +382,9 @@ class _AdminReportsTabState extends State<AdminReportsTab>
               }
 
               if (snapshot.hasError) {
+                debugPrint('[AdminReportsTab] Error loading reports: ${snapshot.error}');
+                debugPrint('[AdminReportsTab] Error type: ${snapshot.error.runtimeType}');
+                
                 return Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -257,6 +394,23 @@ class _AdminReportsTabState extends State<AdminReportsTab>
                       Text(
                         'Error loading reports',
                         style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+                      ),
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Text(
+                          '${snapshot.error}',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          setState(() {}); // Trigger rebuild
+                        },
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Retry'),
                       ),
                     ],
                   ),

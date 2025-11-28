@@ -288,7 +288,7 @@ https://YOUR_USERNAME.github.io/shooluv-policies/privacy.html
 ## 📞 SUPPORT CONTACTS
 
 **Email Addresses in Policies:**
-- support@shooluv.com
+- shooluvbusiness07@gmail.com
 - privacy@shooluv.com
 - legal@shooluv.com
 

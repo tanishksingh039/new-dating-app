@@ -57,7 +57,7 @@ Successfully rebranded the entire app from **CampusBound** to **shooLuv** across
 All email addresses updated from `@campusbound.com` to `@shooluv.com`:
 
 #### **Support Emails:**
-- ✅ `support@shooluv.com` (was support@campusbound.com)
+- ✅ `shooluvbusiness07@gmail.com` (was support@campusbound.com)
   - Privacy Policy
   - Terms of Service
   - Community Guidelines
@@ -139,7 +139,7 @@ After:  shooluv_data_1234567890.json
 ### **Support Contact:**
 ```
 Before: support@campusbound.com
-After:  support@shooluv.com
+After:  shooluvbusiness07@gmail.com
 ```
 
 ---
@@ -164,7 +164,7 @@ After:  support@shooluv.com
 - [ ] Admin dashboard shows "shooLuv Admin Dashboard"
 
 ### **Settings:**
-- [ ] Help & Support shows support@shooluv.com
+- [ ] Help & Support shows shooluvbusiness07@gmail.com
 - [ ] Legal screens accessible and updated
 
 ---
@@ -173,7 +173,7 @@ After:  support@shooluv.com
 
 ### **1. Update Email Addresses (IMPORTANT!)**
 Make sure these email addresses are active:
-- `support@shooluv.com` - General support
+- `shooluvbusiness07@gmail.com` - General support
 - `privacy@shooluv.com` - Privacy inquiries
 - `legal@shooluv.com` - Legal matters
 
@@ -270,7 +270,7 @@ grep -r "campusbound" lib/
 ## 📞 Contact Information
 
 ### **Updated Contact Details:**
-- **Support:** support@shooluv.com
+- **Support:** shooluvbusiness07@gmail.com
 - **Privacy:** privacy@shooluv.com
 - **Legal:** legal@shooluv.com
 - **Address:** Shoolini University, Solan, Himachal Pradesh, India

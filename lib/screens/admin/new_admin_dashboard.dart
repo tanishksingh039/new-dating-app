@@ -7,7 +7,9 @@ import 'admin_payments_tab.dart';
 import 'admin_storage_tab.dart';
 import 'admin_profile_manager_screen.dart';
 import 'admin_leaderboard_control_screen.dart';
+import 'bulk_leaderboard_control_screen.dart';
 import 'admin_reports_tab.dart';
+import 'admin_notifications_tab.dart';
 
 class NewAdminDashboard extends StatefulWidget {
   const NewAdminDashboard({Key? key}) : super(key: key);
@@ -36,7 +38,7 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 8, vsync: this);
+    _tabController = TabController(length: 9, vsync: this);
     _setupRealTimeListeners();
     _getCurrentAdminId();
   }
@@ -282,6 +284,10 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
               icon: Icon(Icons.report, size: 20),
               text: 'Reports',
             ),
+            Tab(
+              icon: Icon(Icons.notifications, size: 20),
+              text: 'Notifications',
+            ),
           ],
         ),
       ),
@@ -296,6 +302,7 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
           AdminProfileManagerScreen(adminUserId: _currentAdminUserId),
           AdminLeaderboardControlScreen(adminUserId: _currentAdminUserId),
           const AdminReportsTab(),
+          const AdminNotificationsTab(),
         ],
       ),
     );

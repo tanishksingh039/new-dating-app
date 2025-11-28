@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../services/admin_profile_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'bulk_profile_creator_screen.dart';
 
 class AdminProfileManagerScreen extends StatefulWidget {
   final String adminUserId;
@@ -177,6 +178,18 @@ class _AdminProfileManagerScreenState extends State<AdminProfileManagerScreen> {
       appBar: AppBar(
         title: const Text('Admin Profile Manager'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.group_add),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const BulkProfileCreatorScreen(),
+                ),
+              );
+            },
+            tooltip: 'Create Multiple Profiles',
+          ),
           if (_isSaving)
             const Center(
               child: Padding(

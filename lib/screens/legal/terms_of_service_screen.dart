@@ -139,7 +139,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                   'Refund Policy',
                   '• Refunds only provided for technical issues\n'
                   '• Request refunds within 48 hours of purchase\n'
-                  '• Contact support@shooluv.com for refund requests\n'
+                  '• Contact shooluvbusiness07@gmail.com for refund requests\n'
                   '• Refunds processed within 7-10 business days',
                 ),
               ],
@@ -276,7 +276,7 @@ class TermsOfServiceScreen extends StatelessWidget {
               children: [
                 const SizedBox(height: 8),
                 _buildContactInfo('Email', 'legal@shooluv.com'),
-                _buildContactInfo('Support', 'support@shooluv.com'),
+                _buildContactInfo('Support', 'shooluvbusiness07@gmail.com'),
                 _buildContactInfo('Address', 'Shoolini University, Solan, Himachal Pradesh, India'),
               ],
             ),

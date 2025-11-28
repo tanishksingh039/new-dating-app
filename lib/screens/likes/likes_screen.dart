@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
+import 'dart:ui';
 import '../../models/user_model.dart';
 import '../../constants/app_colors.dart';
 import '../../services/match_service.dart';
 import '../../utils/firestore_extensions.dart';
 import '../../firebase_services.dart';
 import '../chat/chat_screen.dart';
+import '../../providers/premium_provider.dart';
+import '../payment/payment_screen.dart';
 
 class LikesScreen extends StatefulWidget {
   const LikesScreen({Key? key}) : super(key: key);
@@ -156,7 +160,7 @@ class _LikesScreenState extends State<LikesScreen>
                 if (userData == null) return const SizedBox.shrink();
 
                 final user = UserModel.fromMap(userData);
-                return _buildUserCard(user, showLikeBackButton: true);
+                return _buildUserCard(user, showLikeBackButton: true, isWhoLikesYouSection: true);
               },
             );
           },
@@ -252,7 +256,7 @@ class _LikesScreenState extends State<LikesScreen>
                 if (userData == null) return const SizedBox.shrink();
 
                 final user = UserModel.fromMap(userData);
-                return _buildUserCard(user, showLikeBackButton: false);
+                return _buildUserCard(user, showLikeBackButton: false, isWhoLikesYouSection: false);
               },
             );
           },
@@ -262,86 +266,171 @@ class _LikesScreenState extends State<LikesScreen>
     );
   }
 
-  Widget _buildUserCard(UserModel user, {required bool showLikeBackButton}) {
+  Widget _buildUserCard(UserModel user, {required bool showLikeBackButton, required bool isWhoLikesYouSection}) {
     final age = user.dateOfBirth != null
         ? DateTime.now().year - user.dateOfBirth!.year
         : null;
 
-    return GestureDetector(
-      onTap: () => _showUserProfile(user),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 5),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // Profile Image
-              user.photos.isNotEmpty
-                  ? Image.network(
-                      user.photos[0],
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return _buildPlaceholder(user.name);
-                      },
-                    )
-                  : _buildPlaceholder(user.name),
-
-              // Gradient Overlay
-              Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withOpacity(0.7),
-                    ],
-                    stops: const [0.5, 1.0],
-                  ),
+    return Consumer<PremiumProvider>(
+      builder: (context, premiumProvider, child) {
+        final isPremium = premiumProvider.isPremium;
+        // Only apply premium lock to "Who Likes You" section
+        final shouldShowLock = !isPremium && isWhoLikesYouSection;
+        
+        return GestureDetector(
+          onTap: () {
+            if (shouldShowLock) {
+              _showPremiumUnlockDialog(user);
+            } else {
+              _showUserProfile(user);
+            }
+          },
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
                 ),
-              ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Profile Image
+                  user.photos.isNotEmpty
+                      ? Image.network(
+                          user.photos[0],
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return _buildPlaceholder(user.name);
+                          },
+                        )
+                      : _buildPlaceholder(user.name),
 
-              // User Info
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '${user.name}${age != null ? ', $age' : ''}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                  // Gradient Overlay
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.7),
+                        ],
+                        stops: const [0.5, 1.0],
                       ),
-                      if (showLikeBackButton) ...[
-                        const SizedBox(height: 8),
-                        SizedBox(
+                    ),
+                  ),
+
+                  // Blur overlay for non-premium users in "Who Likes You" section
+                  if (shouldShowLock)
+                    BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                      child: Container(
+                        color: Colors.black.withOpacity(0.3),
+                      ),
+                    ),
+
+                  // Premium lock icon for non-premium users in "Who Likes You" section
+                  if (shouldShowLock)
+                    Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.95),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.lock,
+                          color: Color(0xFFFF6B9D),
+                          size: 32,
+                        ),
+                      ),
+                    ),
+
+                  // User Info
+                  if (!shouldShowLock)
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '${user.name}${age != null ? ', $age' : ''}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (showLikeBackButton) ...[
+                              const SizedBox(height: 8),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  onPressed: () => _likeBack(user),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFFFF6B9D),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                  ),
+                                  child: const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.favorite, size: 18),
+                                      SizedBox(width: 4),
+                                      Text('Like Back'),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+
+                  // Unlock Button for non-premium users
+                  if (shouldShowLock)
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      child: Container(
+                        color: Colors.black.withOpacity(0.3),
+                        padding: const EdgeInsets.all(12),
+                        child: SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
-                            onPressed: () => _likeBack(user),
+                            onPressed: () {
+                              _showPremiumUnlockDialog(user);
+                            },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFFF6B9D),
+                              backgroundColor: Colors.grey.shade400,
                               foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(20),
                               ),
@@ -349,65 +438,64 @@ class _LikesScreenState extends State<LikesScreen>
                             child: const Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.favorite, size: 18),
-                                SizedBox(width: 4),
-                                Text('Like Back'),
+                                Icon(Icons.lock, size: 18),
+                                SizedBox(width: 8),
+                                Text('Unlock to See'),
                               ],
                             ),
                           ),
                         ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
+                      ),
+                    ),
 
-              // Match Badge (if already matched)
-              Positioned(
-                top: 8,
-                right: 8,
-                child: FutureBuilder<bool>(
-                  future: _checkIfMatched(user.uid),
-                  builder: (context, snapshot) {
-                    if (snapshot.data == true) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.green,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.check_circle,
-                              color: Colors.white,
-                              size: 16,
+                  // Match Badge (if already matched)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: FutureBuilder<bool>(
+                      future: _checkIfMatched(user.uid),
+                      builder: (context, snapshot) {
+                        if (snapshot.data == true) {
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
                             ),
-                            SizedBox(width: 4),
-                            Text(
-                              'Matched',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
+                            decoration: BoxDecoration(
+                              color: Colors.green,
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                          ],
-                        ),
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  },
-                ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.check_circle,
+                                  color: Colors.white,
+                                  size: 16,
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Matched',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      },
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -669,6 +757,234 @@ class _LikesScreenState extends State<LikesScreen>
           Navigator.pop(context);
         },
       },
+    );
+  }
+
+  void _showPremiumUnlockDialog(UserModel user) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white,
+                Colors.grey.shade50,
+              ],
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Premium Badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF6B9D).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.star,
+                      color: Color(0xFFFF6B9D),
+                      size: 16,
+                    ),
+                    SizedBox(width: 6),
+                    Text(
+                      'PREMIUM FEATURE',
+                      style: TextStyle(
+                        color: Color(0xFFFF6B9D),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Lock Icon
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF6B9D).withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.lock,
+                  color: Color(0xFFFF6B9D),
+                  size: 48,
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Title
+              const Text(
+                'Unlock Premium',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF2D3142),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Price
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF6B9D).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '₹99',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFFF6B9D),
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'One-time',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFFFF6B9D),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Description
+              Text(
+                'See who likes you and view their full profiles with Premium!',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Features List
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    _buildFeatureItem('See all likes instantly'),
+                    const SizedBox(height: 12),
+                    _buildFeatureItem('View full profiles'),
+                    const SizedBox(height: 12),
+                    _buildFeatureItem('Unlimited super likes'),
+                    const SizedBox(height: 12),
+                    _buildFeatureItem('Advanced filters'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(
+                          color: Color(0xFFFF6B9D),
+                          width: 2,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text(
+                        'Maybe Later',
+                        style: TextStyle(
+                          color: Color(0xFFFF6B9D),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const PaymentScreen(),
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF6B9D),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text(
+                        'Go Premium - ₹99',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFeatureItem(String text) {
+    return Row(
+      children: [
+        const Icon(
+          Icons.check_circle,
+          color: Color(0xFFFF6B9D),
+          size: 20,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF2D3142),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
