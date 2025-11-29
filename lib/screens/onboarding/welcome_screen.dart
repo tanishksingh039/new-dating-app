@@ -62,38 +62,39 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       body: Container(
         decoration: const BoxDecoration(
           gradient: AppColors.primaryGradient,
         ),
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              children: [
-                // Back button
-                Align(
-                  alignment: Alignment.topLeft,
-                  child: IconButton(
-                    icon: const Icon(
-                      Icons.arrow_back,
-                      color: Colors.white,
-                      size: 28,
-                    ),
-                    onPressed: () async {
-                      // Sign out and go back to login
-                      await FirebaseAuth.instance.signOut();
-                      if (context.mounted) {
-                        Navigator.pushReplacementNamed(context, '/login');
-                      }
-                    },
+          child: Column(
+            children: [
+              // Back button
+              Align(
+                alignment: Alignment.topLeft,
+                child: IconButton(
+                  icon: const Icon(
+                    Icons.arrow_back,
+                    color: Colors.white,
+                    size: 28,
                   ),
+                  onPressed: () async {
+                    // Sign out and go back to login
+                    await FirebaseAuth.instance.signOut();
+                    if (context.mounted) {
+                      Navigator.pushReplacementNamed(context, '/login');
+                    }
+                  },
                 ),
-                Expanded(
-                  child: FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: SlideTransition(
-                      position: _slideAnimation,
+              ),
+              Expanded(
+                child: FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: SlideTransition(
+                    position: _slideAnimation,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -158,20 +159,25 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                           ),
                           const SizedBox(height: 24),
                           _buildFeatureItem(
-                            icon: '🔒',
+                            icon: '🔐',
                             title: 'Safe & Secure',
                             description: 'Your privacy and safety are our priority',
                           ),
+                          const SizedBox(height: 60),
                         ],
                       ),
                     ),
                   ),
                 ),
+              ),
 
-                // Get Started Button
-                FadeTransition(
-                  opacity: _fadeAnimation,
+              // Get Started Button
+              FadeTransition(
+                opacity: _fadeAnimation,
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       CustomButton(
                         text: 'Get Started',
@@ -215,8 +221,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

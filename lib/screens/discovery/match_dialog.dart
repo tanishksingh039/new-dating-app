@@ -136,15 +136,22 @@ class _MatchDialogState extends State<MatchDialog>
           ScaleTransition(
             scale: _scaleAnimation,
             child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+              margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
               constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.85,
-                maxHeight: MediaQuery.of(context).size.height * 0.7,
+                maxWidth: MediaQuery.of(context).size.width * 0.8,
+                maxHeight: MediaQuery.of(context).size.height * 0.75,
               ),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(25),
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.15),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
               ),
               child: SingleChildScrollView(
                 child: Column(
@@ -158,23 +165,22 @@ class _MatchDialogState extends State<MatchDialog>
                         fontWeight: FontWeight.bold,
                         color: Colors.pink,
                       ),
+                      textAlign: TextAlign.center,
                     ),
 
                     const SizedBox(height: 12),
 
                     // Subtitle
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Text(
-                        'You and ${widget.matchedUser.name} have liked each other',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[700],
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                    Text(
+                      'You and ${widget.matchedUser.name} have liked each other',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[700],
+                        height: 1.4,
                       ),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
                     ),
 
                     const SizedBox(height: 20),
@@ -182,33 +188,37 @@ class _MatchDialogState extends State<MatchDialog>
                     // Profile pictures
                     _isLoading
                         ? const CircularProgressIndicator()
-                        : Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              // Current user photo
-                              _buildProfileImage(_currentUserPhoto ?? '', true),
+                        : SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Current user photo
+                                _buildProfileImage(_currentUserPhoto ?? '', true),
 
-                              const SizedBox(width: 16),
+                                const SizedBox(width: 12),
 
-                              // Heart icon
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: Colors.pink.withOpacity(0.2),
-                                  shape: BoxShape.circle,
+                                // Heart icon
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.pink.withOpacity(0.2),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.favorite,
+                                    color: Colors.pink,
+                                    size: 18,
+                                  ),
                                 ),
-                                child: const Icon(
-                                  Icons.favorite,
-                                  color: Colors.pink,
-                                  size: 20,
-                                ),
-                              ),
 
-                              const SizedBox(width: 16),
+                                const SizedBox(width: 12),
 
-                              // Matched user photo
-                              _buildProfileImage(matchedUserPhoto ?? '', false),
-                            ],
+                                // Matched user photo
+                                _buildProfileImage(matchedUserPhoto ?? '', false),
+                              ],
+                            ),
                           ),
 
                     const SizedBox(height: 20),
@@ -276,8 +286,8 @@ class _MatchDialogState extends State<MatchDialog>
 
   Widget _buildProfileImage(String imageUrl, bool isCurrentUser) {
     return Container(
-      width: 80,
-      height: 80,
+      width: 70,
+      height: 70,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(color: Colors.pink, width: 2.5),

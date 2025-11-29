@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'send_reward_dialog.dart';
+import 'announce_winner_dialog.dart';
 
 class BulkLeaderboardControlScreen extends StatefulWidget {
   const BulkLeaderboardControlScreen({Key? key}) : super(key: key);
@@ -492,6 +494,60 @@ class _BulkLeaderboardControlScreenState extends State<BulkLeaderboardControlScr
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 12),
+                
+                // Send Reward Button
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    final result = await showDialog(
+                      context: context,
+                      builder: (context) => SendRewardDialog(
+                        userId: uid,
+                        userName: name,
+                        userPhoto: profile['photos']?[0],
+                      ),
+                    );
+                    
+                    if (result == true) {
+                      // Reward sent successfully
+                      setState(() {}); // Refresh UI
+                    }
+                  },
+                  icon: const Icon(Icons.card_giftcard, size: 18),
+                  label: const Text('Send Reward'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    minimumSize: const Size(double.infinity, 40),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                
+                // Announce Winner Button
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    final result = await showDialog(
+                      context: context,
+                      builder: (context) => AnnounceWinnerDialog(
+                        userId: uid,
+                        userName: name,
+                        userPhoto: profile['photos']?[0],
+                        points: currentPoints,
+                        rank: index + 1,
+                      ),
+                    );
+                    
+                    if (result == true) {
+                      // Winner announced successfully
+                      setState(() {}); // Refresh UI
+                    }
+                  },
+                  icon: const Icon(Icons.emoji_events, size: 18),
+                  label: const Text('Announce Winner'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amber,
+                    minimumSize: const Size(double.infinity, 40),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 

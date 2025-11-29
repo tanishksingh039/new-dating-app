@@ -30,7 +30,7 @@ class _RecordingOverlayWidgetState extends State<RecordingOverlayWidget> {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
         color: const Color(0xFF1F2C34), // Dark background like WhatsApp
         boxShadow: [
@@ -43,6 +43,7 @@ class _RecordingOverlayWidgetState extends State<RecordingOverlayWidget> {
       ),
       child: SafeArea(
         child: Row(
+          mainAxisSize: MainAxisSize.max,
           children: [
             // Delete/Cancel button
             GestureDetector(
@@ -56,7 +57,7 @@ class _RecordingOverlayWidgetState extends State<RecordingOverlayWidget> {
                 ),
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 8),
             // Timer with red dot
             Row(
               mainAxisSize: MainAxisSize.min,
@@ -84,38 +85,32 @@ class _RecordingOverlayWidgetState extends State<RecordingOverlayWidget> {
                     }
                   },
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Text(
                   formatDuration(widget.recordingDuration),
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w400,
-                    fontSize: 16,
+                    fontSize: 14,
                   ),
                 ),
               ],
             ),
-            const SizedBox(width: 24),
+            const SizedBox(width: 8),
             // Waveform visualization
             Expanded(
-              child: _buildWaveform(),
-            ),
-            const SizedBox(width: 16),
-            // Slide to cancel text
-            Text(
-              '< Slide to cancel',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
-                fontSize: 13,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: _buildWaveform(),
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 8),
             // Send button
             GestureDetector(
               onTap: widget.onSend,
               child: Container(
-                width: 48,
-                height: 48,
+                width: 44,
+                height: 44,
                 decoration: const BoxDecoration(
                   color: Color(0xFF128C7E), // WhatsApp green
                   shape: BoxShape.circle,
@@ -123,7 +118,7 @@ class _RecordingOverlayWidgetState extends State<RecordingOverlayWidget> {
                 child: const Icon(
                   Icons.send,
                   color: Colors.white,
-                  size: 22,
+                  size: 20,
                 ),
               ),
             ),

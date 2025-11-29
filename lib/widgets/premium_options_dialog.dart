@@ -467,17 +467,21 @@ class _PremiumOptionsDialogState extends State<PremiumOptionsDialog> {
                 ),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
+              child: Row(
+                mainAxisSize: MainAxisSize.max,
                 children: [
-                  Icon(Icons.star, size: 16, color: Colors.white),
-                  SizedBox(width: 4),
-                  Text(
-                    'Premium Bonus: 4 extra swipes!',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
+                  const Icon(Icons.star, size: 16, color: Colors.white),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Premium Bonus: 4 extra swipes!',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],

@@ -13,7 +13,11 @@ class ActionNotificationService {
   /// Get pending admin action notifications
   Future<List<Map<String, dynamic>>> getPendingActionNotifications(String userId) async {
     try {
-      debugPrint('[ActionNotificationService] Fetching pending action notifications for: $userId');
+      debugPrint('[ActionNotificationService] ═══════════════════════════════════════');
+      debugPrint('[ActionNotificationService] 📡 Fetching pending action notifications');
+      debugPrint('[ActionNotificationService] User ID: $userId');
+      debugPrint('[ActionNotificationService] Path: users/$userId/notifications');
+      debugPrint('[ActionNotificationService] Query: type=admin_action, read=false');
 
       final snapshot = await _firestore
           .collection('users')
@@ -24,10 +28,27 @@ class ActionNotificationService {
           .orderBy('createdAt', descending: true)
           .get();
 
-      debugPrint('[ActionNotificationService] Found ${snapshot.docs.length} pending notifications');
+      debugPrint('[ActionNotificationService] 📊 Query completed');
+      debugPrint('[ActionNotificationService] Found ${snapshot.docs.length} documents');
+
+      if (snapshot.docs.isEmpty) {
+        debugPrint('[ActionNotificationService] ℹ️ No pending notifications found');
+        debugPrint('[ActionNotificationService] Possible reasons:');
+        debugPrint('[ActionNotificationService] 1. No notifications exist');
+        debugPrint('[ActionNotificationService] 2. All notifications are read');
+        debugPrint('[ActionNotificationService] 3. Wrong user ID');
+        debugPrint('[ActionNotificationService] ═══════════════════════════════════════');
+        return [];
+      }
 
       final notifications = snapshot.docs.map((doc) {
         final data = doc.data();
+        debugPrint('[ActionNotificationService] 📄 Notification ID: ${doc.id}');
+        debugPrint('[ActionNotificationService]    Title: ${data['title']}');
+        debugPrint('[ActionNotificationService]    Type: ${data['type']}');
+        debugPrint('[ActionNotificationService]    Read: ${data['read']}');
+        debugPrint('[ActionNotificationService]    Action: ${data['data']?['action']}');
+        
         return {
           'id': doc.id,
           'title': data['title'] ?? '',
@@ -39,9 +60,24 @@ class ActionNotificationService {
         };
       }).toList();
 
+      debugPrint('[ActionNotificationService] ✅ Returning ${notifications.length} notifications');
+      debugPrint('[ActionNotificationService] ═══════════════════════════════════════');
       return notifications;
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint('[ActionNotificationService] ❌ Error fetching notifications: $e');
+      debugPrint('[ActionNotificationService] Error type: ${e.runtimeType}');
+      debugPrint('[ActionNotificationService] Stack trace: $stackTrace');
+      
+      if (e.toString().contains('permission-denied')) {
+        debugPrint('[ActionNotificationService] 🔐 PERMISSION DENIED');
+        debugPrint('[ActionNotificationService] ═══════════════════════════════════════');
+        debugPrint('[ActionNotificationService] TROUBLESHOOTING:');
+        debugPrint('[ActionNotificationService] 1. Check Firestore rules are published');
+        debugPrint('[ActionNotificationService] 2. Verify rule: allow read: if true;');
+        debugPrint('[ActionNotificationService] 3. Subcollection: users/{userId}/notifications');
+        debugPrint('[ActionNotificationService] ═══════════════════════════════════════');
+      }
+      
       return [];
     }
   }

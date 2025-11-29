@@ -7,9 +7,12 @@ import '../likes/likes_screen.dart';
 import '../chat/chat_screen.dart';
 import '../profile/profile_screen.dart';
 import '../rewards/rewards_leaderboard_screen.dart';
+import '../warning_screen.dart';
 import '../../constants/app_colors.dart';
 import '../../models/user_model.dart';
 import '../../services/navigation_service.dart';
+import '../../services/action_notification_service.dart';
+import '../../widgets/admin_action_checker.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -66,19 +69,19 @@ class _HomeScreenState extends State<HomeScreen> {
               _isFemale = user.gender.toLowerCase() == 'female';
               _screens = _isFemale
                   ? [
-                      const SwipeableDiscoveryScreen(),
-                      const LikesScreen(),
-                      const MatchesScreen(),
-                      const ConversationsScreen(),
-                      const RewardsLeaderboardScreen(),
-                      const ProfileScreen(),
+                      const AdminActionChecker(child: SwipeableDiscoveryScreen()),
+                      const AdminActionChecker(child: LikesScreen()),
+                      const AdminActionChecker(child: MatchesScreen()),
+                      const AdminActionChecker(child: ConversationsScreen()),
+                      const AdminActionChecker(child: RewardsLeaderboardScreen()),
+                      const AdminActionChecker(child: ProfileScreen()),
                     ]
                   : [
-                      const SwipeableDiscoveryScreen(),
-                      const LikesScreen(),
-                      const MatchesScreen(),
-                      const ConversationsScreen(),
-                      const ProfileScreen(),
+                      const AdminActionChecker(child: SwipeableDiscoveryScreen()),
+                      const AdminActionChecker(child: LikesScreen()),
+                      const AdminActionChecker(child: MatchesScreen()),
+                      const AdminActionChecker(child: ConversationsScreen()),
+                      const AdminActionChecker(child: ProfileScreen()),
                     ];
               _isLoading = false;
             });
@@ -100,10 +103,78 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _onItemTapped(int index) {
+  void _onItemTapped(int index) async {
     setState(() {
       _selectedIndex = index;
     });
+    
+    // Check for pending warnings when user changes tabs
+    _checkForWarnings();
+  }
+  
+  Future<void> _checkForWarnings() async {
+    try {
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      debugPrint('[HomeScreen] 🔍 Checking for warnings on tab change');
+      debugPrint('[HomeScreen] User ID: $userId');
+      
+      if (userId == null) {
+        debugPrint('[HomeScreen] ❌ No user ID');
+        return;
+      }
+      
+      final notificationService = ActionNotificationService();
+      debugPrint('[HomeScreen] Fetching pending notifications...');
+      
+      final notifications = await notificationService.getPendingActionNotifications(userId);
+      debugPrint('[HomeScreen] 📬 Found ${notifications.length} notifications');
+      
+      if (notifications.isNotEmpty) {
+        debugPrint('[HomeScreen] ✅ Notifications found:');
+        for (var notif in notifications) {
+          debugPrint('[HomeScreen]   - Action: ${notif['action']}, Reason: ${notif['reason']}');
+        }
+      }
+      
+      if (notifications.isNotEmpty && mounted) {
+        final firstNotification = notifications[0];
+        final action = firstNotification['action'];
+        
+        debugPrint('[HomeScreen] Processing first notification');
+        debugPrint('[HomeScreen] Action: "$action"');
+        debugPrint('[HomeScreen] Is warning? ${action == 'warning'}');
+        
+        if (action == 'warning' || action.toString().toLowerCase().contains('warning')) {
+          debugPrint('[HomeScreen] 🎯 Showing warning screen from tab change');
+          
+          // Show warning screen
+          await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => WarningScreen(
+                warningData: {
+                  'reason': firstNotification['reason'] ?? 'Violation of community guidelines',
+                  'warningCount': 1,
+                  'lastWarningAt': firstNotification['createdAt'],
+                },
+              ),
+            ),
+          );
+          
+          debugPrint('[HomeScreen] ✅ User returned from warning screen');
+          
+          // Mark as read
+          await notificationService.markNotificationAsRead(userId, firstNotification['id']);
+          debugPrint('[HomeScreen] ✅ Notification marked as read');
+        } else {
+          debugPrint('[HomeScreen] Action is not warning: $action');
+        }
+      } else {
+        debugPrint('[HomeScreen] No notifications to show');
+      }
+    } catch (e, stackTrace) {
+      debugPrint('[HomeScreen] ❌ Error checking warnings: $e');
+      debugPrint('[HomeScreen] Stack trace: $stackTrace');
+    }
   }
 
   @override

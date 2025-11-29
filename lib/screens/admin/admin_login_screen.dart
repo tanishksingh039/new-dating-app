@@ -18,7 +18,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
 
   // Simple admin credentials - Fresh start!
   final Map<String, String> _adminCredentials = {
-    'admin': 'admin123',
+    'data504admin': 'admin123',
     'campusbound': 'campus2025',
     'shooluvadmin': 'shoo123',
   };
@@ -295,64 +295,6 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-
-                    // Debug Credentials
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: Colors.blue.withOpacity(0.3),
-                          width: 1,
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'DEBUG - Admin Credentials:',
-                            style: TextStyle(
-                              color: Colors.blue,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          ..._adminCredentials.entries.map((entry) {
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: Text(
-                                '${entry.key} / ${entry.value}',
-                                style: TextStyle(
-                                  color: Colors.blue[200],
-                                  fontSize: 12,
-                                  fontFamily: 'monospace',
-                                ),
-                              ),
-                            );
-                          }),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton(
-                              onPressed: _clearSessions,
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.blue,
-                                side: BorderSide(
-                                  color: Colors.blue.withOpacity(0.5),
-                                ),
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                              child: const Text('Clear All Sessions'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                   ],
                 ),
               ),

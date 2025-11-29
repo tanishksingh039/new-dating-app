@@ -6,8 +6,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../../models/rewards_model.dart'; 
 import '../../services/rewards_service.dart'; 
+import '../../models/monthly_winner_model.dart';
+import '../../services/monthly_winner_service.dart';
 import './rewards_history_screen.dart';
 import './rewards_rules_screen.dart';
+import './user_rewards_screen.dart';
 
 class RewardsLeaderboardScreen extends StatefulWidget {
   const RewardsLeaderboardScreen({Key? key}) : super(key: key);
@@ -266,6 +269,19 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
         ),
       ),
       actions: [
+        // My Rewards Button (Coupon Codes)
+        IconButton(
+          icon: Icon(Icons.card_giftcard, color: Colors.white),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const UserRewardsScreen(),
+              ),
+            );
+          },
+          tooltip: 'My Rewards',
+        ),
         IconButton(
           icon: Icon(Icons.history, color: Colors.white),
           onPressed: () {
@@ -757,14 +773,14 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Icon(
-                    Icons.card_giftcard,
+                    Icons.emoji_events,
                     color: Colors.amber,
                     size: 24,
                   ),
                 ),
                 const SizedBox(width: 12),
                 const Text(
-                  'This Month\'s Rewards',
+                  'Winner of the Month',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -773,35 +789,240 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
               ],
             ),
             const SizedBox(height: 16),
-            _isLoading
-                ? const Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Center(
-                      child: SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    ),
-                  )
-                : _incentives.isEmpty
-                    ? const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(20),
-                          child: Text(
-                            'No active rewards at the moment',
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                        ),
-                      )
-                    : Column(
-                        children: _incentives
-                            .map((incentive) => _buildIncentiveCard(incentive))
-                            .toList(),
-                      ),
+            _buildWinnerOfTheMonth(),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildWinnerOfTheMonth() {
+    return StreamBuilder<MonthlyWinnerModel?>(
+      stream: MonthlyWinnerService.getCurrentMonthWinnerStream(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.all(20),
+            child: Center(
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        }
+
+        if (!snapshot.hasData || snapshot.data == null) {
+          return Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.grey.shade100, Colors.grey.shade200],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade300, width: 2),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.emoji_events_outlined,
+                  size: 60,
+                  color: Colors.grey.shade400,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No Winner Announced Yet',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'The winner will be announced soon!',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey.shade600,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          );
+        }
+
+        final winner = snapshot.data!;
+        return FadeIn(
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.amber.shade100, Colors.orange.shade100],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.amber.shade400, width: 3),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.amber.withOpacity(0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                // Trophy Icon
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade400,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.amber.withOpacity(0.5),
+                            blurRadius: 20,
+                            spreadRadius: 5,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(
+                      Icons.emoji_events,
+                      size: 50,
+                      color: Colors.white,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                
+                // Winner Badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade700,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    winner.achievement ?? 'Winner of the Month',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Winner Photo & Name
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.amber.shade700, width: 3),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: CircleAvatar(
+                        radius: 40,
+                        backgroundImage: winner.userPhoto != null
+                            ? CachedNetworkImageProvider(winner.userPhoto!)
+                            : null,
+                        child: winner.userPhoto == null
+                            ? const Icon(Icons.person, size: 40)
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            winner.userName,
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.star,
+                                size: 18,
+                                color: Colors.amber.shade700,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${winner.points} points',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.amber.shade900,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Congratulatory Message
+                if (winner.message != null)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.7),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      winner.message!,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.black87,
+                        height: 1.5,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                
+                const SizedBox(height: 12),
+                
+                // Month Display
+                Text(
+                  winner.displayMonth,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.amber.shade900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 

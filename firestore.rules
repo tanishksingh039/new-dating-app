@@ -215,6 +215,30 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid; // Allow deletion for account cleanup
     }
     
+    // ========================================
+    // REWARDS COLLECTION (COUPON CODES)
+    // ========================================
+    
+    match /rewards/{rewardId} {
+      // ✅ ADMIN BYPASS: Allow admin to create/update/delete rewards
+      allow write: if true;
+      
+      // Allow users to read their own rewards
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid || true;
+    }
+    
+    // ========================================
+    // MONTHLY WINNERS COLLECTION
+    // ========================================
+    
+    match /monthly_winners/{winnerId} {
+      // ✅ ADMIN BYPASS: Allow admin to announce winners
+      allow write: if true;
+      
+      // Allow all authenticated users to read winners
+      allow read: if isAuthenticated() || true;
+    }
+    
     match /daily_conversations/{userId}/{document=**} {
       allow read: if isOwner(userId);
       allow write: if isOwner(userId) || isAuthenticated();

@@ -23,6 +23,16 @@ class _AdminAnalyticsTabState extends State<AdminAnalyticsTab>
   int _verifiedUsers = 0;
   List<FlSpot> _growthData = [];
 
+  // Spotlight stats
+  int _totalSpotlightBookings = 0;
+  int _activeSpotlightBookings = 0;
+  int _completedSpotlightBookings = 0;
+  int _pendingSpotlightBookings = 0;
+  int _totalSpotlightRevenue = 0;
+  int _uniqueSpotlightUsers = 0;
+  int _totalSpotlightAppearances = 0;
+  List<FlSpot> _spotlightBookingsTrend = [];
+
   @override
   void initState() {
     super.initState();
@@ -37,6 +47,7 @@ class _AdminAnalyticsTabState extends State<AdminAnalyticsTab>
   }
 
   void _setupRealTimeListeners() {
+    // Listen to users collection
     _firestore.collection('users').snapshots().listen((snapshot) {
       if (!mounted) return;
 
@@ -95,6 +106,79 @@ class _AdminAnalyticsTabState extends State<AdminAnalyticsTab>
         _premiumUsers = premium;
         _verifiedUsers = verified;
         _growthData = spots;
+      });
+    });
+
+    // Listen to spotlight bookings collection
+    _firestore.collection('spotlight_bookings').snapshots().listen((snapshot) {
+      if (!mounted) return;
+
+      final now = DateTime.now();
+      final monthAgo = now.subtract(const Duration(days: 30));
+
+      int totalBookings = 0;
+      int activeBookings = 0;
+      int completedBookings = 0;
+      int pendingBookings = 0;
+      int totalRevenue = 0;
+      Set<String> uniqueUsers = {};
+      int totalAppearances = 0;
+      Map<int, int> dailyBookings = {};
+
+      for (var doc in snapshot.docs) {
+        try {
+          final data = doc.data();
+          totalBookings++;
+
+          final status = data['status'] as String? ?? 'pending';
+          final amount = data['amount'] as int? ?? 0;
+          final userId = data['userId'] as String? ?? '';
+          final appearances = data['appearanceCount'] as int? ?? 0;
+          final bookingDate = (data['date'] as Timestamp?)?.toDate();
+
+          // Count by status
+          if (status == 'active') activeBookings++;
+          if (status == 'completed') completedBookings++;
+          if (status == 'pending') pendingBookings++;
+
+          // Revenue and users
+          if (status == 'completed' || status == 'active') {
+            totalRevenue += amount;
+          }
+          if (userId.isNotEmpty) {
+            uniqueUsers.add(userId);
+          }
+
+          // Appearances
+          totalAppearances += appearances;
+
+          // Track daily bookings for trend
+          if (bookingDate != null && bookingDate.isAfter(monthAgo)) {
+            final daysAgo = now.difference(bookingDate).inDays;
+            if (daysAgo <= 30) {
+              dailyBookings[daysAgo] = (dailyBookings[daysAgo] ?? 0) + 1;
+            }
+          }
+        } catch (e) {
+          debugPrint('Error processing spotlight booking: $e');
+        }
+      }
+
+      // Generate trend data
+      List<FlSpot> trendSpots = [];
+      for (int i = 30; i >= 0; i--) {
+        trendSpots.add(FlSpot((30 - i).toDouble(), (dailyBookings[i] ?? 0).toDouble()));
+      }
+
+      setState(() {
+        _totalSpotlightBookings = totalBookings;
+        _activeSpotlightBookings = activeBookings;
+        _completedSpotlightBookings = completedBookings;
+        _pendingSpotlightBookings = pendingBookings;
+        _totalSpotlightRevenue = totalRevenue;
+        _uniqueSpotlightUsers = uniqueUsers.length;
+        _totalSpotlightAppearances = totalAppearances;
+        _spotlightBookingsTrend = trendSpots;
       });
     });
   }
@@ -300,8 +384,176 @@ class _AdminAnalyticsTabState extends State<AdminAnalyticsTab>
   }
 
   Widget _buildSpotlightAnalytics() {
-    return const Center(
-      child: Text('Spotlight Analytics Coming Soon'),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Stats Grid
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 2,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 1.5,
+            children: [
+              _buildAnalyticsCard(
+                'Total Bookings',
+                _totalSpotlightBookings.toString(),
+                'All spotlight bookings',
+                Icons.calendar_month,
+                Colors.blue,
+              ),
+              _buildAnalyticsCard(
+                'Active Bookings',
+                _activeSpotlightBookings.toString(),
+                'Currently active',
+                Icons.play_circle,
+                Colors.green,
+              ),
+              _buildAnalyticsCard(
+                'Completed Bookings',
+                _completedSpotlightBookings.toString(),
+                'Finished bookings',
+                Icons.check_circle,
+                Colors.teal,
+              ),
+              _buildAnalyticsCard(
+                'Pending Bookings',
+                _pendingSpotlightBookings.toString(),
+                'Awaiting activation',
+                Icons.schedule,
+                Colors.orange,
+              ),
+              _buildAnalyticsCard(
+                'Total Revenue',
+                '₹${(_totalSpotlightRevenue / 100).toStringAsFixed(0)}',
+                'From spotlight bookings',
+                Icons.currency_rupee,
+                Colors.amber,
+              ),
+              _buildAnalyticsCard(
+                'Unique Users',
+                _uniqueSpotlightUsers.toString(),
+                'Users with bookings',
+                Icons.people,
+                Colors.purple,
+              ),
+              _buildAnalyticsCard(
+                'Total Appearances',
+                _totalSpotlightAppearances.toString(),
+                'Times shown to users',
+                Icons.visibility,
+                Colors.pink,
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Spotlight Bookings Trend Chart
+          const Text(
+            'Spotlight Bookings Trend (Last 30 Days)',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            height: 250,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: _spotlightBookingsTrend.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : LineChart(
+                    LineChartData(
+                      gridData: FlGridData(
+                        show: true,
+                        drawVerticalLine: false,
+                        horizontalInterval: 1,
+                        getDrawingHorizontalLine: (value) {
+                          return FlLine(
+                            color: Colors.grey.shade200,
+                            strokeWidth: 1,
+                          );
+                        },
+                      ),
+                      titlesData: FlTitlesData(
+                        show: true,
+                        rightTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
+                        ),
+                        topTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
+                        ),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 30,
+                            interval: 5,
+                            getTitlesWidget: (value, meta) {
+                              return Text(
+                                value.toInt().toString(),
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 10,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        leftTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            interval: 1,
+                            reservedSize: 30,
+                            getTitlesWidget: (value, meta) {
+                              return Text(
+                                value.toInt().toString(),
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 10,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                      borderData: FlBorderData(show: false),
+                      minX: 0,
+                      maxX: 30,
+                      minY: 0,
+                      maxY: (_spotlightBookingsTrend.map((e) => e.y).reduce((a, b) => a > b ? a : b) + 1),
+                      lineBarsData: [
+                        LineChartBarData(
+                          spots: _spotlightBookingsTrend,
+                          isCurved: true,
+                          color: Colors.pink.shade400,
+                          barWidth: 3,
+                          isStrokeCapRound: true,
+                          dotData: const FlDotData(show: false),
+                          belowBarData: BarAreaData(
+                            show: true,
+                            color: Colors.pink.shade100.withOpacity(0.3),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
+        ],
+      ),
     );
   }
 

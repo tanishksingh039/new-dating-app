@@ -785,7 +785,17 @@ class _ChatScreenState extends State<ChatScreen>
             ],
           ),
           // Recording overlay (separate from main column to prevent rebuilds)
-          if (_isRecording)
+          if (_isRecording) ...[
+            // Semi-transparent barrier to prevent interaction with messages
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () {}, // Absorb taps
+                child: Container(
+                  color: Colors.black.withOpacity(0.3),
+                ),
+              ),
+            ),
+            // Recording controls at bottom
             Positioned(
               left: 0,
               right: 0,
@@ -807,6 +817,7 @@ class _ChatScreenState extends State<ChatScreen>
                 },
               ),
             ),
+          ],
         ],
       ),
     );
