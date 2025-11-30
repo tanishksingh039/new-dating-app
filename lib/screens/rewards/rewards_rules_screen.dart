@@ -222,7 +222,7 @@ class RewardsRulesScreen extends StatelessWidget {
           _buildRuleItem('Account must be verified to claim rewards'),
           _buildRuleItem('Minimum score threshold applies for each reward tier'),
           _buildRuleItem('Rankings are based on monthly scores'),
-          _buildRuleItem('Top 10 users are eligible for premium rewards'),
+          _buildRuleItem('Top 10 users are eligible for premium rewards that include Amazon Gift Voucher worth upto 5000 Rupees,Play Store Redeem Codes, OTT Subscription(Netflix, Hotstar, etc.), 1 Month Recharge and many more'),
           _buildRuleItem('Rewards are distributed at the end of each month'),
           _buildRuleItem('One reward per user per month'),
           const SizedBox(height: 16),

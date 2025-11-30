@@ -68,6 +68,7 @@ class _ChatScreenState extends State<ChatScreen>
   // Audio player state
   final Map<String, bool> _audioPlayingStates = {};
   final Map<String, AudioPlayer> _audioPlayers = {};
+  final Map<String, bool> _audioLoadingStates = {};
 
   @override
   void initState() {
@@ -1334,6 +1335,7 @@ class _ChatScreenState extends State<ChatScreen>
   // Build audio player widget with waveform
   Widget _buildAudioPlayer(String audioUrl, bool isMe) {
     final isPlaying = _audioPlayingStates[audioUrl] ?? false;
+    final isLoading = _audioLoadingStates[audioUrl] ?? false;
     
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1341,9 +1343,9 @@ class _ChatScreenState extends State<ChatScreen>
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Play/Pause button
+          // Play/Pause button with loading state
           GestureDetector(
-            onTap: () => _toggleAudioPlayback(audioUrl),
+            onTap: isLoading ? null : () => _toggleAudioPlayback(audioUrl),
             child: Container(
               width: 40,
               height: 40,
@@ -1351,11 +1353,22 @@ class _ChatScreenState extends State<ChatScreen>
                 color: isMe ? Colors.white.withOpacity(0.2) : const Color(0xFF128C7E).withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                isPlaying ? Icons.pause : Icons.play_arrow,
-                color: isMe ? Colors.white : const Color(0xFF128C7E),
-                size: 24,
-              ),
+              child: isLoading
+                  ? SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          isMe ? Colors.white : const Color(0xFF128C7E),
+                        ),
+                      ),
+                    )
+                  : Icon(
+                      isPlaying ? Icons.pause : Icons.play_arrow,
+                      color: isMe ? Colors.white : const Color(0xFF128C7E),
+                      size: 24,
+                    ),
             ),
           ),
           const SizedBox(width: 12),
@@ -1387,13 +1400,20 @@ class _ChatScreenState extends State<ChatScreen>
         await _audioPlayers[audioUrl]?.pause();
         setState(() {
           _audioPlayingStates[audioUrl] = false;
+          _audioLoadingStates[audioUrl] = false;
         });
       } else {
+        // Show loading state immediately
+        setState(() {
+          _audioLoadingStates[audioUrl] = true;
+        });
+        
         // Stop all other audio
         for (var player in _audioPlayers.values) {
           await player.stop();
         }
         _audioPlayingStates.updateAll((key, value) => false);
+        _audioLoadingStates.updateAll((key, value) => false);
         
         // Play this audio
         final player = _audioPlayers[audioUrl] ?? AudioPlayer();
@@ -1403,17 +1423,29 @@ class _ChatScreenState extends State<ChatScreen>
           if (mounted) {
             setState(() {
               _audioPlayingStates[audioUrl] = false;
+              _audioLoadingStates[audioUrl] = false;
             });
           }
         });
         
-        await player.play(UrlSource(audioUrl));
-        setState(() {
-          _audioPlayingStates[audioUrl] = true;
-        });
+        try {
+          await player.play(UrlSource(audioUrl));
+          setState(() {
+            _audioLoadingStates[audioUrl] = false;
+            _audioPlayingStates[audioUrl] = true;
+          });
+        } catch (e) {
+          debugPrint('Error starting audio playback: $e');
+          setState(() {
+            _audioLoadingStates[audioUrl] = false;
+          });
+        }
       }
     } catch (e) {
       debugPrint('Error playing audio: $e');
+      setState(() {
+        _audioLoadingStates[audioUrl] = false;
+      });
     }
   }
   

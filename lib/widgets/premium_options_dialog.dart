@@ -4,8 +4,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import '../services/payment_service.dart';
 import '../services/swipe_limit_service.dart';
+import '../services/verification_check_service.dart';
 import '../config/swipe_config.dart';
 import '../constants/app_colors.dart';
+import 'verification_required_dialog.dart';
 
 /// Dialog showing premium subscription and swipe pack options
 /// Premium users: Only see swipe pack (₹20 for 10 swipes)
@@ -115,6 +117,38 @@ class _PremiumOptionsDialogState extends State<PremiumOptionsDialog> {
   }
 
   void _purchasePremium() async {
+    print('🔍 Premium purchase - checking verification...');
+    
+    // Check if user is verified before proceeding
+    final isVerified = await VerificationCheckService.isUserVerified();
+    
+    print('🔍 Verification result: $isVerified');
+    
+    if (!isVerified) {
+      print('❌ User not verified - showing dialog');
+      // Show verification required dialog
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => VerificationRequiredDialog(
+            onVerificationComplete: () {
+              print('✅ Verification complete - proceeding with premium payment');
+              // User verified, now proceed with payment
+              _proceedWithPremiumPayment();
+            },
+          ),
+        );
+      }
+      return;
+    }
+
+    print('✅ User verified - proceeding with premium payment');
+    // User is verified, proceed with payment
+    _proceedWithPremiumPayment();
+  }
+
+  void _proceedWithPremiumPayment() async {
     setState(() {
       _isProcessing = true;
       _swipesCount = 0; // Reset to indicate premium purchase

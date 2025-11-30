@@ -5,7 +5,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../../services/payment_service.dart';
 import '../../services/swipe_limit_service.dart';
+import '../../services/verification_check_service.dart';
 import '../../widgets/premium_options_dialog.dart';
+import '../../widgets/verification_required_dialog.dart';
 import '../../providers/premium_provider.dart';
 
 class PremiumSubscriptionScreen extends StatefulWidget {
@@ -154,6 +156,40 @@ class _PremiumSubscriptionScreenState extends State<PremiumSubscriptionScreen> {
   }
 
   Future<void> _startPayment() async {
+    if (_isProcessing) return;
+
+    print('🔍 Starting payment - checking verification...');
+    
+    // Check if user is verified before proceeding
+    final isVerified = await VerificationCheckService.isUserVerified();
+    
+    print('🔍 Verification result: $isVerified');
+    
+    if (!isVerified) {
+      print('❌ User not verified - showing dialog');
+      // Show verification required dialog
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => VerificationRequiredDialog(
+            onVerificationComplete: () {
+              print('✅ Verification complete - proceeding with payment');
+              // User verified, now proceed with payment
+              _proceedWithPayment();
+            },
+          ),
+        );
+      }
+      return;
+    }
+
+    print('✅ User verified - proceeding with payment');
+    // User is verified, proceed with payment
+    _proceedWithPayment();
+  }
+
+  Future<void> _proceedWithPayment() async {
     if (_isProcessing) return;
 
     setState(() => _isProcessing = true);
