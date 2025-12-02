@@ -207,8 +207,8 @@ class _DetailedProfileScreenState extends State<DetailedProfileScreen> {
                             
                             _buildTextField(
                               controller: _schoolController,
-                              label: 'School/University',
-                              hint: 'e.g., Harvard University',
+                              label: 'Course/Stream',
+                              hint: 'e.g. Bachelors in computer science ',
                               optional: true,
                             ),
                             const SizedBox(height: 16),

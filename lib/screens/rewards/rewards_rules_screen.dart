@@ -71,7 +71,7 @@ class RewardsRulesScreen extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           const Text(
-            'Earn points through active engagement:',
+            'Earn points through active engagement with users:',
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w600,
@@ -111,7 +111,7 @@ class RewardsRulesScreen extends StatelessWidget {
           _buildPointRow(
             Icons.emoji_events,
             'Weekly streak bonus',
-            'Bonus points',
+            'Very high points',
             Colors.amber,
           ),
           const SizedBox(height: 16),
@@ -128,7 +128,7 @@ class RewardsRulesScreen extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Scores reset weekly and monthly. Keep engaging to stay on top!',
+                    'Scores reset monthly. Keep engaging to stay on top!',
                     style: TextStyle(
                       fontSize: 13,
                       color: Colors.blue.shade900,
@@ -222,7 +222,7 @@ class RewardsRulesScreen extends StatelessWidget {
           _buildRuleItem('Account must be verified to claim rewards'),
           _buildRuleItem('Minimum score threshold applies for each reward tier'),
           _buildRuleItem('Rankings are based on monthly scores'),
-          _buildRuleItem('Top 10 users are eligible for premium rewards that include Amazon Gift Voucher worth upto 5000 Rupees,Play Store Redeem Codes, OTT Subscription(Netflix, Hotstar, etc.), 1 Month Recharge and many more'),
+          _buildRuleItem('Top 10 users are eligible for premium rewards that include Amazon Gift Voucher worth upto 5000 Rupees,Play Store Redeem Codes, OTT Subscription(Netflix, Hotstar, etc.),  and many more'),
           _buildRuleItem('Rewards are distributed at the end of each month'),
           _buildRuleItem('One reward per user per month'),
           const SizedBox(height: 16),
@@ -416,7 +416,7 @@ class RewardsRulesScreen extends StatelessWidget {
           const SizedBox(height: 20),
           _buildPrivacyItem(
             'Leaderboard Visibility',
-            'Your name and profile picture will be visible on the leaderboard if you\'re in the top 10.',
+            'Your name and profile picture will be visible on the leaderboard if you\'re in the top 20.',
           ),
           _buildPrivacyItem(
             'Stats Privacy',

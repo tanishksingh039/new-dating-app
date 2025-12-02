@@ -595,7 +595,7 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
         indicatorWeight: 3,
         tabs: const [
           Tab(text: 'Dashboard'),
-          Tab(text: 'Leaderboard'),
+          Tab(text: 'Shooboard'),
         ],
       ),
     );

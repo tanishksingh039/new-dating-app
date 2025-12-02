@@ -140,7 +140,7 @@ class PremiumLockOverlay extends StatelessWidget {
 
                   // Info Text
                   Text(
-                    'One-time payment • Lifetime access',
+                    'One-time payment • Monthly access',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey.shade600,

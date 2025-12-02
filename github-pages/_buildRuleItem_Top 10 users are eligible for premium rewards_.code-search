@@ -1,0 +1,10 @@
+# Query:           _buildRuleItem('Top 10 users are eligible for premium rewards'),\n
+# ContextLines: 1
+
+1 result - 1 file
+
+lib\screens\rewards\rewards_rules_screen.dart:
+  224            _buildRuleItem('Rankings are based on monthly scores'),
+  225:           _buildRuleItem('Top 10 users are eligible for premium rewards '),
+  226:           _buildRuleItem('Rewards are distributed at the end of each month'),
+  227            _buildRuleItem('One reward per user per month'),

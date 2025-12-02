@@ -17,6 +17,11 @@ class PaymentService {
   // Razorpay credentials are now managed in RazorpayConfig
   // Premium subscription price
   static const int premiumPriceInPaise = 9900; // ₹99.00
+  
+  // ⚠️ IMPORTANT: TEST/PROD TOGGLE FOR PREMIUM EXPIRY
+  // Set to true for TESTING (30 seconds expiry)
+  // Set to false for PRODUCTION (30 days expiry)
+  static const bool USE_TEST_EXPIRY = false; // ✅ PRODUCTION MODE: 30 days expiry
 
   /// Initialize Razorpay with event handlers
   void init({
@@ -162,10 +167,25 @@ class PaymentService {
         }
       }
 
-      // Update user's premium status
+      // Calculate premium expiry date
+      // 🔴 CHANGE USE_TEST_EXPIRY TO FALSE FOR PRODUCTION
+      final now = DateTime.now();
+      final premiumExpiryDate = USE_TEST_EXPIRY
+          ? now.add(const Duration(seconds: 30)) // TEST: 30 seconds
+          : now.add(const Duration(days: 30));   // PRODUCTION: 30 days
+
+      if (kDebugMode) {
+        print('🎯 Premium Expiry Configuration:');
+        print('   USE_TEST_EXPIRY: $USE_TEST_EXPIRY');
+        print('   Expiry Date: $premiumExpiryDate');
+        print('   Days until expiry: ${premiumExpiryDate.difference(now).inDays}');
+      }
+
+      // Update user's premium status with expiry date
       await _firestore.collection('users').doc(user.uid).update({
         'isPremium': true,
         'premiumActivatedAt': FieldValue.serverTimestamp(),
+        'premiumExpiryDate': Timestamp.fromDate(premiumExpiryDate),
         'lastPaymentId': paymentId,
       });
 
@@ -178,6 +198,7 @@ class PaymentService {
         'amount': premiumPriceInPaise,
         'status': 'success',
         'verified': isVerified,
+        'premiumExpiryDate': Timestamp.fromDate(premiumExpiryDate),
         'completedAt': FieldValue.serverTimestamp(),
       });
 
@@ -185,7 +206,8 @@ class PaymentService {
       await SwipeLimitService().upgradeToPremium();
 
       if (kDebugMode) {
-        print('Premium activated successfully');
+        print('✅ Premium activated successfully');
+        print('   Expires on: $premiumExpiryDate');
       }
       if (kDebugMode) {
         print('Payment successful: $paymentId');

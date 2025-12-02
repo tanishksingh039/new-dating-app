@@ -212,7 +212,7 @@ class _MatchesScreenState extends State<MatchesScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              'Start swiping to find your matches!',
+              'Start finding your perfect match!',
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.grey.shade600,

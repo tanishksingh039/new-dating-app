@@ -401,7 +401,7 @@ class _PremiumSubscriptionScreenState extends State<PremiumSubscriptionScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Lifetime access to all premium features',
+                        'Monthly access to all premium features',
                         style: TextStyle(
                           color: Colors.white.withOpacity(0.9),
                           fontSize: 14,

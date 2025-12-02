@@ -18,6 +18,7 @@ class UserModel {
   // Phase 1 fields
   final bool isVerified;
   final bool isPremium;
+  final DateTime? premiumExpiryDate; // When premium expires (null = lifetime or not premium)
   final List<String> matches;
   final int matchCount;
   final Map<String, int> dailySwipes;
@@ -46,6 +47,7 @@ class UserModel {
     this.lastActive,
     this.isVerified = false,
     this.isPremium = false,
+    this.premiumExpiryDate,
     this.matches = const [],
     this.matchCount = 0,
     this.dailySwipes = const {},
@@ -93,6 +95,7 @@ class UserModel {
       'lastActive': lastActive != null ? Timestamp.fromDate(lastActive!) : null,
       'isVerified': isVerified,
       'isPremium': isPremium,
+      'premiumExpiryDate': premiumExpiryDate != null ? Timestamp.fromDate(premiumExpiryDate!) : null,
       'matches': matches,
       'matchCount': matchCount,
       'dailySwipes': dailySwipes,
@@ -135,6 +138,7 @@ class UserModel {
       lastActive: (map['lastActive'] as Timestamp?)?.toDate(),
       isVerified: map['isVerified'] ?? false,
       isPremium: map['isPremium'] ?? false,
+      premiumExpiryDate: (map['premiumExpiryDate'] as Timestamp?)?.toDate(),
       matches: List<String>.from(map['matches'] ?? []),
       matchCount: map['matchCount'] ?? 0,
       dailySwipes: Map<String, int>.from(map['dailySwipes'] ?? {}),
@@ -166,6 +170,7 @@ class UserModel {
     DateTime? lastActive,
     bool? isVerified,
     bool? isPremium,
+    DateTime? premiumExpiryDate,
     List<String>? matches,
     int? matchCount,
     Map<String, int>? dailySwipes,
@@ -190,6 +195,7 @@ class UserModel {
       lastActive: lastActive ?? this.lastActive,
       isVerified: isVerified ?? this.isVerified,
       isPremium: isPremium ?? this.isPremium,
+      premiumExpiryDate: premiumExpiryDate ?? this.premiumExpiryDate,
       matches: matches ?? this.matches,
       matchCount: matchCount ?? this.matchCount,
       dailySwipes: dailySwipes ?? this.dailySwipes,

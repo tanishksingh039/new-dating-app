@@ -23,7 +23,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       'amount': 9900, // ₹99.00 in paise
       'displayAmount': '₹99',
       'features': [
-        '20 free swipes daily',
+        '50 free swipes weekly',
         'Unlimited likes',
         'See who liked you',
         'Advanced filters',
