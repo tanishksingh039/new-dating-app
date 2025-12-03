@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/discovery_filters.dart';
 import '../../constants/app_colors.dart';
+import '../../utils/constants.dart';
 
 // Wrapper class to distinguish between "dismissed" and "reset clicked"
 class FilterDialogResult {
@@ -28,6 +29,7 @@ class _FiltersDialogState extends State<FiltersDialog> {
   double? _maxDistance;
   bool _showVerifiedOnly = false;
   String? _selectedEducation;
+  String? _selectedCourseStream;
   List<String> _selectedInterests = [];
 
   // Available options
@@ -65,6 +67,7 @@ class _FiltersDialogState extends State<FiltersDialog> {
     _maxDistance = _filters.maxDistance;
     _showVerifiedOnly = _filters.showVerifiedOnly;
     _selectedEducation = _filters.education;
+    _selectedCourseStream = _filters.courseStream;
     _selectedInterests = List.from(_filters.interests);
   }
 
@@ -140,6 +143,38 @@ class _FiltersDialogState extends State<FiltersDialog> {
                     ),
                     const SizedBox(height: 24),
 
+                    // Course/Stream
+                    _buildSectionTitle('Course/Stream'),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedCourseStream,
+                          hint: const Text('Select Course/Stream'),
+                          isExpanded: true,
+                          items: AppConstants.courseStreamOptions.map((String course) {
+                            return DropdownMenuItem<String>(
+                              value: course,
+                              child: Text(course),
+                            );
+                          }).toList(),
+                          onChanged: (String? value) {
+                            setState(() {
+                              _selectedCourseStream = value;
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
                     // Interests
                     _buildSectionTitle('Interests'),
                     const SizedBox(height: 8),
@@ -205,6 +240,7 @@ class _FiltersDialogState extends State<FiltersDialog> {
                         maxDistance: _maxDistance,
                         showVerifiedOnly: _showVerifiedOnly,
                         education: _selectedEducation,
+                        courseStream: _selectedCourseStream,
                         interests: _selectedInterests,
                       );
                       Navigator.pop(context, FilterDialogResult(filters: updatedFilters, wasReset: false));

@@ -209,25 +209,14 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
       
       final currentUser = UserModel.fromMap(currentUserDoc.data()!);
       final prefs = currentUser.preferences;
-      final currentUserGender = currentUser.gender;
+      final currentUserGender = currentUser.gender.trim().toLowerCase();
       
-      // Build query
-      Query query = FirebaseFirestore.instance
-          .collection('users')
-          .where('uid', isNotEqualTo: _currentUserId);
+      debugPrint('🔍 Fallback: Current user gender: "$currentUserGender" (raw: "${currentUser.gender}")');
       
-      // AUTOMATIC FILTER: Show opposite gender only (Male sees Female, Female sees Male)
-      // This is ALWAYS applied
-      if (currentUserGender == 'Male') {
-        query = query.where('gender', isEqualTo: 'Female');
-        debugPrint('Fallback gender filter: Male user, showing Females only');
-      } else if (currentUserGender == 'Female') {
-        query = query.where('gender', isEqualTo: 'Male');
-        debugPrint('Fallback gender filter: Female user, showing Males only');
-      }
-      // If gender is not Male/Female, show all (no gender filter)
+      // Build query - no gender filter in query (will filter in code for case-insensitive matching)
+      Query query = FirebaseFirestore.instance.collection('users');
       
-      final snapshot = await query.limit(100).get();
+      final snapshot = await query.limit(200).get();
       
       List<UserModel> profiles = [];
       for (var doc in snapshot.docs) {
@@ -239,23 +228,56 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
           }
           final user = UserModel.fromMap(data);
           
-          // Only check onboarding and basic requirements
-          final isOnboardingComplete = data['onboardingCompleted'] == true || 
-                                       data['isOnboardingComplete'] == true;
-          if (!isOnboardingComplete) continue;
+          // Skip current user
+          if (user.uid == _currentUserId) continue;
+          
+          // AUTOMATIC FILTER: Show opposite gender only (case-insensitive)
+          final userGender = user.gender.trim().toLowerCase();
+          if (currentUserGender == 'male' && userGender != 'female') {
+            debugPrint('Fallback: Skipping user ${user.uid}: gender mismatch (male user needs female)');
+            continue;
+          } else if (currentUserGender == 'female' && userGender != 'male') {
+            debugPrint('Fallback: Skipping user ${user.uid}: gender mismatch (female user needs male)');
+            continue;
+          }
+          debugPrint('✅ Fallback: Gender match: $currentUserGender ↔ $userGender');
+          
+          // Only check basic requirements - show all profiles regardless of onboarding completion or photos
           if (user.dateOfBirth == null) continue;
-          if (user.photos.isEmpty) continue;
           
           // Apply age filter only if filters are set
           int minAge = 18;
           int maxAge = 100;
-          if (_filters != null) {
-            if (_filters!.minAge > 0) minAge = _filters!.minAge;
-            if (_filters!.maxAge > 0) maxAge = _filters!.maxAge;
+          if (_filters != null && _filters!.hasActiveFilters) {
+            minAge = _filters!.minAge;
+            maxAge = _filters!.maxAge;
           }
           
           final userAge = _calculateAge(user.dateOfBirth!);
           if (userAge < minAge || userAge > maxAge) continue;
+          
+          // Filter by education level (only if filter is set)
+          if (_filters?.education != null) {
+            final userEducation = user.education;
+            if (userEducation == null || userEducation != _filters!.education) {
+              debugPrint('Fallback: Skipping user ${user.uid}: education mismatch');
+              continue;
+            }
+          }
+          
+          // Filter by course/stream - STRICT matching
+          if (_filters?.courseStream != null) {
+            final userCourseStream = user.courseStream;
+            debugPrint('Fallback: Course filter: user=$userCourseStream, filter=${_filters!.courseStream}');
+            
+            // Skip if user doesn't have courseStream OR it doesn't match
+            if (userCourseStream == null || userCourseStream != _filters!.courseStream) {
+              debugPrint('Fallback: Skipping user ${user.uid}: course/stream mismatch ($userCourseStream != ${_filters!.courseStream})');
+              continue;
+            }
+            
+            debugPrint('✅ Fallback: Course/Stream match: $userCourseStream');
+          }
           
           profiles.add(user);
         } catch (e) {

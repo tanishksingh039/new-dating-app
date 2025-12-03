@@ -31,6 +31,10 @@ class UserModel {
   final List<String> blockedUsers;
   final List<String> blockedBy;
 
+  // Education fields
+  final String? education;
+  final String? courseStream;
+
   UserModel({
     required this.uid,
     this.email = '',
@@ -55,6 +59,8 @@ class UserModel {
     Map<String, dynamic>? notificationSettings,
     this.blockedUsers = const [],
     this.blockedBy = const [],
+    this.education,
+    this.courseStream,
   })  : privacySettings = privacySettings ??
             {
               'showOnlineStatus': true,
@@ -103,6 +109,8 @@ class UserModel {
       'notificationSettings': notificationSettings,
       'blockedUsers': blockedUsers,
       'blockedBy': blockedBy,
+      'education': education,
+      'courseStream': courseStream,
     };
   }
 
@@ -150,6 +158,8 @@ class UserModel {
           : null,
       blockedUsers: List<String>.from(map['blockedUsers'] ?? []),
       blockedBy: List<String>.from(map['blockedBy'] ?? []),
+      education: map['education'],
+      courseStream: map['courseStream'],
     );
   }
 
@@ -178,6 +188,8 @@ class UserModel {
     Map<String, dynamic>? notificationSettings,
     List<String>? blockedUsers,
     List<String>? blockedBy,
+    String? education,
+    String? courseStream,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -203,6 +215,8 @@ class UserModel {
       notificationSettings: notificationSettings ?? this.notificationSettings,
       blockedUsers: blockedUsers ?? this.blockedUsers,
       blockedBy: blockedBy ?? this.blockedBy,
+      education: education ?? this.education,
+      courseStream: courseStream ?? this.courseStream,
     );
   }
 }

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:io';
 import 'send_reward_dialog.dart';
 import 'announce_winner_dialog.dart';
 
@@ -201,6 +204,169 @@ class _BulkLeaderboardControlScreenState extends State<BulkLeaderboardControlScr
     );
   }
 
+  Future<void> _updateUserName(String userId, String newName) async {
+    try {
+      await _firestore.collection('users').doc(userId).update({
+        'name': newName,
+      });
+      _showSuccess('Name updated to: $newName');
+      await _loadProfiles();
+    } catch (e) {
+      _showError('Error updating name: $e');
+    }
+  }
+
+  Future<void> _toggleVerification(String userId, bool isVerified) async {
+    try {
+      await _firestore.collection('users').doc(userId).update({
+        'isVerified': isVerified,
+      });
+      _showSuccess(isVerified ? 'User marked as verified' : 'User marked as unverified');
+      await _loadProfiles();
+    } catch (e) {
+      _showError('Error updating verification: $e');
+    }
+  }
+
+  Future<void> _deleteUser(String userId, String userName) async {
+    try {
+      // Delete from users collection
+      await _firestore.collection('users').doc(userId).delete();
+      
+      // Delete from rewards_stats if exists
+      try {
+        await _firestore.collection('rewards_stats').doc(userId).delete();
+      } catch (e) {
+        debugPrint('No rewards_stats entry to delete: $e');
+      }
+      
+      _showSuccess('User $userName deleted successfully');
+      await _loadProfiles();
+    } catch (e) {
+      _showError('Error deleting user: $e');
+    }
+  }
+
+  void _showDeleteConfirmation(String userId, String userName) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete User'),
+        content: Text(
+          'Are you sure you want to delete $userName? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _deleteUser(userId, userName);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _uploadUserPhoto(String userId, String userName) async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+      
+      if (image == null) {
+        _showError('No image selected');
+        return;
+      }
+
+      setState(() => _isLoading = true);
+      
+      final File imageFile = File(image.path);
+      final String fileName = 'users/$userId/photo_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      
+      debugPrint('[BulkLeaderboardControl] Uploading photo for $userName');
+      debugPrint('[BulkLeaderboardControl] File path: ${image.path}');
+      debugPrint('[BulkLeaderboardControl] Storage path: $fileName');
+      
+      // Upload to Firebase Storage
+      final Reference ref = FirebaseStorage.instance.ref().child(fileName);
+      final UploadTask uploadTask = ref.putFile(imageFile);
+      
+      final TaskSnapshot snapshot = await uploadTask;
+      final String downloadUrl = await snapshot.ref.getDownloadURL();
+      
+      debugPrint('[BulkLeaderboardControl] ✅ Photo uploaded: $downloadUrl');
+      
+      // Get current photos array
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      final List<dynamic> currentPhotos = userDoc.data()?['photos'] ?? [];
+      
+      // Add new photo to the beginning of the array
+      final List<String> updatedPhotos = [downloadUrl];
+      updatedPhotos.addAll(currentPhotos.cast<String>());
+      
+      // Update user document with new photo
+      await _firestore.collection('users').doc(userId).update({
+        'photos': updatedPhotos,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      
+      debugPrint('[BulkLeaderboardControl] ✅ User profile updated with new photo');
+      _showSuccess('Photo added for $userName!');
+      await _loadProfiles();
+    } catch (e) {
+      debugPrint('[BulkLeaderboardControl] ❌ Error uploading photo: $e');
+      _showError('Error uploading photo: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _deleteUserPhoto(String userId, String photoUrl, String userName) async {
+    try {
+      setState(() => _isLoading = true);
+      
+      debugPrint('[BulkLeaderboardControl] Deleting photo for $userName');
+      debugPrint('[BulkLeaderboardControl] Photo URL: $photoUrl');
+      
+      // Delete from Firebase Storage
+      try {
+        final Reference ref = FirebaseStorage.instance.refFromURL(photoUrl);
+        await ref.delete();
+        debugPrint('[BulkLeaderboardControl] ✅ Photo deleted from storage');
+      } catch (e) {
+        debugPrint('[BulkLeaderboardControl] ⚠️ Could not delete from storage: $e');
+      }
+      
+      // Remove from user's photos array
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      final List<dynamic> currentPhotos = userDoc.data()?['photos'] ?? [];
+      
+      final List<String> updatedPhotos = currentPhotos
+          .cast<String>()
+          .where((photo) => photo != photoUrl)
+          .toList();
+      
+      await _firestore.collection('users').doc(userId).update({
+        'photos': updatedPhotos,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      
+      debugPrint('[BulkLeaderboardControl] ✅ Photo removed from user profile');
+      _showSuccess('Photo deleted for $userName!');
+      await _loadProfiles();
+    } catch (e) {
+      debugPrint('[BulkLeaderboardControl] ❌ Error deleting photo: $e');
+      _showError('Error deleting photo: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -317,8 +483,10 @@ class _BulkLeaderboardControlScreenState extends State<BulkLeaderboardControlScr
     final gender = profile['gender'] ?? 'N/A';
     final uid = profile['uid'] ?? '';
     final isTestProfile = profile['isTestProfile'] ?? false;
+    final isVerified = profile['isVerified'] ?? false;
     
     final pointsController = TextEditingController();
+    final nameController = TextEditingController(text: name);
     
     return FutureBuilder<Map<String, dynamic>?>(
       future: _firestore.collection('rewards_stats').doc(uid).get().then((doc) => doc.data()),
@@ -573,6 +741,221 @@ class _BulkLeaderboardControlScreenState extends State<BulkLeaderboardControlScr
                       minimumSize: const Size(double.infinity, 40),
                     ),
                   ),
+                const SizedBox(height: 12),
+                
+                // Edit Name
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: nameController,
+                        decoration: InputDecoration(
+                          labelText: 'Edit Name',
+                          hintText: 'Enter new name',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          prefixIcon: const Icon(Icons.person),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        if (nameController.text.trim().isNotEmpty) {
+                          _updateUserName(uid, nameController.text.trim());
+                        } else {
+                          _showError('Please enter a name');
+                        }
+                      },
+                      icon: const Icon(Icons.check, size: 18),
+                      label: const Text('Save'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                
+                // Verified Toggle
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: isVerified ? Colors.blue.shade50 : Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isVerified ? Colors.blue.shade200 : Colors.grey.shade300,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.verified,
+                                  color: isVerified ? Colors.blue : Colors.grey,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  isVerified ? 'Verified' : 'Not Verified',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: isVerified ? Colors.blue : Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Switch(
+                              value: isVerified,
+                              onChanged: (value) {
+                                _toggleVerification(uid, value);
+                              },
+                              activeColor: Colors.blue,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                
+                // Upload Photo Button
+                ElevatedButton.icon(
+                  onPressed: () {
+                    _uploadUserPhoto(uid, name);
+                  },
+                  icon: const Icon(Icons.add_photo_alternate, size: 18),
+                  label: const Text('Add Photo'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.teal,
+                    minimumSize: const Size(double.infinity, 40),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                
+                // Display User Photos
+                if ((profile['photos'] as List?)?.isNotEmpty == true)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'User Photos',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        height: 120,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: (profile['photos'] as List).length,
+                          itemBuilder: (context, photoIndex) {
+                            final photoUrl = (profile['photos'] as List)[photoIndex];
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: Stack(
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.network(
+                                      photoUrl,
+                                      width: 100,
+                                      height: 120,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return Container(
+                                          width: 100,
+                                          height: 120,
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey.shade300,
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: const Icon(Icons.broken_image),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                  Positioned(
+                                    top: 4,
+                                    right: 4,
+                                    child: GestureDetector(
+                                      onTap: () {
+                                        showDialog(
+                                          context: context,
+                                          builder: (context) => AlertDialog(
+                                            title: const Text('Delete Photo'),
+                                            content: const Text(
+                                              'Are you sure you want to delete this photo?',
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(context),
+                                                child: const Text('Cancel'),
+                                              ),
+                                              ElevatedButton(
+                                                onPressed: () {
+                                                  Navigator.pop(context);
+                                                  _deleteUserPhoto(uid, photoUrl, name);
+                                                },
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Colors.red,
+                                                ),
+                                                child: const Text('Delete'),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: Colors.red,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        padding: const EdgeInsets.all(4),
+                                        child: const Icon(
+                                          Icons.close,
+                                          color: Colors.white,
+                                          size: 16,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                  ),
+                
+                // Delete User Button
+                ElevatedButton.icon(
+                  onPressed: () {
+                    _showDeleteConfirmation(uid, name);
+                  },
+                  icon: const Icon(Icons.delete_forever, size: 18),
+                  label: const Text('Delete User'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    minimumSize: const Size(double.infinity, 40),
+                  ),
+                ),
               ],
             ),
           ),

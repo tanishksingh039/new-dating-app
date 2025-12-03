@@ -16,8 +16,8 @@ class DetailedProfileScreen extends StatefulWidget {
 class _DetailedProfileScreenState extends State<DetailedProfileScreen> {
   final _jobController = TextEditingController();
   final _companyController = TextEditingController();
-  final _schoolController = TextEditingController();
   
+  String? _selectedCourseStream;
   String? _selectedEducation;
   int _selectedHeight = 170; // Default height in cm
   String? _selectedDrinking;
@@ -57,7 +57,6 @@ class _DetailedProfileScreenState extends State<DetailedProfileScreen> {
   void dispose() {
     _jobController.dispose();
     _companyController.dispose();
-    _schoolController.dispose();
     super.dispose();
   }
 
@@ -82,7 +81,7 @@ class _DetailedProfileScreenState extends State<DetailedProfileScreen> {
         stepData: {
           'jobTitle': _jobController.text.trim(),
           'company': _companyController.text.trim(),
-          'school': _schoolController.text.trim(),
+          'courseStream': _selectedCourseStream,
           'education': _selectedEducation,
           'height': _selectedHeight,
           'drinking': _selectedDrinking,
@@ -205,10 +204,15 @@ class _DetailedProfileScreenState extends State<DetailedProfileScreen> {
                             _buildSectionTitle('🎓', 'Education'),
                             const SizedBox(height: 16),
                             
-                            _buildTextField(
-                              controller: _schoolController,
+                            _buildDropdown(
                               label: 'Course/Stream',
-                              hint: 'e.g. Bachelors in computer science ',
+                              value: _selectedCourseStream,
+                              items: AppConstants.courseStreamOptions,
+                              onChanged: (value) {
+                                setState(() {
+                                  _selectedCourseStream = value;
+                                });
+                              },
                               optional: true,
                             ),
                             const SizedBox(height: 16),

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'services/notification_service.dart';
@@ -144,6 +145,14 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    
+    // Initialize Firebase Analytics
+    try {
+      await FirebaseAnalytics.instance.logAppOpen();
+      debugPrint('✅ Firebase Analytics initialized');
+    } catch (e) {
+      debugPrint('⚠️ Firebase Analytics init failed: $e');
+    }
     
     // Start Firestore monitoring (debug mode only)
     if (kDebugMode) {

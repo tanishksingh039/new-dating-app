@@ -5,6 +5,7 @@ class DiscoveryFilters {
   final List<String> interests; // Filter by specific interests
   final bool showVerifiedOnly;
   final String? education; // Filter by education level
+  final String? courseStream; // Filter by course/stream
 
   DiscoveryFilters({
     this.minAge = 18,
@@ -13,6 +14,7 @@ class DiscoveryFilters {
     this.interests = const [],
     this.showVerifiedOnly = false,
     this.education,
+    this.courseStream,
   });
 
   // Convert to Map for storage
@@ -24,6 +26,7 @@ class DiscoveryFilters {
       'interests': interests,
       'showVerifiedOnly': showVerifiedOnly,
       'education': education,
+      'courseStream': courseStream,
     };
   }
 
@@ -36,6 +39,7 @@ class DiscoveryFilters {
       interests: List<String>.from(map['interests'] ?? []),
       showVerifiedOnly: map['showVerifiedOnly'] ?? false,
       education: map['education'],
+      courseStream: map['courseStream'],
     );
   }
 
@@ -47,6 +51,7 @@ class DiscoveryFilters {
     List<String>? interests,
     bool? showVerifiedOnly,
     String? education,
+    String? courseStream,
   }) {
     return DiscoveryFilters(
       minAge: minAge ?? this.minAge,
@@ -55,6 +60,7 @@ class DiscoveryFilters {
       interests: interests ?? this.interests,
       showVerifiedOnly: showVerifiedOnly ?? this.showVerifiedOnly,
       education: education ?? this.education,
+      courseStream: courseStream ?? this.courseStream,
     );
   }
 
@@ -65,7 +71,8 @@ class DiscoveryFilters {
         maxDistance != null ||
         interests.isNotEmpty ||
         showVerifiedOnly ||
-        education != null;
+        education != null ||
+        courseStream != null;
   }
 
   // Reset to default values

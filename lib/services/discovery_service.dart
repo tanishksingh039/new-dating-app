@@ -26,30 +26,21 @@ class DiscoveryService {
 
       final currentUser = UserModel.fromMap(currentUserDoc.data()!);
       final prefs = currentUser.preferences;
-      final currentUserGender = currentUser.gender;
+      final currentUserGender = currentUser.gender.trim().toLowerCase();
+
+      debugPrint('🔍 Current user gender: "$currentUserGender" (raw: "${currentUser.gender}")');
+      debugPrint('🔍 Filters applied: ${filters?.toMap()}');
+      debugPrint('🔍 Has active filters: ${filters?.hasActiveFilters}');
 
       // Get user's swipe history to exclude already swiped profiles
       final swipeHistory = await _getSwipeHistory(currentUserId);
       
-      // Build query - try both onboarding field names for compatibility
-      Query query = _firestore
-          .collection('users')
-          .where('uid', isNotEqualTo: currentUserId);
-
-      // AUTOMATIC FILTER: Show opposite gender only (Male sees Female, Female sees Male)
-      // This is ALWAYS applied by default
-      if (currentUserGender == 'Male') {
-        query = query.where('gender', isEqualTo: 'Female');
-        debugPrint('Gender filter: Male user, showing Females only');
-      } else if (currentUserGender == 'Female') {
-        query = query.where('gender', isEqualTo: 'Male');
-        debugPrint('Gender filter: Female user, showing Males only');
-      }
-      // If gender is not Male/Female, show all (no gender filter)
+      // Build query - no gender filter in query (will filter in code for case-insensitive matching)
+      Query query = _firestore.collection('users');
 
       // Get potential matches
       debugPrint('Fetching users from Firestore...');
-      final snapshot = await query.limit(50).get();
+      final snapshot = await query.limit(200).get();
       debugPrint('Found ${snapshot.docs.length} potential users');
 
       // Convert to UserModel and apply additional filters
@@ -63,13 +54,22 @@ class DiscoveryService {
           }
           final user = UserModel.fromMap(data);
 
-          // Check onboarding completion (check both possible field names)
-          final isOnboardingComplete = data['onboardingCompleted'] == true || 
-                                       data['isOnboardingComplete'] == true;
-          if (!isOnboardingComplete) {
-            debugPrint('Skipping user ${user.uid}: onboarding not complete');
+          // Skip current user
+          if (user.uid == currentUserId) {
+            debugPrint('Skipping user ${user.uid}: current user');
             continue;
           }
+
+          // AUTOMATIC FILTER: Show opposite gender only (case-insensitive)
+          final userGender = user.gender.trim().toLowerCase();
+          if (currentUserGender == 'male' && userGender != 'female') {
+            debugPrint('Skipping user ${user.uid}: gender mismatch (male user needs female)');
+            continue;
+          } else if (currentUserGender == 'female' && userGender != 'male') {
+            debugPrint('Skipping user ${user.uid}: gender mismatch (female user needs male)');
+            continue;
+          }
+          debugPrint('✅ Gender match: $currentUserGender ↔ $userGender');
 
           // Skip if already swiped
           if (swipeHistory.contains(user.uid)) {
@@ -83,22 +83,13 @@ class DiscoveryService {
             continue;
           }
 
-          // Filter by age range ONLY if filters are explicitly provided
-          // Do NOT auto-apply user preferences - show all ages by default
-          int minAge = 18;
-          int maxAge = 100;
-          
-          if (filters != null) {
-            // Only apply age filter if explicitly set by user
-            minAge = filters.minAge;
-            maxAge = filters.maxAge;
-          }
-          // Removed: Do NOT use prefs['ageRange'] automatically
-          
-          final userAge = _calculateAge(user.dateOfBirth!);
-          if (userAge < minAge || userAge > maxAge) {
-            debugPrint('Skipping user ${user.uid}: age $userAge not in range $minAge-$maxAge');
-            continue;
+          // Filter by age range ONLY if filters are explicitly provided and have active filters
+          if (filters != null && filters.hasActiveFilters) {
+            final userAge = _calculateAge(user.dateOfBirth!);
+            if (userAge < filters.minAge || userAge > filters.maxAge) {
+              debugPrint('Skipping user ${user.uid}: age $userAge not in range ${filters.minAge}-${filters.maxAge}');
+              continue;
+            }
           }
 
           // Filter by verified status
@@ -107,13 +98,37 @@ class DiscoveryService {
             continue;
           }
 
-          // Filter by education level
+          // Filter by education level (only if user has an education value)
           if (filters?.education != null) {
             final userEducation = data['education'] as String?;
-            if (userEducation != filters!.education) {
-              debugPrint('Skipping user ${user.uid}: education mismatch');
+            debugPrint('Education filter: user=$userEducation, filter=${filters!.education}');
+            
+            // Only skip if user has education AND it doesn't match
+            if (userEducation != null && userEducation != filters!.education) {
+              debugPrint('Skipping user ${user.uid}: education mismatch ($userEducation != ${filters!.education})');
               continue;
             }
+            
+            // If user doesn't have education, show them anyway
+            if (userEducation == null) {
+              debugPrint('⚠️ User ${user.uid} has no education set, showing anyway');
+            } else {
+              debugPrint('✅ Education match: $userEducation');
+            }
+          }
+
+          // Filter by course/stream - STRICT matching
+          if (filters?.courseStream != null) {
+            final userCourseStream = data['courseStream'] as String?;
+            debugPrint('Course filter: user=$userCourseStream, filter=${filters!.courseStream}');
+            
+            // Skip if user doesn't have courseStream OR it doesn't match
+            if (userCourseStream == null || userCourseStream != filters!.courseStream) {
+              debugPrint('Skipping user ${user.uid}: course/stream mismatch ($userCourseStream != ${filters!.courseStream})');
+              continue;
+            }
+            
+            debugPrint('✅ Course/Stream match: $userCourseStream');
           }
 
           // Filter by interests
@@ -135,12 +150,7 @@ class DiscoveryService {
             debugPrint('Distance filtering not yet implemented');
           }
 
-          // Skip if no photos
-          if (user.photos.isEmpty) {
-            debugPrint('Skipping user ${user.uid}: no photos');
-            continue;
-          }
-
+          // Show all profiles regardless of photos
           profiles.add(user);
         } catch (e) {
           debugPrint('Error processing user document ${doc.id}: $e');

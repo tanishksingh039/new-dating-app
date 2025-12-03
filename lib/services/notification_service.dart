@@ -288,9 +288,18 @@ class NotificationService {
     String? senderPhoto,
   }) async {
     try {
+      // Check if recipient is premium
+      final targetUserDoc = await _firestore.collection('users').doc(targetUserId).get();
+      final isPremium = targetUserDoc.data()?['isPremium'] ?? false;
+      
+      // Only show sender name if user is premium
+      final notificationTitle = isPremium ? '💬 $senderName' : '💬 New Message';
+      
+      debugPrint('[NotificationService] Message notification - Premium: $isPremium, Title: $notificationTitle');
+      
       await _sendNotificationToUser(
         userId: targetUserId,
-        title: '💬 $senderName',
+        title: notificationTitle,
         body: messagePreview,
         data: {
           'type': 'message',

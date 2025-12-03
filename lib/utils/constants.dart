@@ -175,6 +175,39 @@ class AppConstants {
     'Trade School',
     'Prefer not to say',
   ];
+
+  // ==================== COURSE/STREAM OPTIONS ====================
+  
+  static const List<String> courseStreamOptions = [
+    // Bachelor Degrees
+    'B.Tech (Bachelor of Technology)',
+    'B.Sc. (Bachelor of Science)',
+    'B.Sc. (Hons) (Bachelor of Science Honours)',
+    'B.Com (Hons) (Bachelor of Commerce Honours)',
+    'BBA (Bachelor of Business Administration)',
+    'BCA (Bachelor of Computer Applications)',
+    'B.Pharmacy',
+    'BA (Bachelor of Arts)',
+    'BA (Hons) (Bachelor of Arts Honours)',
+    'B.Design',
+    'B.Sc. Hospitality and Hotel Administration',
+    'BA LLB (Integrated Law Program)',
+    'BBA LLB (Integrated Law Program)',
+    'LLB (Bachelor of Laws)',
+    
+    // Master Degrees
+    'MBA (Master of Business Administration)',
+    'M.Tech (Master of Technology)',
+    'M.Sc. (Master of Science)',
+    'M.Pharm (Master of Pharmacy)',
+    'MA (Master of Arts)',
+    'MCA (Master of Computer Applications)',
+    'LLM (Master of Laws)',
+    
+    // Doctorate
+    'PhD',
+    'Others',
+  ];
   
   // ==================== VALIDATION ====================
   
