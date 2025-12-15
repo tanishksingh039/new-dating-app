@@ -135,7 +135,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
                           // Tagline
                           Text(
-                            'Find your perfect match\non campus',
+                            'Where connections meets compatibility',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 18,

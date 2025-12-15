@@ -125,14 +125,14 @@ class ActionButtons extends StatelessWidget {
         height: 55,
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [Color(0xFF9B59B6), Color(0xFF8E44AD)],
+            colors: [Color(0xFFE91E63), Color(0xFF9C27B0)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF9B59B6).withOpacity(0.4),
+              color: const Color(0xFFE91E63).withOpacity(0.5),
               blurRadius: 15,
               offset: const Offset(0, 5),
             ),
@@ -140,7 +140,7 @@ class ActionButtons extends StatelessWidget {
         ),
         child: const Center(
           child: Icon(
-            Icons.flash_on,
+            Icons.workspace_premium,
             color: Colors.white,
             size: 28,
           ),

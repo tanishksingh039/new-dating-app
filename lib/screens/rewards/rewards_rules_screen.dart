@@ -9,7 +9,7 @@ class RewardsRulesScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Rules & Privacy'),
+        title: const Text('How This Works'),
         backgroundColor: Colors.purple,
         foregroundColor: Colors.white,
       ),
@@ -61,7 +61,7 @@ class RewardsRulesScreen extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               const Text(
-                'How Scoring Works',
+                'Your Presence Matters',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -71,7 +71,7 @@ class RewardsRulesScreen extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           const Text(
-            'Earn points through active engagement with users:',
+            'Your authentic presence naturally reflects in the community:',
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w600,
@@ -80,38 +80,38 @@ class RewardsRulesScreen extends StatelessWidget {
           const SizedBox(height: 12),
           _buildPointRow(
             Icons.message,
-            'Send a message',
-            'Points vary',
+            'Meaningful conversations',
+            'Recognized',
             Colors.blue,
           ),
           _buildPointRow(
             Icons.reply,
-            'Give a reply',
-            'Points vary',
+            'Thoughtful responses',
+            'Appreciated',
             Colors.green,
           ),
           _buildPointRow(
             Icons.image,
-            'Send an image',
-            'Points vary',
+            'Sharing your authentic self',
+            'Celebrated',
             Colors.orange,
           ),
           _buildPointRow(
             Icons.thumb_up,
-            'Receive positive feedback',
-            'Bonus points',
+            'Connections that resonate',
+            'Highlighted',
             Colors.pink,
           ),
           _buildPointRow(
             Icons.local_fire_department,
-            'Daily streak bonus',
-            'Bonus points',
+            'Consistent daily and weekly streaks',
+            'Valued',
             Colors.red,
           ),
           _buildPointRow(
             Icons.emoji_events,
-            'Weekly streak bonus',
-            'Very high points',
+            'Building community',
+            'Celebrated',
             Colors.amber,
           ),
           const SizedBox(height: 16),
@@ -128,7 +128,7 @@ class RewardsRulesScreen extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Scores reset monthly. Keep engaging to stay on top!',
+                    'Each month brings a fresh start—your presence is always welcome.',
                     style: TextStyle(
                       fontSize: 13,
                       color: Colors.blue.shade900,
@@ -209,7 +209,7 @@ class RewardsRulesScreen extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               const Text(
-                'Eligibility Rules',
+                'Who Can Join',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -218,13 +218,13 @@ class RewardsRulesScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 20),
-          _buildRuleItem('Only female accounts can participate in the rewards program'),
-          _buildRuleItem('Account must be verified to claim rewards'),
-          _buildRuleItem('Minimum score threshold applies for each reward tier'),
-          _buildRuleItem('Rankings are based on monthly scores'),
-          _buildRuleItem('Top 10 users are eligible for premium rewards that include Amazon Gift Voucher worth upto 5000 Rupees,Play Store Redeem Codes, OTT Subscription(Netflix, Hotstar, etc.),  and many more'),
-          _buildRuleItem('Rewards are distributed at the end of each month'),
-          _buildRuleItem('One reward per user per month'),
+          _buildRuleItem('This space is created for women who enjoy authentic social connection'),
+          _buildRuleItem('Verification helps keep our community safe and genuine'),
+          _buildRuleItem('Meaningful engagement is what matters most'),
+          _buildRuleItem('Recognition is based on monthly community participation'),
+          _buildRuleItem('Top 10 members receive appreciation through rewards including Amazon Gift Vouchers up to ₹5000, Play Store Codes, OTT Subscriptions (Netflix, Hotstar, etc.), and more'),
+          _buildRuleItem('Rewards celebrate your contribution at the end of each month'),
+          _buildRuleItem('Each person receives one appreciation reward per month'),
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(12),
@@ -239,7 +239,7 @@ class RewardsRulesScreen extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Maintain your rank to stay eligible for rewards!',
+                    'Your authentic presence is what makes this community special.',
                     style: TextStyle(
                       fontSize: 13,
                       color: Colors.amber.shade900,
@@ -315,7 +315,7 @@ class RewardsRulesScreen extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               const Text(
-                'Moderation & Appeals',
+                'Keeping This Space Safe',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -325,20 +325,20 @@ class RewardsRulesScreen extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           _buildModerationItem(
-            'Fair Play',
-            'All activities are monitored to ensure fair play. Any form of cheating or manipulation will result in disqualification.',
+            'Authentic Community',
+            'We protect this space by ensuring interactions are genuine and respectful. We care about quality over quantity.',
           ),
           _buildModerationItem(
-            'Quality Engagement',
-            'Points are awarded based on engagement quality and authenticity. Our system analyzes various factors to ensure fair scoring. Low-quality or suspicious activity may be penalized.',
+            'What We Value',
+            'Recognition goes to those who engage authentically. We celebrate meaningful conversations and real connections.',
           ),
           _buildModerationItem(
-            'Appeals Process',
-            'If you believe your score is incorrect, you can submit an appeal through the support section within 7 days.',
+            'If Something Feels Off',
+            'We\'re here to help. If you have concerns about your recognition, reach out through support within 7 days.',
           ),
           _buildModerationItem(
-            'Violations',
-            'Repeated violations of community guidelines may result in permanent removal from the rewards program.',
+            'Community Guidelines',
+            'We ask everyone to keep this space respectful and kind. Repeated disrespect affects your ability to participate.',
           ),
         ],
       ),
@@ -405,7 +405,7 @@ class RewardsRulesScreen extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               const Text(
-                'Privacy & Data',
+                'Your Control & Privacy',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -415,39 +415,76 @@ class RewardsRulesScreen extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           _buildPrivacyItem(
-            'Leaderboard Visibility',
-            'Your name and profile picture will be visible on the leaderboard if you\'re in the top 20.',
+            'Your Visibility, Your Choice',
+            'If you\'re in the top 20, your name and photo appear on the leaderboard. You can adjust your visibility preferences anytime.',
           ),
           _buildPrivacyItem(
-            'Stats Privacy',
-            'Your detailed stats are private and only visible to you.',
+            'Your Stats Are Yours',
+            'Only you see your detailed activity. It\'s private, personal, and never shared.',
           ),
           _buildPrivacyItem(
-            'Data Usage',
-            'Engagement data is used solely for calculating scores and improving the rewards program.',
+            'How We Use Your Data',
+            'We use your engagement to recognize your presence and improve this community. Your data is never sold or exploited.',
           ),
           _buildPrivacyItem(
-            'Opt-Out',
-            'You can opt out of the rewards program at any time through settings.',
+            'Step Back Anytime',
+            'Participation is always optional. You can pause or leave the program whenever you want through settings.',
+          ),
+          _buildPrivacyItem(
+            'Your Right to Silence',
+            'You can opt out of the leaderboard completely. When you do, your chats continue normally, but nothing is counted toward visibility or scores. It\'s like stepping into a quiet space where you can just be.',
+          ),
+          _buildPrivacyItem(
+            'What Happens When You Opt Out',
+            'Your name, photo, and rank disappear from the leaderboard. No activity is analyzed for leaderboard purposes. No scores are calculated. You\'re completely invisible to the ranking system—and that\'s perfectly okay.',
+          ),
+          _buildPrivacyItem(
+            'Your Presence, Your Choice',
+            'Choosing privacy is choosing peace. There\'s no judgment, no pressure, and no consequences. You can opt back in whenever you\'re ready, or stay silent forever. It\'s entirely up to you.',
           ),
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.red.shade50,
+              color: Colors.purple.shade50,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.red.shade200),
+              border: Border.all(color: Colors.purple.shade200),
             ),
             child: Row(
               children: [
-                Icon(Icons.warning_amber, color: Colors.red.shade700, size: 20),
+                Icon(Icons.favorite, color: Colors.purple.shade700, size: 20),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Never share your reward codes publicly. They are for personal use only.',
+                    'Your comfort matters more than any leaderboard. Choose what feels right for you.',
                     style: TextStyle(
                       fontSize: 13,
-                      color: Colors.red.shade900,
+                      color: Colors.purple.shade900,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.blue.shade200),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Keep your reward codes private—they\'re just for you.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.blue.shade900,
                     ),
                   ),
                 ),

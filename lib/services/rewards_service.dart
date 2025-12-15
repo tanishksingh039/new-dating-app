@@ -7,6 +7,8 @@ import '../models/conversation_health_score_model.dart';
 import 'message_content_analyzer.dart';
 import 'face_detection_service.dart';
 import 'conversation_health_service.dart';
+import 'leaderboard_anti_farming_service.dart';
+import 'leaderboard_optout_service.dart';
 
 class RewardsService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -122,31 +124,57 @@ class RewardsService {
     }
   }
   
-  // Get monthly leaderboard REAL-TIME stream (updates automatically)
+  // Get monthly leaderboard REAL-TIME stream (updates automatically) - OPTIMIZED
   Stream<List<LeaderboardEntry>> getMonthlyLeaderboardStream() {
-    print('[RewardsService] 🔄 getMonthlyLeaderboardStream CREATED');
+    print('[RewardsService] 🔄 getMonthlyLeaderboardStream CREATED - OPTIMIZED VERSION');
     return _firestore
         .collection('rewards_stats')
         .orderBy('monthlyScore', descending: true)
         .limit(20)
         .snapshots()
-        .asyncMap((snapshot) async {
+        .asyncMap<List<LeaderboardEntry>>((snapshot) async {
           print('[RewardsService] 📡 Real-time update received: ${snapshot.docs.length} documents');
+          
+          if (snapshot.docs.isEmpty) {
+            print('[RewardsService] ℹ️ No leaderboard data');
+            return [];
+          }
+          
+          // Extract all user IDs from rewards_stats
+          final userIds = snapshot.docs
+              .map((doc) => UserRewardsStats.fromMap(doc.data()).userId)
+              .toList();
+          
+          print('[RewardsService] 📋 Fetching ${userIds.length} user documents in batch...');
+          
+          // Batch fetch all user documents at once (much faster than individual calls)
+          final userDocs = await Future.wait(
+            userIds.map((userId) => _firestore.collection('users').doc(userId).get()),
+            eagerError: false,
+          );
+          
+          print('[RewardsService] ✅ Batch fetch completed');
+          
           List<LeaderboardEntry> leaderboard = [];
           int rank = 1;
           int skipped = 0;
+          int optedOut = 0;
 
-          for (var doc in snapshot.docs) {
-            final stats = UserRewardsStats.fromMap(doc.data());
+          for (int i = 0; i < snapshot.docs.length; i++) {
+            final stats = UserRewardsStats.fromMap(snapshot.docs[i].data());
+            final userDoc = userDocs[i];
             
-            // Get user details
-            final userDoc = await _firestore
-                .collection('users')
-                .doc(stats.userId)
-                .get();
-                
             if (userDoc.exists) {
               final user = UserModel.fromMap(userDoc.data()!);
+              
+              // Check if user has opted out of leaderboard
+              final isOptedOut = (user.isOptedOutOfLeaderboard ?? false);
+              if (isOptedOut) {
+                print('[RewardsService] 🔇 Skipping opted-out user: ${stats.userId}');
+                optedOut++;
+                continue;
+              }
+              
               leaderboard.add(LeaderboardEntry(
                 userId: stats.userId,
                 userName: user.name,
@@ -162,13 +190,8 @@ class RewardsService {
             }
           }
 
-          print('[RewardsService] ✅ Real-time leaderboard updated: ${leaderboard.length} entries');
+          print('[RewardsService] ✅ Real-time leaderboard updated: ${leaderboard.length} entries, $skipped skipped');
           return leaderboard;
-        })
-        .handleError((e, stackTrace) {
-          print('[RewardsService] ❌ ERROR in leaderboard stream: $e');
-          print('[RewardsService] ❌ Stack trace: $stackTrace');
-          return [];
         });
   }
 
@@ -249,20 +272,58 @@ class RewardsService {
     }
   }
 
-  // Award points for message sent (with quality check)
+  // Award points for message sent (with quality check and anti-farming limits)
   Future<void> awardMessagePoints(
     String userId,
     String conversationId,
-    String messageText,
-  ) async {
+    String messageText, {
+    String? otherUserId,
+  }) async {
     print('═══════════════════════════════════════════════════════════');
     print('[RewardsService] 🔄 awardMessagePoints STARTED');
     print('[RewardsService] userId: $userId');
+    print('[RewardsService] otherUserId: $otherUserId');
     print('[RewardsService] conversationId: $conversationId');
     print('[RewardsService] messageText: $messageText');
     print('═══════════════════════════════════════════════════════════');
     
     try {
+      // Check if user has opted out of leaderboard
+      print('[RewardsService] 🔍 Checking opt-out status...');
+      final optOutService = LeaderboardOptOutService();
+      final isOptedOut = await optOutService.isOptedOut(userId);
+      
+      if (isOptedOut) {
+        print('[RewardsService] 🔇 USER OPTED OUT: User has opted out of leaderboard - no points awarded');
+        debugPrint('⏭️ User opted out of leaderboard - no points awarded');
+        return;
+      }
+      print('[RewardsService] ✅ User is opted in to leaderboard');
+
+      // Check anti-farming limits (if otherUserId is provided)
+      if (otherUserId != null && otherUserId.isNotEmpty) {
+        print('[RewardsService] 🛡️ Checking anti-farming limits...');
+        final antiArmingService = LeaderboardAntiArmingService();
+        final canEarnPoints = await antiArmingService.canEarnPointsWithUser(userId, otherUserId);
+        
+        if (!canEarnPoints) {
+          print('[RewardsService] ❌ ANTI-FARMING CAP: User has reached 35-minute cap with this user in current window');
+          debugPrint('❌ Anti-farming cap reached - no points awarded');
+          return;
+        }
+        print('[RewardsService] ✅ Anti-farming check passed');
+      }
+
+      // Check for two-way conversation (both users must have sent messages)
+      print('[RewardsService] 🔄 Checking two-way conversation...');
+      final isTwoWay = await _isTwoWayConversation(conversationId, userId, otherUserId);
+      if (!isTwoWay) {
+        print('[RewardsService] ❌ ONE-SIDED CONVERSATION: Other user has not replied yet - no points awarded');
+        debugPrint('❌ One-sided conversation - waiting for reply from other user');
+        return;
+      }
+      print('[RewardsService] ✅ Two-way conversation confirmed');
+
       // Check rate limits
       print('[RewardsService] 📊 Fetching message tracking...');
       final tracking = await _getMessageTracking(userId, conversationId);
@@ -368,12 +429,13 @@ class RewardsService {
     }
   }
 
-  // Award points for image sent (with rate limiting and face verification)
+  // Award points for image sent (with rate limiting, face verification, and anti-farming limits)
   Future<void> awardImagePoints(
     String userId,
     String conversationId,
     String imagePath, {
     String? profileImagePath,
+    String? otherUserId,
   }) async {
     print('═══════════════════════════════════════════════════════════');
     print('[RewardsService] 🔄 awardImagePoints STARTED');
@@ -382,6 +444,42 @@ class RewardsService {
     print('═══════════════════════════════════════════════════════════');
     
     try {
+      // Check if user has opted out of leaderboard
+      print('[RewardsService] 🔍 Checking opt-out status for image...');
+      final optOutService = LeaderboardOptOutService();
+      final isOptedOut = await optOutService.isOptedOut(userId);
+      
+      if (isOptedOut) {
+        print('[RewardsService] 🔇 USER OPTED OUT: User has opted out of leaderboard - no points awarded');
+        debugPrint('⏭️ User opted out of leaderboard - no points awarded');
+        return;
+      }
+      print('[RewardsService] ✅ User is opted in to leaderboard');
+
+      // Check anti-farming limits (if otherUserId is provided)
+      if (otherUserId != null && otherUserId.isNotEmpty) {
+        print('[RewardsService] 🛡️ Checking anti-farming limits for image...');
+        final antiArmingService = LeaderboardAntiArmingService();
+        final canEarnPoints = await antiArmingService.canEarnPointsWithUser(userId, otherUserId);
+        
+        if (!canEarnPoints) {
+          print('[RewardsService] ❌ ANTI-FARMING CAP: User has reached 35-minute cap with this user in current window');
+          debugPrint('❌ Anti-farming cap reached - no points awarded');
+          return;
+        }
+        print('[RewardsService] ✅ Anti-farming check passed for image');
+      }
+
+      // Check for two-way conversation (both users must have sent messages)
+      print('[RewardsService] 🔄 Checking two-way conversation for image...');
+      final isTwoWay = await _isTwoWayConversation(conversationId, userId, otherUserId);
+      if (!isTwoWay) {
+        print('[RewardsService] ❌ ONE-SIDED CONVERSATION: Other user has not replied yet - no image points awarded');
+        debugPrint('❌ One-sided conversation - waiting for reply from other user');
+        return;
+      }
+      print('[RewardsService] ✅ Two-way conversation confirmed for image');
+
       // Check image rate limits
       print('[RewardsService] 📊 Checking image rate limits...');
       final tracking = await _getMessageTracking(userId, conversationId);
@@ -406,35 +504,40 @@ class RewardsService {
         return;
       }
 
-      // If profile image is provided, compare faces for similarity
-      if (profileImagePath != null && profileImagePath.isNotEmpty) {
-        try {
-          print('[RewardsService] 🔍 Comparing faces with profile image...');
-          final comparisonResult = await faceDetectionService.compareFaces(
-            profileImagePath,
-            imagePath,
-          );
-          print('[RewardsService] ✅ Face comparison result: isMatch=${comparisonResult.isMatch}, similarity=${comparisonResult.similarity}');
-          
-          if (!comparisonResult.isMatch) {
-            print('[RewardsService] ❌ FACE MISMATCH: Face does not match profile - no points awarded (similarity: ${comparisonResult.similarity})');
-            debugPrint('❌ Face does not match profile - no points awarded');
-            debugPrint('   Similarity: ${comparisonResult.similarity}');
-            faceDetectionService.dispose();
-            return;
-          }
-          
-          print('[RewardsService] ✅ FACE MATCH: Face matches profile! Similarity: ${comparisonResult.similarity}');
-          debugPrint('✅ Face matches profile! Similarity: ${comparisonResult.similarity}');
-        } catch (e) {
-          print('[RewardsService] ❌ FACE COMPARISON ERROR: Error comparing faces - no points awarded');
-          debugPrint('❌ Error comparing faces - no points awarded: $e');
+      // MANDATORY: Compare faces with profile image to verify identity
+      if (profileImagePath == null || profileImagePath.isEmpty) {
+        print('[RewardsService] ❌ FACE VERIFICATION FAILED: No profile image provided - cannot verify identity - no points awarded');
+        debugPrint('❌ No profile image available for verification - no points awarded');
+        faceDetectionService.dispose();
+        return;
+      }
+      
+      try {
+        print('[RewardsService] 🔍 MANDATORY FACE VERIFICATION: Comparing sent image with profile image...');
+        final comparisonResult = await faceDetectionService.compareFaces(
+          profileImagePath,
+          imagePath,
+        );
+        print('[RewardsService] 📊 Face comparison result: isMatch=${comparisonResult.isMatch}, similarity=${comparisonResult.similarity}');
+        
+        if (!comparisonResult.isMatch) {
+          print('[RewardsService] ❌ FACE MISMATCH: Sent image face does NOT match profile picture - no points awarded');
+          print('[RewardsService] ❌ Similarity score: ${comparisonResult.similarity} (required: > 0.5)');
+          debugPrint('❌ Face does not match profile - no points awarded');
+          debugPrint('   Similarity: ${comparisonResult.similarity}');
           faceDetectionService.dispose();
           return;
         }
-      } else {
-        print('[RewardsService] ✅ Face detected in image (${faceResult.faceCount} face(s))');
-        debugPrint('✅ Face detected in image (${faceResult.faceCount} face(s))');
+        
+        print('[RewardsService] ✅ FACE VERIFIED: Sent image face MATCHES profile picture!');
+        print('[RewardsService] ✅ Similarity score: ${comparisonResult.similarity} (threshold: 0.5)');
+        debugPrint('✅ Face matches profile! Similarity: ${comparisonResult.similarity}');
+      } catch (e) {
+        print('[RewardsService] ❌ FACE VERIFICATION ERROR: Error comparing faces - no points awarded');
+        print('[RewardsService] ❌ Error details: $e');
+        debugPrint('❌ Error comparing faces - no points awarded: $e');
+        faceDetectionService.dispose();
+        return;
       }
 
       faceDetectionService.dispose();
@@ -732,6 +835,69 @@ class RewardsService {
     }
   }
 
+  // Check if conversation is two-way (both users have sent messages)
+  Future<bool> _isTwoWayConversation(
+    String conversationId,
+    String currentUserId,
+    String? otherUserId,
+  ) async {
+    try {
+      // If otherUserId is not provided, we can't check - allow points
+      if (otherUserId == null || otherUserId.isEmpty) {
+        print('[RewardsService] ⚠️ No otherUserId provided - skipping two-way check');
+        return true;
+      }
+
+      print('[RewardsService] 🔍 Checking messages in conversation: $conversationId');
+      
+      // Get messages from the conversation
+      final messagesSnapshot = await _firestore
+          .collection('chats')
+          .doc(conversationId)
+          .collection('messages')
+          .orderBy('timestamp', descending: true)
+          .limit(50) // Check last 50 messages
+          .get();
+
+      if (messagesSnapshot.docs.isEmpty) {
+        print('[RewardsService] ⚠️ No messages found in conversation');
+        return false;
+      }
+
+      // Check if other user has sent at least one message
+      bool otherUserHasSent = false;
+      bool currentUserHasSent = false;
+
+      for (var doc in messagesSnapshot.docs) {
+        final senderId = doc.data()['senderId'] as String?;
+        
+        if (senderId == otherUserId) {
+          otherUserHasSent = true;
+        }
+        if (senderId == currentUserId) {
+          currentUserHasSent = true;
+        }
+
+        // If both have sent messages, it's a two-way conversation
+        if (otherUserHasSent && currentUserHasSent) {
+          print('[RewardsService] ✅ Two-way conversation detected');
+          print('[RewardsService]    Current user sent: $currentUserHasSent');
+          print('[RewardsService]    Other user sent: $otherUserHasSent');
+          return true;
+        }
+      }
+
+      print('[RewardsService] ❌ One-sided conversation detected');
+      print('[RewardsService]    Current user sent: $currentUserHasSent');
+      print('[RewardsService]    Other user sent: $otherUserHasSent');
+      return false;
+    } catch (e) {
+      print('[RewardsService] ❌ Error checking two-way conversation: $e');
+      // On error, default to allowing points (fail-open)
+      return true;
+    }
+  }
+
   // Get message tracking for rate limiting and duplicate detection
   Future<MessageTracking?> _getMessageTracking(String userId, String conversationId) async {
     try {
@@ -895,48 +1061,70 @@ class RewardsService {
     }
   }
 
-  // Get real-time stream of user's rank among girls
+  // Get real-time stream of user's rank among girls - OPTIMIZED
+  // Uses periodic polling instead of continuous snapshots to reduce reads
   Stream<int> getUserRankAmongGirlsStream(String userId) {
-    return _firestore
-        .collection('users')
-        .doc(userId)
-        .snapshots()
-        .asyncMap((userSnapshot) async {
-          if (!userSnapshot.exists) return 0;
-          
-          final user = UserModel.fromMap(userSnapshot.data()!);
-          
-          // Get all female users sorted by monthly score
-          final snapshot = await _firestore
-              .collection('rewards_stats')
-              .orderBy('monthlyScore', descending: true)
-              .get();
-
-          int rank = 1;
-          
-          for (var doc in snapshot.docs) {
-            final stats = UserRewardsStats.fromMap(doc.data());
-            
-            // Get user details to check gender
-            final userDetailsDoc = await _firestore
-                .collection('users')
-                .doc(stats.userId)
+    return Stream.periodic(const Duration(seconds: 30), (_) => _)
+        .asyncMap((_) async {
+          try {
+            // Get user's current stats
+            final userStatsDoc = await _firestore
+                .collection('rewards_stats')
+                .doc(userId)
                 .get();
-                
-            if (userDetailsDoc.exists) {
-              final userDetails = UserModel.fromMap(userDetailsDoc.data()!);
+            
+            if (!userStatsDoc.exists) return 0;
+            
+            final userStats = UserRewardsStats.fromMap(userStatsDoc.data()!);
+            final userScore = userStats.monthlyScore;
+            
+            // Get user's gender
+            final userDoc = await _firestore
+                .collection('users')
+                .doc(userId)
+                .get();
+            
+            if (!userDoc.exists) return 0;
+            
+            final user = UserModel.fromMap(userDoc.data()!);
+            final userGender = user.gender?.toLowerCase();
+            
+            // Only calculate rank for female users
+            if (userGender != 'female' && userGender != 'woman') {
+              return 0;
+            }
+            
+            // Count how many female users have higher scores
+            // This is much more efficient than fetching all documents
+            final higherScoresSnapshot = await _firestore
+                .collection('rewards_stats')
+                .where('monthlyScore', isGreaterThan: userScore)
+                .get();
+            
+            int rank = 1;
+            
+            // Check each higher-scoring user's gender
+            for (var doc in higherScoresSnapshot.docs) {
+              final otherUserDoc = await _firestore
+                  .collection('users')
+                  .doc(doc.id)
+                  .get();
               
-              // Only count female users
-              if (userDetails.gender?.toLowerCase() == 'female' || userDetails.gender?.toLowerCase() == 'woman') {
-                if (stats.userId == userId) {
-                  return rank;
+              if (otherUserDoc.exists) {
+                final otherUser = UserModel.fromMap(otherUserDoc.data()!);
+                final otherGender = otherUser.gender?.toLowerCase();
+                
+                if (otherGender == 'female' || otherGender == 'woman') {
+                  rank++;
                 }
-                rank++;
               }
             }
+            
+            return rank;
+          } catch (e, stackTrace) {
+            print('Error calculating rank: $e');
+            return 0;
           }
-          
-          return 0;
         })
         .handleError((e, stackTrace) {
           print('Error in rank stream: $e');

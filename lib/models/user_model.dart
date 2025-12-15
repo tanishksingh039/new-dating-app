@@ -35,6 +35,9 @@ class UserModel {
   final String? education;
   final String? courseStream;
 
+  // Leaderboard opt-out
+  final bool? isOptedOutOfLeaderboard;
+
   UserModel({
     required this.uid,
     this.email = '',
@@ -61,6 +64,7 @@ class UserModel {
     this.blockedBy = const [],
     this.education,
     this.courseStream,
+    this.isOptedOutOfLeaderboard,
   })  : privacySettings = privacySettings ??
             {
               'showOnlineStatus': true,
@@ -111,6 +115,7 @@ class UserModel {
       'blockedBy': blockedBy,
       'education': education,
       'courseStream': courseStream,
+      'isOptedOutOfLeaderboard': isOptedOutOfLeaderboard,
     };
   }
 
@@ -160,6 +165,7 @@ class UserModel {
       blockedBy: List<String>.from(map['blockedBy'] ?? []),
       education: map['education'],
       courseStream: map['courseStream'],
+      isOptedOutOfLeaderboard: map['isOptedOutOfLeaderboard'],
     );
   }
 
@@ -190,6 +196,7 @@ class UserModel {
     List<String>? blockedBy,
     String? education,
     String? courseStream,
+    bool? isOptedOutOfLeaderboard,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -217,6 +224,7 @@ class UserModel {
       blockedBy: blockedBy ?? this.blockedBy,
       education: education ?? this.education,
       courseStream: courseStream ?? this.courseStream,
+      isOptedOutOfLeaderboard: isOptedOutOfLeaderboard ?? this.isOptedOutOfLeaderboard,
     );
   }
 }

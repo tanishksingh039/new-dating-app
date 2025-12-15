@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:animate_do/animate_do.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import '../../firebase_services.dart';
 import '../../widgets/app_logo.dart';
 import '../../constants/app_colors.dart';
@@ -108,7 +109,10 @@ class _LoginScreenState extends State<LoginScreen> {
       _log('Signed out from Google to show account picker');
       _log('Starting Google Sign-In flow...');
 
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn().catchError((error) {
+        _log('Google Sign-In error: $error');
+        throw error;
+      });
       
       if (googleUser == null) {
         _log('User cancelled Google Sign-In');
@@ -189,35 +193,74 @@ class _LoginScreenState extends State<LoginScreen> {
 
     } on FirebaseAuthException catch (e) {
       _log('FirebaseAuthException: ${e.code} - ${e.message}');
+      _log('Full error: $e');
+      
+      // Log to Crashlytics
+      FirebaseCrashlytics.instance.recordError(
+        e,
+        StackTrace.current,
+        reason: 'FirebaseAuthException during login',
+        information: [
+          'Error Code: ${e.code}',
+          'Error Message: ${e.message}',
+          'Full Error: $e',
+          'Build Type: Release',
+        ],
+      );
       
       if (mounted) {
-        String errorMessage = "Authentication failed. Please try again.";
+        // Show detailed error with code and message
+        String errorMessage = "Firebase Auth Error\n\nCode: ${e.code}\nMessage: ${e.message}";
         
         switch (e.code) {
           case 'account-exists-with-different-credential':
-            errorMessage = "An account already exists with this email.";
+            errorMessage = "Account Exists\n\nAn account already exists with this email.\n\nCode: ${e.code}";
             break;
           case 'invalid-credential':
-            errorMessage = "Invalid credentials. Please try again.";
+            errorMessage = "Invalid Credentials\n\nPlease try again.\n\nCode: ${e.code}\nDetails: ${e.message}";
             break;
           case 'operation-not-allowed':
-            errorMessage = "Google Sign-In is not enabled.";
+            errorMessage = "Operation Not Allowed\n\nGoogle Sign-In is not enabled.\n\nCode: ${e.code}";
             break;
           case 'network-request-failed':
-            errorMessage = "Network error. Check your connection.";
+            errorMessage = "Network Error\n\nCheck your internet connection.\n\nCode: ${e.code}";
             break;
+          default:
+            errorMessage = "Firebase Error\n\nCode: ${e.code}\nMessage: ${e.message}";
         }
         
         _showErrorSnackBar(errorMessage);
       }
     } catch (e) {
       _log('General error: $e');
+      _log('Error type: ${e.runtimeType}');
+      _log('Stack trace: ${StackTrace.current}');
+      
+      // Log to Crashlytics
+      FirebaseCrashlytics.instance.recordError(
+        e,
+        StackTrace.current,
+        reason: 'General error during login',
+        information: [
+          'Error: $e',
+          'Error Type: ${e.runtimeType}',
+          'Build Type: Release',
+        ],
+      );
       
       if (mounted) {
-        String errorMessage = "Something went wrong. Please try again.";
+        // Show detailed error message with full trace
+        String errorMessage = "Error: $e\n\nType: ${e.runtimeType}";
         
+        // Add more details for common errors
         if (e.toString().contains('network')) {
-          errorMessage = "Network error. Check your internet connection.";
+          errorMessage = "Network Error: Check your internet connection.\n\nDetails: $e";
+        } else if (e.toString().contains('sign_in_failed')) {
+          errorMessage = "Google Sign-In Failed.\n\nDetails: $e";
+        } else if (e.toString().contains('permission')) {
+          errorMessage = "Permission Denied.\n\nDetails: $e";
+        } else if (e.toString().contains('firebase')) {
+          errorMessage = "Firebase Error.\n\nDetails: $e";
         }
         
         _showErrorSnackBar(errorMessage);
@@ -232,19 +275,32 @@ class _LoginScreenState extends State<LoginScreen> {
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.error_outline, color: Colors.white),
-            const SizedBox(width: 12),
-            Expanded(child: Text(message)),
-          ],
+        content: SingleChildScrollView(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontFamily: 'Courier',
+                  ),
+                  maxLines: 10,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
         ),
         backgroundColor: Colors.red.shade400,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
         ),
-        duration: const Duration(seconds: 4),
+        duration: const Duration(seconds: 8),
       ),
     );
   }
@@ -407,7 +463,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     delay: const Duration(milliseconds: 600),
                     duration: const Duration(milliseconds: 800),
                     child: Text(
-                      'Find your perfect match',
+                      'Where Connections Meets Compatibility !!',
                       style: TextStyle(
                         fontSize: 16,
                         color: Colors.white.withOpacity(0.9),

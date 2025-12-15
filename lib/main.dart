@@ -4,9 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'services/notification_service.dart';
+import 'services/screenshot_service.dart';
+import 'services/screenshot_protection_service.dart';
+import 'services/presence_service.dart';
 import 'constants/app_colors.dart';
 import 'providers/appearance_provider.dart';
 import 'providers/theme_provider.dart';
@@ -22,6 +26,7 @@ import 'screens/auth/login_screen.dart';
 // Screens - Onboarding
 import 'screens/onboarding/welcome_screen.dart';
 import 'screens/onboarding/phone_verification_screen.dart';
+import 'screens/onboarding/terms_and_conditions_screen.dart';
 import 'screens/onboarding/basic_info_screen.dart';
 import 'screens/onboarding/detailed_profile_screen.dart';
 import 'screens/onboarding/prompts_screen.dart';
@@ -73,78 +78,92 @@ import 'screens/banned_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // CRITICAL: Catch ALL errors and prevent crashes
-  FlutterError.onError = (FlutterErrorDetails details) {
-    // Log the error but DON'T crash the app
-    debugPrint('═══════════════════════════════════════');
-    debugPrint('🚨 CAUGHT ERROR: ${details.exception}');
-    debugPrint('📍 Location: ${details.context}');
-    debugPrint('📚 Stack trace: ${details.stack}');
-    debugPrint('═══════════════════════════════════════');
-    
-    // Show error in debug mode but don't crash
-    if (kDebugMode) {
-      FlutterError.presentError(details);
-    }
-  };
-  
-  // Replace error widget with friendly message instead of red screen
-  ErrorWidget.builder = (FlutterErrorDetails details) {
-    return Material(
-      child: Container(
-        color: Colors.white,
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.error_outline,
-                  color: Colors.orange,
-                  size: 64,
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Something went wrong',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Please restart the app',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.black54,
-                  ),
-                ),
-                if (kDebugMode) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    '${details.exception}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.red,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  };
-  
   // Catch errors outside Flutter framework
   runZonedGuarded(() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    
+    // Initialize Firebase Crashlytics
+    try {
+      // Enable Crashlytics collection (in both debug and release modes)
+      // In debug mode, you can test crashes; in release mode, they'll be reported
+      await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
+      
+      // Set up Flutter error handler
+      FlutterError.onError = (FlutterErrorDetails details) {
+        // Send to Crashlytics
+        FirebaseCrashlytics.instance.recordFlutterError(details);
+        
+        // Log the error
+        debugPrint('═══════════════════════════════════════');
+        debugPrint('🚨 CAUGHT ERROR: ${details.exception}');
+        debugPrint('📍 Location: ${details.context}');
+        debugPrint('📚 Stack trace: ${details.stack}');
+        debugPrint('═══════════════════════════════════════');
+        
+        // Show error in debug mode but don't crash
+        if (kDebugMode) {
+          FlutterError.presentError(details);
+        }
+      };
+      
+      debugPrint('✅ Firebase Crashlytics initialized');
+    } catch (e) {
+      debugPrint('⚠️ Firebase Crashlytics init failed: $e');
+    }
+    
+    // Replace error widget with friendly message instead of red screen
+    ErrorWidget.builder = (FlutterErrorDetails details) {
+      return Material(
+        child: Container(
+          color: Colors.white,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    color: Colors.orange,
+                    size: 64,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Something went wrong',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Please restart the app',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.black54,
+                    ),
+                  ),
+                  if (kDebugMode) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      '${details.exception}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.red,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    };
     
     // Initialize Firebase Analytics
     try {
@@ -156,15 +175,37 @@ void main() async {
     
     // Start Firestore monitoring (debug mode only)
     if (kDebugMode) {
-      FirestoreMonitor.startMonitoring();
-      debugPrint('🔍 Firestore monitoring enabled');
+      try {
+        FirestoreMonitor.startMonitoring();
+        debugPrint('🔍 Firestore monitoring enabled');
+      } catch (e) {
+        debugPrint('⚠️ Firestore monitoring failed: $e');
+      }
     }
     
     // Initialize notification service
     try {
       await NotificationService().initialize();
+      debugPrint('✅ Notification service initialized');
     } catch (e) {
       debugPrint('⚠️ Notification service init failed: $e');
+    }
+    
+    // Initialize screenshot service
+    try {
+      await ScreenshotService().initialize();
+      debugPrint('✅ Screenshot service initialized');
+    } catch (e) {
+      debugPrint('⚠️ Screenshot service init failed: $e');
+    }
+    
+    // Initialize screenshot protection service with real-time admin control
+    try {
+      // This will start listening to admin settings immediately
+      final screenshotProtection = ScreenshotProtectionService();
+      debugPrint('✅ Screenshot protection service initialized with real-time sync');
+    } catch (e) {
+      debugPrint('⚠️ Screenshot protection service init failed: $e');
     }
     
     runApp(const MyApp());
@@ -173,6 +214,13 @@ void main() async {
     debugPrint('🚨 UNCAUGHT ERROR: $error');
     debugPrint('📚 Stack trace: $stackTrace');
     debugPrint('═══════════════════════════════════════');
+    
+    // Send uncaught errors to Crashlytics
+    FirebaseCrashlytics.instance.recordError(
+      error,
+      stackTrace,
+      reason: 'Uncaught error in runZonedGuarded',
+    );
   });
 }
 
@@ -259,6 +307,8 @@ class MyApp extends StatelessWidget {
             return MaterialPageRoute(builder: (_) => const WelcomeScreen());
           case '/onboarding/phone':
             return MaterialPageRoute(builder: (_) => const PhoneVerificationScreen());
+          case '/onboarding/terms':
+            return MaterialPageRoute(builder: (_) => const TermsAndConditionsScreen());
           case '/onboarding/basic-info':
             return MaterialPageRoute(builder: (_) => const BasicInfoScreen());
           case '/onboarding/detailed-profile':

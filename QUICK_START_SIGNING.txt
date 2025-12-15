@@ -1,0 +1,107 @@
+================================================================================
+                    APP SIGNING - QUICK START GUIDE
+================================================================================
+
+✅ CODE CHANGES: COMPLETE
+   - build.gradle.kts has been updated
+   - Ready for signing configuration
+
+⏳ YOUR NEXT STEPS: Follow these 5 steps
+
+================================================================================
+STEP 1: CREATE KEYSTORE FILE (5 minutes)
+================================================================================
+
+Copy and paste this command into Command Prompt:
+
+keytool -genkey -v -keystore c:\CampusBound\campusbound.jks -keyalg RSA -keysize 2048 -validity 10000 -alias campusbound
+
+When prompted, enter:
+  Keystore password: [Create a strong password - SAVE IT!]
+  Re-enter password: [Same password]
+  First and last name: Your Name
+  Organization unit: Development
+  Organization: CampusBound
+  City: Your City
+  State: Your State
+  Country code: IN
+  Confirm: yes
+  Key password: [Same as keystore password]
+
+✓ File created: c:\CampusBound\campusbound.jks
+
+================================================================================
+STEP 2: CREATE KEY.PROPERTIES FILE (2 minutes)
+================================================================================
+
+Create new file: c:\CampusBound\frontend\android\key.properties
+
+Copy this content (replace YOUR_PASSWORD):
+
+storePassword=YOUR_PASSWORD
+keyPassword=YOUR_PASSWORD
+keyAlias=campusbound
+storeFile=../campusbound.jks
+
+Example:
+storePassword=MySecurePassword123!
+keyPassword=MySecurePassword123!
+keyAlias=campusbound
+storeFile=../campusbound.jks
+
+✓ File created: c:\CampusBound\frontend\android\key.properties
+
+================================================================================
+STEP 3: BUILD SIGNED BUNDLE (10 minutes)
+================================================================================
+
+Open Command Prompt and run:
+
+cd c:\CampusBound\frontend
+flutter clean
+flutter pub get
+flutter build appbundle --release
+
+Wait for completion...
+
+✓ Output: Built build/app/outputs/bundle/release/app-release.aab
+
+================================================================================
+STEP 4: VERIFY SIGNATURE (1 minute)
+================================================================================
+
+Run this command:
+
+jarsigner -verify -verbose -certs build/app/outputs/bundle/release/app-release.aab
+
+Expected output: jar verified.
+
+✓ Signature verified
+
+================================================================================
+STEP 5: UPLOAD TO GOOGLE PLAY CONSOLE (5 minutes)
+================================================================================
+
+1. Go to Google Play Console
+2. Click "Test and release" → "Internal testing"
+3. Click "Create new release"
+4. Upload file: build/app/outputs/bundle/release/app-release.aab
+5. Add release notes
+6. Click "Save"
+7. Click "Review release"
+8. Click "Start rollout to Internal testing"
+
+✓ Upload complete
+
+================================================================================
+TOTAL TIME: ~23 minutes
+================================================================================
+
+For detailed help, see:
+  - SIGNING_SETUP_GUIDE.md (detailed instructions)
+  - SIGNING_CHECKLIST.md (quick checklist)
+  - SIGNING_IMPLEMENTATION_COMPLETE.md (summary)
+
+Questions? Check the guides above!
+
+================================================================================

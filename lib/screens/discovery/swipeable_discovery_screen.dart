@@ -148,10 +148,11 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
     setState(() => _isLoading = true);
     
     try {
-      // Pass null filters on first load to show ALL profiles
+      // Force refresh to ensure verification filter is applied (bypass cache)
       final profiles = await _discoveryService.getDiscoveryProfiles(
         _currentUserId!,
         filters: _filters, // Will be null initially, showing all profiles
+        forceRefresh: true, // Force refresh to bypass cache and apply verification filter
       );
       
       setState(() {
@@ -242,6 +243,17 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
           }
           debugPrint('✅ Fallback: Gender match: $currentUserGender ↔ $userGender');
           
+          // VERIFICATION FILTER: Males see only verified females, females see only verified males
+          final isUserVerified = data['isVerified'] ?? false;
+          if (currentUserGender == 'male' && userGender == 'female' && !isUserVerified) {
+            debugPrint('Fallback: Skipping user ${user.uid}: female not verified (male users see verified females only)');
+            continue;
+          } else if (currentUserGender == 'female' && userGender == 'male' && !isUserVerified) {
+            debugPrint('Fallback: Skipping user ${user.uid}: male not verified (female users see verified males only)');
+            continue;
+          }
+          debugPrint('✅ Fallback: Verification check passed: isVerified=$isUserVerified');
+          
           // Only check basic requirements - show all profiles regardless of onboarding completion or photos
           if (user.dateOfBirth == null) continue;
           
@@ -255,15 +267,6 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
           
           final userAge = _calculateAge(user.dateOfBirth!);
           if (userAge < minAge || userAge > maxAge) continue;
-          
-          // Filter by education level (only if filter is set)
-          if (_filters?.education != null) {
-            final userEducation = user.education;
-            if (userEducation == null || userEducation != _filters!.education) {
-              debugPrint('Fallback: Skipping user ${user.uid}: education mismatch');
-              continue;
-            }
-          }
           
           // Filter by course/stream - STRICT matching
           if (_filters?.courseStream != null) {
@@ -338,13 +341,7 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
   }
 
   Future<void> _refreshProfiles() async {
-    setState(() {
-      _allProfiles.clear();
-      _swipedProfileIds.clear();
-      _currentIndex = 0;
-    });
-    await _loadProfiles();
-    
+    // Just show a message - don't reload profiles or change current profile
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -354,6 +351,9 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
         ),
       );
     }
+    
+    // Load more profiles in background without changing current view
+    _loadMoreProfilesInBackground();
   }
 
   Future<void> _openFiltersDialog() async {
@@ -365,12 +365,49 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
     // result will be null if dialog was dismissed (X button or outside tap)
     // result will be FilterDialogResult if Reset or Apply was clicked
     if (result != null) {
-      setState(() {
-        _filters = result.filters; // Can be null (reset) or DiscoveryFilters (apply)
-        _allProfiles.clear(); // Clear cache when filters change
-        _swipedProfileIds.clear();
-      });
-      _loadProfiles();
+      if (result.wasReset) {
+        // RESET: Just clear filters, DON'T reload profiles, DON'T change current profile
+        setState(() {
+          _filters = null;
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Filters reset!'),
+              duration: Duration(seconds: 1),
+              backgroundColor: AppColors.primary,
+            ),
+          );
+        }
+      } else {
+        // APPLY: Reload profiles with new filters, try to keep current profile
+        final currentProfile = _currentIndex < _profiles.length ? _profiles[_currentIndex] : null;
+        final previousIndex = _currentIndex;
+        
+        setState(() {
+          _filters = result.filters;
+          _allProfiles.clear();
+          _swipedProfileIds.clear();
+        });
+        
+        await _loadProfiles();
+        
+        // Try to restore the same profile after filter change
+        if (currentProfile != null && mounted) {
+          final newIndex = _profiles.indexWhere((p) => p.uid == currentProfile.uid);
+          if (newIndex != -1) {
+            setState(() {
+              _currentIndex = newIndex;
+            });
+          } else {
+            // If current profile not in filtered results, stay at same index if possible
+            setState(() {
+              _currentIndex = previousIndex < _profiles.length ? previousIndex : 0;
+            });
+          }
+        }
+      }
     }
   }
 

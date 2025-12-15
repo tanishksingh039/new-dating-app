@@ -72,7 +72,9 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
             }
           }
           if (mounted) {
-            Navigator.pushReplacementNamed(context, '/onboarding/basic-info');
+            debugPrint('[PhoneVerification] 🔄 Navigating to /onboarding/terms...');
+            Navigator.pushReplacementNamed(context, '/onboarding/terms');
+            debugPrint('[PhoneVerification] ✅ Navigation called');
           }
         },
         verificationFailed: (FirebaseAuthException e) {
@@ -160,7 +162,9 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
       }
       
       if (mounted) {
-        Navigator.pushReplacementNamed(context, '/onboarding/basic-info');
+        debugPrint('[PhoneVerification] 🔄 Navigating to /onboarding/terms after OTP verification...');
+        Navigator.pushReplacementNamed(context, '/onboarding/terms');
+        debugPrint('[PhoneVerification] ✅ Navigation called');
       }
     } catch (e) {
       debugPrint('[PhoneVerification] ❌ Error: $e');

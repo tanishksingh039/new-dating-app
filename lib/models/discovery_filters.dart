@@ -3,8 +3,6 @@ class DiscoveryFilters {
   final int maxAge;
   final double? maxDistance; // in kilometers, null means no limit
   final List<String> interests; // Filter by specific interests
-  final bool showVerifiedOnly;
-  final String? education; // Filter by education level
   final String? courseStream; // Filter by course/stream
 
   DiscoveryFilters({
@@ -12,8 +10,6 @@ class DiscoveryFilters {
     this.maxAge = 100,
     this.maxDistance,
     this.interests = const [],
-    this.showVerifiedOnly = false,
-    this.education,
     this.courseStream,
   });
 
@@ -24,8 +20,6 @@ class DiscoveryFilters {
       'maxAge': maxAge,
       'maxDistance': maxDistance,
       'interests': interests,
-      'showVerifiedOnly': showVerifiedOnly,
-      'education': education,
       'courseStream': courseStream,
     };
   }
@@ -37,8 +31,6 @@ class DiscoveryFilters {
       maxAge: map['maxAge'] ?? 100,
       maxDistance: map['maxDistance']?.toDouble(),
       interests: List<String>.from(map['interests'] ?? []),
-      showVerifiedOnly: map['showVerifiedOnly'] ?? false,
-      education: map['education'],
       courseStream: map['courseStream'],
     );
   }
@@ -49,8 +41,6 @@ class DiscoveryFilters {
     int? maxAge,
     double? maxDistance,
     List<String>? interests,
-    bool? showVerifiedOnly,
-    String? education,
     String? courseStream,
   }) {
     return DiscoveryFilters(
@@ -58,8 +48,6 @@ class DiscoveryFilters {
       maxAge: maxAge ?? this.maxAge,
       maxDistance: maxDistance ?? this.maxDistance,
       interests: interests ?? this.interests,
-      showVerifiedOnly: showVerifiedOnly ?? this.showVerifiedOnly,
-      education: education ?? this.education,
       courseStream: courseStream ?? this.courseStream,
     );
   }
@@ -70,8 +58,6 @@ class DiscoveryFilters {
         maxAge != 100 ||
         maxDistance != null ||
         interests.isNotEmpty ||
-        showVerifiedOnly ||
-        education != null ||
         courseStream != null;
   }
 
@@ -82,8 +68,6 @@ class DiscoveryFilters {
       maxAge: 100,
       maxDistance: null,
       interests: const [],
-      showVerifiedOnly: false,
-      education: null,
     );
   }
 }

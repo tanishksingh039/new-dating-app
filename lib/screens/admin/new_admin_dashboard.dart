@@ -10,6 +10,7 @@ import 'admin_leaderboard_control_screen.dart';
 import 'bulk_leaderboard_control_screen.dart';
 import 'admin_reports_tab.dart';
 import 'admin_notifications_tab.dart';
+import 'admin_settings_tab.dart';
 
 class NewAdminDashboard extends StatefulWidget {
   const NewAdminDashboard({Key? key}) : super(key: key);
@@ -38,9 +39,10 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 9, vsync: this);
+    _tabController = TabController(length: 10, vsync: this);
     _setupRealTimeListeners();
     _getCurrentAdminId();
+    debugPrint('[AdminDashboard] TabController initialized with length: 10');
   }
 
   void _getCurrentAdminId() {
@@ -106,14 +108,34 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
       for (var doc in snapshot.docs) {
         try {
           final data = doc.data();
+          debugPrint('═══════════════════════════════════════');
+          debugPrint('[Dashboard] 📋 Processing payment document: ${doc.id}');
+          debugPrint('[Dashboard] Status: ${data['status']}');
+          debugPrint('[Dashboard] Amount raw: ${data['amount']} (type: ${data['amount'].runtimeType})');
+          debugPrint('[Dashboard] All keys: ${data.keys.toList()}');
+          
           if (data['status'] == 'success' || data['status'] == 'completed') {
             successful++;
-            // Divide by 100 to convert from paise to rupees
+            // Convert paise to rupees
             final amountInPaise = (data['amount'] as num?)?.toInt() ?? 0;
-            revenue += (amountInPaise / 100).round();
+            debugPrint('[Dashboard] Amount in paise: $amountInPaise');
+            
+            // If amount is less than 100, it's likely already in rupees
+            final amountInRupees = amountInPaise >= 100 
+              ? (amountInPaise / 100).round()  // Convert from paise to rupees
+              : amountInPaise;  // Already in rupees
+            
+            debugPrint('[Dashboard] Amount in rupees: ₹$amountInRupees');
+            debugPrint('[Dashboard] Old revenue: ₹$revenue');
+            revenue += amountInRupees;
+            debugPrint('[Dashboard] New revenue: ₹$revenue');
+            debugPrint('[Dashboard] ✅ Added ₹$amountInRupees to revenue');
+          } else {
+            debugPrint('[Dashboard] ⚠️ Payment not successful - Status: ${data['status']}');
           }
+          debugPrint('═══════════════════════════════════════');
         } catch (e) {
-          debugPrint('Error processing payment: $e');
+          debugPrint('[Dashboard] ❌ Error processing payment: $e');
         }
       }
 
@@ -288,6 +310,10 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
               icon: Icon(Icons.notifications, size: 20),
               text: 'Notifications',
             ),
+            Tab(
+              icon: Icon(Icons.settings, size: 20),
+              text: 'Settings',
+            ),
           ],
         ),
       ),
@@ -303,6 +329,7 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
           AdminLeaderboardControlScreen(adminUserId: _currentAdminUserId),
           const AdminReportsTab(),
           const AdminNotificationsTab(),
+          const AdminSettingsTab(),
         ],
       ),
     );

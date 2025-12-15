@@ -27,33 +27,40 @@ class _FiltersDialogState extends State<FiltersDialog> {
   late DiscoveryFilters _filters;
   late RangeValues _ageRange;
   double? _maxDistance;
-  bool _showVerifiedOnly = false;
-  String? _selectedEducation;
   String? _selectedCourseStream;
   List<String> _selectedInterests = [];
 
-  // Available options
-  final List<String> _educationLevels = [
-    'High School',
-    'Bachelor\'s',
-    'Master\'s',
-    'PhD',
-    'Other',
-  ];
-
   final List<String> _availableInterests = [
-    'Sports',
-    'Music',
-    'Art',
-    'Movies',
     'Travel',
+    'Music',
+    'Movies',
     'Food',
-    'Reading',
-    'Gaming',
     'Fitness',
+    'Sports',
+    'Reading',
     'Photography',
-    'Technology',
+    'Art',
+    'Dancing',
+    'Cooking',
+    'Gaming',
     'Fashion',
+    'Technology',
+    'Nature',
+    'Pets',
+    'Coffee',
+    'Wine',
+    'Yoga',
+    'Beach',
+    'Mountains',
+    'Shopping',
+    'Comedy',
+    'Adventure',
+    'Cars',
+    'Bikes',
+    'Writing',
+    'Volunteering',
+    'Meditation',
+    'DIY',
   ];
 
   @override
@@ -65,8 +72,6 @@ class _FiltersDialogState extends State<FiltersDialog> {
       _filters.maxAge.toDouble(),
     );
     _maxDistance = _filters.maxDistance;
-    _showVerifiedOnly = _filters.showVerifiedOnly;
-    _selectedEducation = _filters.education;
     _selectedCourseStream = _filters.courseStream;
     _selectedInterests = List.from(_filters.interests);
   }
@@ -108,41 +113,6 @@ class _FiltersDialogState extends State<FiltersDialog> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Verified Only
-                    CheckboxListTile(
-                      title: const Text('Show verified users only'),
-                      subtitle: const Text('Users with verified profiles'),
-                      value: _showVerifiedOnly,
-                      activeColor: const Color(0xFFFF6B9D),
-                      onChanged: (value) {
-                        setState(() => _showVerifiedOnly = value ?? false);
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Education Level
-                    _buildSectionTitle('Education Level'),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _educationLevels.map((edu) {
-                        final isSelected = _selectedEducation == edu;
-                        return FilterChip(
-                          label: Text(edu),
-                          selected: isSelected,
-                          selectedColor: const Color(0xFFFF6B9D).withOpacity(0.3),
-                          checkmarkColor: const Color(0xFFFF6B9D),
-                          onSelected: (selected) {
-                            setState(() {
-                              _selectedEducation = selected ? edu : null;
-                            });
-                          },
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 24),
-
                     // Course/Stream
                     _buildSectionTitle('Course/Stream'),
                     const SizedBox(height: 8),
@@ -238,8 +208,6 @@ class _FiltersDialogState extends State<FiltersDialog> {
                         minAge: _ageRange.start.round(),
                         maxAge: _ageRange.end.round(),
                         maxDistance: _maxDistance,
-                        showVerifiedOnly: _showVerifiedOnly,
-                        education: _selectedEducation,
                         courseStream: _selectedCourseStream,
                         interests: _selectedInterests,
                       );

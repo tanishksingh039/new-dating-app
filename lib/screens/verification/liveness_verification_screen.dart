@@ -8,10 +8,17 @@ import 'dart:io';
 import 'dart:math';
 import '../../services/face_detection_service.dart';
 import '../../services/r2_storage_service.dart';
+import '../../services/profile_picture_verification_service.dart';
 import '../../constants/app_colors.dart';
 
 class LivenessVerificationScreen extends StatefulWidget {
-  const LivenessVerificationScreen({Key? key}) : super(key: key);
+  // Optional: Pass context to indicate this is for profile picture verification
+  final bool isProfilePictureVerification;
+  
+  const LivenessVerificationScreen({
+    Key? key,
+    this.isProfilePictureVerification = false,
+  }) : super(key: key);
 
   @override
   State<LivenessVerificationScreen> createState() => _LivenessVerificationScreenState();
@@ -59,9 +66,16 @@ class _LivenessVerificationScreenState extends State<LivenessVerificationScreen>
   Future<void> _capturePhoto() async {
     if (_isProcessing) return;
     
+    print('═══════════════════════════════════════════════════════════');
+    print('[LivenessVerification] 📸 _capturePhoto STARTED');
+    print('[LivenessVerification] Current step: $_currentStep/${_challenges.length}');
+    print('[LivenessVerification] Current challenge: ${_challenges[_currentStep]}');
+    print('═══════════════════════════════════════════════════════════');
+    
     setState(() => _isProcessing = true);
     
     try {
+      print('[LivenessVerification] 📷 Opening camera...');
       final XFile? image = await _imagePicker.pickImage(
         source: ImageSource.camera, // CAMERA ONLY - no gallery
         imageQuality: 85,
@@ -69,123 +83,216 @@ class _LivenessVerificationScreenState extends State<LivenessVerificationScreen>
       );
       
       if (image != null) {
+        print('[LivenessVerification] ✅ Photo captured: ${image.path}');
+        
         // Verify it's a recent photo (anti-spoofing)
         final file = File(image.path);
         final fileStats = await file.stat();
         final now = DateTime.now();
         final timeDiff = now.difference(fileStats.modified).inSeconds;
         
+        print('[LivenessVerification] ⏱️ Photo timestamp check:');
+        print('[LivenessVerification]    Modified: ${fileStats.modified}');
+        print('[LivenessVerification]    Now: $now');
+        print('[LivenessVerification]    Time diff: ${timeDiff}s (max: 10s)');
+        
         // Photo must be taken within last 10 seconds
         if (timeDiff > 10) {
+          print('[LivenessVerification] ❌ ANTI-SPOOFING FAILED: Photo too old (${timeDiff}s > 10s)');
           _showError('Please take a fresh photo, not from gallery!');
           setState(() => _isProcessing = false);
           return;
         }
+        print('[LivenessVerification] ✅ Anti-spoofing check passed');
         
         // Verify face
+        print('[LivenessVerification] 🔍 Validating face in photo...');
         final result = await _faceDetectionService.validateProfileImage(image.path);
         
+        print('[LivenessVerification] 📊 Validation result:');
+        print('[LivenessVerification]    Valid: ${result.isValid}');
+        print('[LivenessVerification]    Message: ${result.message}');
+        print('[LivenessVerification]    Confidence: ${result.confidence}');
+        
         if (!result.isValid) {
+          print('[LivenessVerification] ❌ FACE VALIDATION FAILED: ${result.message}');
           _showError(result.message);
           setState(() => _isProcessing = false);
           return;
         }
         
+        print('[LivenessVerification] ✅ Face validation passed');
+        
         // Store the image and result
         _capturedImages.add(file);
         _verificationResults.add(result);
         
+        print('[LivenessVerification] 💾 Stored image and result');
+        print('[LivenessVerification] 📊 Progress: ${_capturedImages.length}/${_challenges.length} photos captured');
+        
         // Move to next challenge
         if (_currentStep < _challenges.length - 1) {
+          print('[LivenessVerification] ➡️ Moving to next challenge');
           setState(() {
             _currentStep++;
             _isProcessing = false;
           });
+          print('[LivenessVerification] ✅ _capturePhoto COMPLETED - Next challenge');
+          print('═══════════════════════════════════════════════════════════');
         } else {
+          print('[LivenessVerification] 🎯 All challenges completed - starting liveness verification');
+          print('═══════════════════════════════════════════════════════════');
           // All challenges completed - verify liveness
           await _verifyLiveness();
         }
       } else {
+        print('[LivenessVerification] ⚠️ No photo captured (user cancelled)');
         setState(() => _isProcessing = false);
+        print('═══════════════════════════════════════════════════════════');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('═══════════════════════════════════════════════════════════');
+      print('[LivenessVerification] ❌ EXCEPTION in _capturePhoto');
+      print('[LivenessVerification] Error: $e');
+      print('[LivenessVerification] Stack trace: $stackTrace');
+      print('═══════════════════════════════════════════════════════════');
       setState(() => _isProcessing = false);
       _showError('Error: $e');
     }
   }
 
   Future<void> _verifyLiveness() async {
+    print('═══════════════════════════════════════════════════════════');
+    print('[LivenessVerification] 🔐 _verifyLiveness STARTED');
+    print('[LivenessVerification] Total photos captured: ${_capturedImages.length}');
+    print('[LivenessVerification] Total verification results: ${_verificationResults.length}');
+    print('═══════════════════════════════════════════════════════════');
+    
     setState(() => _isProcessing = true);
     
     try {
       // Check 1: All photos must have valid faces
+      print('[LivenessVerification] ✅ CHECK 1: Validating all photos...');
+      final invalidResults = _verificationResults.where((r) => !r.isValid).toList();
+      print('[LivenessVerification]    Valid photos: ${_verificationResults.length - invalidResults.length}/${_verificationResults.length}');
+      
       if (_verificationResults.any((r) => !r.isValid)) {
+        print('[LivenessVerification] ❌ CHECK 1 FAILED: Some photos have invalid faces');
+        for (int i = 0; i < _verificationResults.length; i++) {
+          if (!_verificationResults[i].isValid) {
+            print('[LivenessVerification]    Photo ${i + 1}: INVALID - ${_verificationResults[i].message}');
+          }
+        }
         _showError('Some photos failed validation. Please try again.');
         _resetVerification();
         return;
       }
+      print('[LivenessVerification] ✅ CHECK 1 PASSED: All photos have valid faces');
       
       // Check 2: Verify face matches profile photo
+      print('[LivenessVerification] ✅ CHECK 2: Verifying profile photo match...');
       bool matchesProfile = await _verifyProfilePhotoMatch();
+      print('[LivenessVerification]    Profile match result: $matchesProfile');
+      
       if (!matchesProfile) {
+        print('[LivenessVerification] ❌ CHECK 2 FAILED: Face does not match profile photo');
         _showError('Face doesn\'t match your profile photo. Please use the same person.');
         _resetVerification();
         return;
       }
+      print('[LivenessVerification] ✅ CHECK 2 PASSED: Face matches profile photo');
       
       // Check 3: Verify face consistency across images
+      print('[LivenessVerification] ✅ CHECK 3: Verifying face consistency...');
       bool facesMatch = await _verifyFaceConsistency();
+      print('[LivenessVerification]    Face consistency result: $facesMatch');
+      
       if (!facesMatch) {
+        print('[LivenessVerification] ❌ CHECK 3 FAILED: Faces do not match across photos');
         _showError('Faces don\'t match across photos. Please ensure it\'s the same person.');
         _resetVerification();
         return;
       }
+      print('[LivenessVerification] ✅ CHECK 3 PASSED: Faces consistent across photos');
       
       // Check 4: Verify different expressions/poses (anti-spoofing)
+      print('[LivenessVerification] ✅ CHECK 4: Verifying expression variation...');
       bool hasVariation = _verifyExpressionVariation();
+      print('[LivenessVerification]    Expression variation result: $hasVariation');
+      
       if (!hasVariation) {
+        print('[LivenessVerification] ❌ CHECK 4 FAILED: Photos appear too similar');
         _showError('Photos appear too similar. Please follow the challenges.');
         _resetVerification();
         return;
       }
+      print('[LivenessVerification] ✅ CHECK 4 PASSED: Expression variation detected');
       
       // All checks passed - submit verification
+      print('[LivenessVerification] 🎉 ALL CHECKS PASSED - Submitting verification');
+      print('═══════════════════════════════════════════════════════════');
       await _submitVerification();
       
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('═══════════════════════════════════════════════════════════');
+      print('[LivenessVerification] ❌ EXCEPTION in _verifyLiveness');
+      print('[LivenessVerification] Error: $e');
+      print('[LivenessVerification] Stack trace: $stackTrace');
+      print('═══════════════════════════════════════════════════════════');
       setState(() => _isProcessing = false);
       _showError('Verification error: $e');
     }
   }
 
   Future<bool> _verifyProfilePhotoMatch() async {
+    print('═══════════════════════════════════════════════════════════');
+    print('[LivenessVerification] 🔍 _verifyProfilePhotoMatch STARTED');
+    print('═══════════════════════════════════════════════════════════');
+    
     // Compare first liveness photo (straight face) with profile photo
-    if (_capturedImages.isEmpty) return false;
+    if (_capturedImages.isEmpty) {
+      print('[LivenessVerification] ❌ No captured images available');
+      return false;
+    }
     
     try {
       final userId = FirebaseAuth.instance.currentUser?.uid;
-      if (userId == null) return false;
+      print('[LivenessVerification] 👤 User ID: $userId');
+      
+      if (userId == null) {
+        print('[LivenessVerification] ❌ No user logged in');
+        return false;
+      }
       
       // Get user's profile photo URL from Firestore
+      print('[LivenessVerification] 📡 Fetching user profile from Firestore...');
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
           .get();
       
-      if (!userDoc.exists) return false;
+      if (!userDoc.exists) {
+        print('[LivenessVerification] ❌ User document does not exist');
+        return false;
+      }
       
       final userData = userDoc.data();
       final List<dynamic>? photos = userData?['photos'] as List<dynamic>?;
       
+      print('[LivenessVerification] 📸 Profile photos count: ${photos?.length ?? 0}');
+      
       if (photos == null || photos.isEmpty) {
+        print('[LivenessVerification] ❌ No profile photos found');
         _showError('Please upload a profile photo first before verification.');
         return false;
       }
       
       // Get the first profile photo URL
       final profilePhotoUrl = photos.first as String;
+      print('[LivenessVerification] 🖼️ Profile photo URL: $profilePhotoUrl');
       
       // Download profile photo to temp file for comparison
+      print('[LivenessVerification] ⬇️ Downloading profile photo...');
       final tempDir = await Directory.systemTemp.createTemp();
       final profilePhotoFile = File('${tempDir.path}/profile_photo.jpg');
       
@@ -193,62 +300,141 @@ class _LivenessVerificationScreenState extends State<LivenessVerificationScreen>
       final bytes = await consolidateHttpClientResponseBytes(await response.close());
       await profilePhotoFile.writeAsBytes(bytes);
       
+      final downloadedSize = await profilePhotoFile.length();
+      print('[LivenessVerification] ✅ Profile photo downloaded: ${downloadedSize} bytes');
+      
       // Compare first liveness photo (straight face) with profile photo
+      print('[LivenessVerification] 🔄 Comparing liveness photo with profile photo...');
+      print('[LivenessVerification]    Liveness photo: ${_capturedImages.first.path}');
+      print('[LivenessVerification]    Profile photo: ${profilePhotoFile.path}');
+      
       final result = await _faceDetectionService.compareFaces(
         _capturedImages.first.path,  // First photo is always "Look straight at camera"
         profilePhotoFile.path,
       );
       
+      print('[LivenessVerification] 📊 Comparison result:');
+      print('[LivenessVerification]    Similarity: ${(result.similarity * 100).toStringAsFixed(2)}%');
+      print('[LivenessVerification]    Threshold: 60% (MEDIUM strictness)');
+      print('[LivenessVerification]    Match: ${result.similarity > 0.6 ? 'YES ✅' : 'NO ❌'}');
+      
       // Clean up temp file
+      print('[LivenessVerification] 🧹 Cleaning up temp files...');
       await profilePhotoFile.delete();
       await tempDir.delete();
+      print('[LivenessVerification] ✅ Temp files cleaned');
       
-      // Require 70% similarity with profile photo
-      return result.similarity > 0.7;
+      // MEDIUM strictness: Require 60% similarity with profile photo
+      // This balances security with user experience
+      final matches = result.similarity > 0.6;
+      print('[LivenessVerification] ${matches ? '✅' : '❌'} Profile photo match: $matches');
+      print('═══════════════════════════════════════════════════════════');
+      return matches;
       
-    } catch (e) {
-      print('Error comparing with profile photo: $e');
+    } catch (e, stackTrace) {
+      print('═══════════════════════════════════════════════════════════');
+      print('[LivenessVerification] ❌ EXCEPTION in _verifyProfilePhotoMatch');
+      print('[LivenessVerification] Error: $e');
+      print('[LivenessVerification] Stack trace: $stackTrace');
+      print('═══════════════════════════════════════════════════════════');
       return false;
     }
   }
 
   Future<bool> _verifyFaceConsistency() async {
+    print('═══════════════════════════════════════════════════════════');
+    print('[LivenessVerification] 🔍 _verifyFaceConsistency STARTED');
+    print('[LivenessVerification] Total images: ${_capturedImages.length}');
+    print('═══════════════════════════════════════════════════════════');
+    
     // Compare first and last image to ensure same person
-    if (_capturedImages.length < 2) return true;
+    if (_capturedImages.length < 2) {
+      print('[LivenessVerification] ⚠️ Less than 2 images - skipping consistency check');
+      print('═══════════════════════════════════════════════════════════');
+      return true;
+    }
     
     try {
+      print('[LivenessVerification] 🔄 Comparing first and last images...');
+      print('[LivenessVerification]    First image: ${_capturedImages.first.path}');
+      print('[LivenessVerification]    Last image: ${_capturedImages.last.path}');
+      
       final result = await _faceDetectionService.compareFaces(
         _capturedImages.first.path,
         _capturedImages.last.path,
       );
       
-      return result.similarity > 0.6; // 60% similarity threshold
-    } catch (e) {
+      print('[LivenessVerification] 📊 Consistency result:');
+      print('[LivenessVerification]    Similarity: ${(result.similarity * 100).toStringAsFixed(2)}%');
+      print('[LivenessVerification]    Threshold: 55% (MEDIUM strictness)');
+      print('[LivenessVerification]    Consistent: ${result.similarity > 0.55 ? 'YES ✅' : 'NO ❌'}');
+      
+      // MEDIUM strictness: 55% similarity threshold for face consistency
+      // Allows for different angles/expressions while ensuring same person
+      final isConsistent = result.similarity > 0.55;
+      print('[LivenessVerification] ${isConsistent ? '✅' : '❌'} Face consistency: $isConsistent');
+      print('═══════════════════════════════════════════════════════════');
+      return isConsistent;
+    } catch (e, stackTrace) {
+      print('═══════════════════════════════════════════════════════════');
+      print('[LivenessVerification] ❌ EXCEPTION in _verifyFaceConsistency');
+      print('[LivenessVerification] Error: $e');
+      print('[LivenessVerification] Stack trace: $stackTrace');
+      print('═══════════════════════════════════════════════════════════');
       return false;
     }
   }
 
   bool _verifyExpressionVariation() {
+    print('═══════════════════════════════════════════════════════════');
+    print('[LivenessVerification] 🔍 _verifyExpressionVariation STARTED');
+    print('[LivenessVerification] Verification results: ${_verificationResults.length}');
+    print('═══════════════════════════════════════════════════════════');
+    
     // Check if there's variation in head angles or expressions
-    if (_verificationResults.length < 2) return false;
+    if (_verificationResults.length < 2) {
+      print('[LivenessVerification] ❌ Less than 2 results - cannot check variation');
+      print('═══════════════════════════════════════════════════════════');
+      return false;
+    }
     
     // Get head angles from each result
     List<double> angles = [];
-    for (var result in _verificationResults) {
+    for (int i = 0; i < _verificationResults.length; i++) {
+      final result = _verificationResults[i];
       if (result.face != null) {
         final angleY = result.face!.headEulerAngleY ?? 0;
         angles.add(angleY.abs());
+        print('[LivenessVerification] Photo ${i + 1} - Head Euler Angle Y: ${angleY.toStringAsFixed(2)}° (abs: ${angleY.abs().toStringAsFixed(2)}°)');
+      } else {
+        print('[LivenessVerification] Photo ${i + 1} - No face data available');
       }
     }
     
-    if (angles.isEmpty) return false;
+    if (angles.isEmpty) {
+      print('[LivenessVerification] ❌ No angle data available');
+      print('═══════════════════════════════════════════════════════════');
+      return false;
+    }
     
-    // Check if there's at least 10 degrees variation
+    // Check if there's at least 1 degree variation (MEDIUM strictness)
+    // Lowered from 10° → 5° → 2° → 1° to accommodate extremely subtle movements
+    // At MEDIUM strictness, we prioritize user experience over strict anti-spoofing
+    // The profile match (60%) and face consistency (55%) checks are the primary security
+    // This threshold mainly prevents completely static photos (0° variation)
     final maxAngle = angles.reduce((a, b) => a > b ? a : b);
     final minAngle = angles.reduce((a, b) => a < b ? a : b);
     final variation = maxAngle - minAngle;
     
-    return variation > 10; // At least 10 degrees difference
+    print('[LivenessVerification] 📐 Angle variation analysis:');
+    print('[LivenessVerification]    Min angle: ${minAngle.toStringAsFixed(2)}°');
+    print('[LivenessVerification]    Max angle: ${maxAngle.toStringAsFixed(2)}°');
+    print('[LivenessVerification]    Variation: ${variation.toStringAsFixed(2)}° (minimum required: 1°)');
+    
+    final hasVariation = variation > 1; // MEDIUM: At least 1 degree difference (extremely lenient)
+    print('[LivenessVerification] ${hasVariation ? '✅' : '❌'} Expression variation: $hasVariation');
+    print('═══════════════════════════════════════════════════════════');
+    return hasVariation;
   }
 
   Future<void> _submitVerification() async {
@@ -281,6 +467,11 @@ class _LivenessVerificationScreenState extends State<LivenessVerificationScreen>
         'verificationMethod': 'liveness_detection',
         'challengesCompleted': _challenges,
       });
+
+      // If this is for profile picture verification, complete that process
+      if (widget.isProfilePictureVerification) {
+        await ProfilePictureVerificationService.completeProfilePictureVerification();
+      }
 
       if (mounted) {
         _showSuccessDialog();
@@ -320,7 +511,9 @@ class _LivenessVerificationScreenState extends State<LivenessVerificationScreen>
             Icon(Icons.check_circle_outline, color: Colors.green, size: 64),
             SizedBox(height: 16),
             Text(
-              'Your profile has been verified with liveness detection!',
+              widget.isProfilePictureVerification
+                  ? 'Your profile picture has been verified and updated!'
+                  : 'Your profile has been verified with liveness detection!',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 16),
             ),
@@ -335,7 +528,17 @@ class _LivenessVerificationScreenState extends State<LivenessVerificationScreen>
           ElevatedButton(
             onPressed: () {
               Navigator.of(context).pop(); // Close dialog
-              Navigator.of(context).pop(true); // Return to settings with success
+              
+              // If this is profile picture verification, return to profile page
+              // by popping back to the root and letting ProfilePictureVerificationDialog handle it
+              if (widget.isProfilePictureVerification) {
+                // Pop back to the screen that opened the liveness verification
+                // This will trigger the onVerificationComplete callback in ProfilePictureVerificationDialog
+                Navigator.of(context).pop(true);
+              } else {
+                // Regular verification - return to previous screen (settings)
+                Navigator.of(context).pop(true);
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,
@@ -365,20 +568,39 @@ class _LivenessVerificationScreenState extends State<LivenessVerificationScreen>
     
     return WillPopScope(
       onWillPop: () async {
+        // If this is profile picture verification, prevent back button entirely
+        if (widget.isProfilePictureVerification) {
+          print('🔴 [LivenessVerificationScreen] Back button pressed during profile picture verification');
+          print('🔴 [LivenessVerificationScreen] Back button is BLOCKED - verification is mandatory');
+          
+          // Show a message that verification is mandatory
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Verification is mandatory to change your profile picture'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 2),
+            ),
+          );
+          
+          // Return false to prevent back navigation
+          return false;
+        }
+        
+        // For regular verification, show cancel confirmation
         if (_currentStep > 0) {
           final shouldPop = await showDialog<bool>(
             context: context,
             builder: (context) => AlertDialog(
-              title: Text('Cancel Verification?'),
-              content: Text('Your progress will be lost.'),
+              title: const Text('Cancel Verification?'),
+              content: const Text('Your progress will be lost.'),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context, false),
-                  child: Text('Continue'),
+                  child: const Text('Continue'),
                 ),
                 TextButton(
                   onPressed: () => Navigator.pop(context, true),
-                  child: Text('Cancel', style: TextStyle(color: Colors.red)),
+                  child: const Text('Cancel', style: TextStyle(color: Colors.red)),
                 ),
               ],
             ),
@@ -389,14 +611,61 @@ class _LivenessVerificationScreenState extends State<LivenessVerificationScreen>
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text('Liveness Verification'),
+          title: const Text('Liveness Verification'),
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
+          // Hide back button during profile picture verification
+          automaticallyImplyLeading: !widget.isProfilePictureVerification,
         ),
         body: SingleChildScrollView(
           padding: EdgeInsets.all(20),
           child: Column(
             children: [
+              // Mandatory verification warning for profile picture
+              if (widget.isProfilePictureVerification)
+                FadeInDown(
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.red.shade300, width: 2),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.warning, color: Colors.red, size: 28),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Verification Required',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: Colors.red,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'You must complete verification to change your profile picture',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.red.shade700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              
+              if (widget.isProfilePictureVerification)
+                const SizedBox(height: 20),
+              
               // Progress indicator
               FadeInDown(
                 child: Column(
@@ -407,10 +676,10 @@ class _LivenessVerificationScreenState extends State<LivenessVerificationScreen>
                       valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
                       minHeight: 8,
                     ),
-                    SizedBox(height: 8),
+                    const SizedBox(height: 8),
                     Text(
                       'Step ${_currentStep + 1} of ${_challenges.length}',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
                         color: AppColors.primary,
@@ -420,7 +689,7 @@ class _LivenessVerificationScreenState extends State<LivenessVerificationScreen>
                 ),
               ),
               
-              SizedBox(height: 30),
+              const SizedBox(height: 30),
               
               // Security info
               FadeInDown(

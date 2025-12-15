@@ -192,6 +192,77 @@ class _BulkLeaderboardControlScreenState extends State<BulkLeaderboardControlScr
     }
   }
 
+  Future<void> _resetLeaderboard() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reset Leaderboard'),
+        content: const Text(
+          'Are you sure you want to reset the entire leaderboard? This will set all users\' points to 0 and cannot be undone.\n\nThis action affects ALL users regardless of gender filter.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Reset All', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      debugPrint('[BulkLeaderboardControl] Starting leaderboard reset');
+      
+      // Get all documents from rewards_stats collection
+      final snapshot = await _firestore.collection('rewards_stats').get();
+      
+      debugPrint('[BulkLeaderboardControl] Found ${snapshot.docs.length} leaderboard entries to reset');
+      
+      int resetCount = 0;
+      for (final doc in snapshot.docs) {
+        try {
+          await _firestore.collection('rewards_stats').doc(doc.id).set({
+            'userId': doc.id,
+            'monthlyScore': 0,
+            'monthlyRank': 0,
+            'weeklyScore': 0,
+            'totalScore': 0,
+            'currentStreak': 0,
+            'lastActivityAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+            'updatedBy': 'admin_leaderboard_reset',
+          }, SetOptions(merge: true));
+          
+          resetCount++;
+          debugPrint('[BulkLeaderboardControl] ✅ Reset ${doc.id} ($resetCount/${snapshot.docs.length})');
+          
+          // Small delay to avoid overwhelming Firestore
+          await Future.delayed(const Duration(milliseconds: 50));
+        } catch (e) {
+          debugPrint('[BulkLeaderboardControl] ❌ Error resetting ${doc.id}: $e');
+        }
+      }
+      
+      debugPrint('[BulkLeaderboardControl] ✅ Leaderboard reset completed: $resetCount entries reset');
+      _showSuccess('Leaderboard reset! $resetCount entries set to 0 points');
+      await _loadProfiles();
+    } catch (e, stackTrace) {
+      debugPrint('[BulkLeaderboardControl] ❌ Leaderboard reset error: $e');
+      debugPrint('[BulkLeaderboardControl] Stack trace: $stackTrace');
+      _showError('Error resetting leaderboard: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: Colors.red),
@@ -432,6 +503,10 @@ class _BulkLeaderboardControlScreenState extends State<BulkLeaderboardControlScr
                           : () => _bulkUpdateLeaderboard(50000, 100),
                       icon: const Icon(Icons.trending_up),
                       label: const Text('Top 50K'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.purple.shade700,
+                        foregroundColor: Colors.white,
+                      ),
                     ),
                     ElevatedButton.icon(
                       onPressed: _isLoading
@@ -439,6 +514,10 @@ class _BulkLeaderboardControlScreenState extends State<BulkLeaderboardControlScr
                           : () => _bulkUpdateLeaderboard(100000, 500),
                       icon: const Icon(Icons.star),
                       label: const Text('Top 100K'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.purple.shade700,
+                        foregroundColor: Colors.white,
+                      ),
                     ),
                     ElevatedButton.icon(
                       onPressed: _isLoading
@@ -446,6 +525,19 @@ class _BulkLeaderboardControlScreenState extends State<BulkLeaderboardControlScr
                           : () => _bulkUpdateLeaderboard(10000, 50),
                       icon: const Icon(Icons.equalizer),
                       label: const Text('Balanced'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.purple.shade700,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: _isLoading ? null : _resetLeaderboard,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Reset Leaderboard'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red.shade700,
+                        foregroundColor: Colors.white,
+                      ),
                     ),
                   ],
                 ),

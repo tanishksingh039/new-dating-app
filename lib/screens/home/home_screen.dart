@@ -12,6 +12,7 @@ import '../../constants/app_colors.dart';
 import '../../models/user_model.dart';
 import '../../services/navigation_service.dart';
 import '../../services/action_notification_service.dart';
+import '../../services/presence_service.dart';
 import '../../widgets/admin_action_checker.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -21,10 +22,11 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _selectedIndex = 0;
   bool _isFemale = false;
   bool _isLoading = true;
+  final PresenceService _presenceService = PresenceService();
 
   List<Widget> _screens = [];
 
@@ -35,12 +37,39 @@ class _HomeScreenState extends State<HomeScreen> {
     
     // Listen to navigation service for tab changes
     NavigationService.selectedTabNotifier.addListener(_onTabChangeFromNotification);
+    
+    // Start presence tracking when home screen loads
+    WidgetsBinding.instance.addObserver(this);
+    _presenceService.startPresenceTracking();
   }
 
   @override
   void dispose() {
     NavigationService.selectedTabNotifier.removeListener(_onTabChangeFromNotification);
+    WidgetsBinding.instance.removeObserver(this);
+    _presenceService.stopPresenceTracking();
     super.dispose();
+  }
+  
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    // Update presence based on app lifecycle
+    switch (state) {
+      case AppLifecycleState.resumed:
+        // App came to foreground - start tracking
+        _presenceService.startPresenceTracking();
+        break;
+      case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+        // App went to background - stop tracking
+        _presenceService.stopPresenceTracking();
+        break;
+      case AppLifecycleState.hidden:
+        break;
+    }
   }
 
   void _onTabChangeFromNotification() {

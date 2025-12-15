@@ -5,7 +5,9 @@ import 'dart:io';
 import '../../models/user_model.dart';
 import '../../utils/constants.dart';
 import '../../widgets/custom_button.dart';
+import '../../widgets/select_main_profile_picture_dialog.dart';
 import '../../services/r2_storage_service.dart';
+import '../../services/profile_picture_verification_service.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final UserModel user;
@@ -29,6 +31,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   
   bool _isSaving = false;
   List<File> _newPhotos = [];
+  String? _originalMainPhoto; // Track original main photo
 
   @override
   void initState() {
@@ -40,6 +43,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _selectedGender = _normalizeGender(widget.user.gender);
     _selectedDate = widget.user.dateOfBirth ?? DateTime.now();
     _preferences = Map.from(widget.user.preferences);
+    
+    // Store the original main photo (first photo in the array)
+    _originalMainPhoto = _photos.isNotEmpty ? _photos.first : null;
   }
 
   String _normalizeGender(String gender) {
@@ -147,25 +153,115 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       // Combine existing and new photos
       final allPhotos = [..._photos, ...uploadedUrls];
 
-      // Update Firestore
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.user.uid)
-          .update({
-        'name': _nameController.text.trim(),
-        'bio': _bioController.text.trim(),
-        'photos': allPhotos,
-        'interests': _selectedInterests,
-        'gender': _selectedGender,
-        'dateOfBirth': _selectedDate.toIso8601String(),
-        'preferences': _preferences,
-      });
+      // Check if new photos were added - if yes, show main picture selection
+      if (_newPhotos.isNotEmpty && uploadedUrls.isNotEmpty) {
+        print('🔴 [EditProfileScreen] NEW PHOTOS DETECTED');
+        print('🔴 [EditProfileScreen] New photos count: ${_newPhotos.length}');
+        print('🔴 [EditProfileScreen] Uploaded URLs: ${uploadedUrls.length}');
+        
+        if (mounted) {
+          setState(() => _isSaving = false);
+          
+          // Show main picture selection dialog
+          final selectedMainIndex = await showDialog<int>(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => SelectMainProfilePictureDialog(
+              allPhotos: allPhotos,
+              currentMainIndex: 0,
+            ),
+          );
+          
+          // If user cancelled, don't save
+          if (selectedMainIndex == null) {
+            print('🔴 [EditProfileScreen] User cancelled main picture selection');
+            return;
+          }
+          
+          print('🔴 [EditProfileScreen] Selected main picture index: $selectedMainIndex');
+          
+          // Reorder photos so selected one is first
+          final reorderedPhotos = <String>[];
+          reorderedPhotos.add(allPhotos[selectedMainIndex]);
+          for (int i = 0; i < allPhotos.length; i++) {
+            if (i != selectedMainIndex) {
+              reorderedPhotos.add(allPhotos[i]);
+            }
+          }
+          
+          print('🔴 [EditProfileScreen] Reordered photos - main: ${reorderedPhotos.first}');
+          print('🔴 [EditProfileScreen] Original main photo: $_originalMainPhoto');
+          
+          setState(() => _isSaving = true);
+          
+          // The new main picture is now at index 0
+          final newMainPhotoUrl = reorderedPhotos.first;
+          
+          // Update Firestore with reordered photos
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(widget.user.uid)
+              .update({
+            'name': _nameController.text.trim(),
+            'bio': _bioController.text.trim(),
+            'photos': reorderedPhotos,
+            'interests': _selectedInterests,
+            'gender': _selectedGender,
+            'dateOfBirth': _selectedDate.toIso8601String(),
+            'preferences': _preferences,
+          });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile updated successfully!')),
-        );
-        Navigator.pop(context);
+          print('🔴 [EditProfileScreen] Profile updated in Firestore with reordered photos');
+
+          // ONLY mark for verification if the main photo actually changed
+          final mainPhotoChanged = newMainPhotoUrl != _originalMainPhoto;
+          print('🔴 [EditProfileScreen] Main photo changed: $mainPhotoChanged');
+          
+          if (mainPhotoChanged) {
+            // Mark the new main picture as pending verification
+            await ProfilePictureVerificationService.markProfilePictureAsPending(newMainPhotoUrl);
+            print('🔴 [EditProfileScreen] Picture marked as pending verification');
+
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Profile updated! Verification required for new main photo.')),
+              );
+              print('🔴 [EditProfileScreen] Popping with true flag (verification needed)');
+              // Return with true to indicate verification is needed
+              Navigator.pop(context, true);
+            }
+          } else {
+            // Main photo didn't change, just added photos
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Profile updated successfully!')),
+              );
+              print('🔴 [EditProfileScreen] Popping without verification (main photo unchanged)');
+              Navigator.pop(context);
+            }
+          }
+        }
+      } else {
+        // No new photos, just update profile normally
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.user.uid)
+            .update({
+          'name': _nameController.text.trim(),
+          'bio': _bioController.text.trim(),
+          'photos': allPhotos,
+          'interests': _selectedInterests,
+          'gender': _selectedGender,
+          'dateOfBirth': _selectedDate.toIso8601String(),
+          'preferences': _preferences,
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Profile updated successfully!')),
+          );
+          Navigator.pop(context);
+        }
       }
     } catch (e) {
       if (mounted) {

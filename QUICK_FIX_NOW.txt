@@ -1,0 +1,82 @@
+================================================================================
+                    QUICK FIX - NullPointerException
+================================================================================
+
+PROBLEM: key.properties has empty or null values
+
+SOLUTION: Recreate the file with correct values
+
+================================================================================
+CHOOSE ONE OPTION BELOW
+================================================================================
+
+OPTION 1: Use PowerShell Script (Easiest)
+-------------------------------------------
+cd c:\CampusBound\frontend
+powershell -ExecutionPolicy Bypass -File fix_keystore.ps1
+
+Then follow the prompts.
+
+
+OPTION 2: Use Batch Script
+---------------------------
+cd c:\CampusBound\frontend
+verify_and_fix_keystore.bat
+
+Then follow the prompts.
+
+
+OPTION 3: Manual Command (Replace YOUR_PASSWORD)
+-------------------------------------------------
+cd c:\CampusBound\frontend\android
+del key.properties
+(
+echo storePassword=YOUR_PASSWORD
+echo keyPassword=YOUR_PASSWORD
+echo keyAlias=campusbound
+echo storeFile=../campusbound.jks
+) > key.properties
+
+Example (if password is MyPassword123!):
+cd c:\CampusBound\frontend\android
+del key.properties
+(
+echo storePassword=MyPassword123!
+echo keyPassword=MyPassword123!
+echo keyAlias=campusbound
+echo storeFile=../campusbound.jks
+) > key.properties
+
+================================================================================
+AFTER CREATING KEY.PROPERTIES
+================================================================================
+
+Run these commands:
+
+cd c:\CampusBound\frontend
+flutter clean
+flutter pub get
+flutter build appbundle --release
+
+================================================================================
+EXPECTED OUTPUT
+================================================================================
+
+✓ Built build/app/outputs/bundle/release/app-release.aab
+
+================================================================================
+NEED HELP?
+================================================================================
+
+See: KEYSTORE_NULL_POINTER_FIX.md
+
+================================================================================
+DO THIS NOW
+================================================================================
+
+1. Choose an option above (1, 2, or 3)
+2. Create/fix key.properties
+3. Run the build command
+4. Report the result!
+
+================================================================================

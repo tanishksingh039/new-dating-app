@@ -172,7 +172,7 @@ class PaymentService {
       final now = DateTime.now();
       final premiumExpiryDate = USE_TEST_EXPIRY
           ? now.add(const Duration(seconds: 30)) // TEST: 30 seconds
-          : now.add(const Duration(days: 30));   // PRODUCTION: 30 days
+          : now.add(const Duration(days: 28));   // PRODUCTION: 28 days
 
       if (kDebugMode) {
         print('🎯 Premium Expiry Configuration:');

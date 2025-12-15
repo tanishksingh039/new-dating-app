@@ -100,21 +100,41 @@ class SwipeLimitService {
 
   /// Reset weekly swipes to 50 (for premium users only)
   /// Premium users get 50 swipes reset every week during their premium period
+  /// Testing: resets every 1 minute
+  /// Production: resets every 7 days
+  /// NOTE: Backend Cloud Function adds 50 swipes on update, so we set to 0
   Future<SwipeStats> _resetWeeklySwipes(SwipeStats stats) async {
     final now = DateTime.now();
+    
+    print('[WeeklyReset] 🔄 Weekly reset triggered for user ${stats.userId}');
+    print('[WeeklyReset] 📊 Current state:');
+    print('[WeeklyReset]   - purchasedSwipesRemaining: ${stats.purchasedSwipesRemaining}');
+    print('[WeeklyReset]   - freeSwipesUsed: ${stats.freeSwipesUsed}');
+    print('[WeeklyReset]   - lastResetDate: ${stats.lastResetDate}');
+    
+    // Reset to 0 swipes (backend will add 50 to make it 50 total)
     final updatedStats = stats.copyWith(
       freeSwipesUsed: 0,
-      purchasedSwipesRemaining: 50, // Reset to 50 swipes every week
+      purchasedSwipesRemaining: 0,
       lastResetDate: now,
       updatedAt: now,
     );
 
+    print('[WeeklyReset] 📝 Resetting to 0 (backend will add 50 to make 50 total)');
+    
+    // Write only essential fields to Firestore
     await _firestore
         .collection('swipe_stats')
         .doc(stats.userId)
-        .update(updatedStats.toFirestore());
+        .update({
+          'freeSwipesUsed': 0,
+          'purchasedSwipesRemaining': 0,
+          'lastResetDate': Timestamp.fromDate(now),
+          'updatedAt': Timestamp.fromDate(now),
+        });
+    
+    print('[WeeklyReset] ✅ Reset completed - backend will add 50 to reach 50 total');
 
-    print('✅ Weekly swipes reset to 50 for premium user ${stats.userId}');
     return updatedStats;
   }
 
@@ -261,44 +281,42 @@ class SwipeLimitService {
       final stats = await getSwipeStats();
       if (stats == null) return;
 
-      // Calculate remaining free swipes from non-premium allocation (8 swipes)
-      final nonPremiumFreeSwipes = SwipeConfig.getFreeSwipes(false); // Should be 8
-      final remainingFreeSwipes = nonPremiumFreeSwipes - stats.freeSwipesUsed;
+      print('[PremiumUpgrade] 🎉 Upgrading user to premium');
+      print('[PremiumUpgrade]   - Current swipes: ${stats.purchasedSwipesRemaining}');
       
-      // Only add remaining free swipes if positive
-      final remainingToAdd = remainingFreeSwipes > 0 ? remainingFreeSwipes : 0;
+      final now = DateTime.now();
       
-      // Premium upgrade: 50 swipes + remaining free swipes from non-premium
-      final premiumBonusSwipes = 50;
-      final totalPurchasedSwipes = stats.purchasedSwipesRemaining + premiumBonusSwipes + remainingToAdd-50;
-
-      print('🎉 Premium Upgrade Calculation:');
-      print('  - Non-premium free swipes used: ${stats.freeSwipesUsed}/$nonPremiumFreeSwipes');
-      print('  - Remaining free swipes to convert: $remainingToAdd');
-      print('  - Premium bonus swipes: $premiumBonusSwipes');
-      print('  - Existing purchased swipes: ${stats.purchasedSwipesRemaining}');
-      print('  - Total purchased swipes after upgrade: $totalPurchasedSwipes');
-
-      // Reset free swipes counter to 0 since user is now premium
-      // Premium users get weekly free swipes that reset, starting fresh
+      // Premium upgrade: Set to 0 (backend will add 50 to make it 50 total)
       final updatedStats = stats.copyWith(
-        freeSwipesUsed: 0, // Reset to 0 for premium weekly tracking
-        purchasedSwipesRemaining: totalPurchasedSwipes,
-        lastResetDate: DateTime.now(), // Start weekly reset cycle
-        updatedAt: DateTime.now(),
+        freeSwipesUsed: 0,
+        purchasedSwipesRemaining: 0,
+        lastResetDate: now,
+        updatedAt: now,
       );
 
+      print('[PremiumUpgrade] 📝 Setting swipes to 0 (backend will add 50 to make 50 total)');
+      
+      // Write to Firestore using set with merge to handle both new and existing documents
       await _firestore
           .collection('swipe_stats')
           .doc(user.uid)
-          .update(updatedStats.toFirestore());
+          .set({
+            'totalSwipes': updatedStats.totalSwipes,
+            'freeSwipesUsed': 0,
+            'purchasedSwipesRemaining': 0,
+            'lastResetDate': Timestamp.fromDate(now),
+            'createdAt': Timestamp.fromDate(updatedStats.createdAt),
+            'updatedAt': Timestamp.fromDate(now),
+          }, SetOptions(merge: true));
+
+      print('[PremiumUpgrade] ✅ Swipes updated - backend will add 50 to reach 50 total');
 
       await _firestore.collection('users').doc(user.uid).update({
         'isPremium': true,
         'premiumUpgradedAt': FieldValue.serverTimestamp(),
       });
 
-      print('✅ Upgraded to premium - User now has $totalPurchasedSwipes purchased swipes');
+      print('[PremiumUpgrade] ✅ Upgraded to premium - User will have 50 swipes');
     } catch (e) {
       print('Error upgrading to premium: $e');
       rethrow;

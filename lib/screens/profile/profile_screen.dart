@@ -6,7 +6,9 @@ import 'package:animate_do/animate_do.dart';
 import 'package:provider/provider.dart';
 import '../../models/user_model.dart';
 import '../../services/match_service.dart';
+import '../../services/profile_picture_verification_service.dart';
 import '../../widgets/spotlight_status_widget.dart';
+import '../../widgets/profile_picture_verification_dialog.dart';
 import '../../providers/appearance_provider.dart';
 import 'edit_profile_screen.dart';
 import 'profile_preview_screen.dart';
@@ -40,6 +42,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
     _loadUserData();
+    
+    // Check for pending profile picture verification on app load
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndShowPendingVerification();
+    });
+  }
+
+  /// Check if user has pending profile picture verification
+  /// If yes, show mandatory verification dialog
+  Future<void> _checkAndShowPendingVerification() async {
+    try {
+      print('🔵 [ProfileScreen] Checking for pending profile picture verification...');
+      final hasPending = await ProfilePictureVerificationService.hasPendingProfilePictureVerification();
+      
+      print('🔵 [ProfileScreen] hasPending result: $hasPending');
+      print('🔵 [ProfileScreen] mounted: $mounted');
+      
+      if (hasPending && mounted) {
+        print('🔵 [ProfileScreen] ⚠️ Pending profile picture verification detected - showing dialog');
+        _showProfilePictureVerificationDialog();
+      } else if (hasPending && !mounted) {
+        print('🔵 [ProfileScreen] ⚠️ Pending verification found but widget not mounted');
+      } else {
+        print('🔵 [ProfileScreen] ✅ No pending verification found');
+      }
+    } catch (e) {
+      print('🔵 [ProfileScreen] ❌ Error checking pending verification: $e');
+    }
+  }
+
+  /// Show mandatory profile picture verification dialog
+  void _showProfilePictureVerificationDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // Cannot dismiss by tapping outside
+      builder: (context) => ProfilePictureVerificationDialog(
+        onVerificationComplete: () {
+          print('✅ Profile picture verification completed');
+          _loadUserData();
+        },
+        onPictureDiscarded: () {
+          print('✅ Profile picture discarded');
+          _loadUserData();
+        },
+      ),
+    );
   }
 
   Future<void> _loadUserData() async {
@@ -248,7 +296,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontSize: 12,
-                                    fontWeight: FontWeight.bold,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ],
@@ -264,7 +312,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         MaterialPageRoute(
                           builder: (context) => EditProfileScreen(user: _currentUser!),
                         ),
-                      ).then((_) => _loadUserData());
+                      ).then((_) async {
+                        print('🔵 [ProfileScreen] Returned from EditProfileScreen');
+                        await _loadUserData();
+                        // Check for pending verification after returning from edit
+                        await Future.delayed(const Duration(milliseconds: 500));
+                        await _checkAndShowPendingVerification();
+                      });
                     },
                     icon: const Icon(Icons.edit, size: 18),
                     label: const Text('Edit'),

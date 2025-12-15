@@ -148,20 +148,40 @@ class _AdminPaymentsTabState extends State<AdminPaymentsTab> {
               
               // Extract amount - handle different formats
               int amountInPaise = 0;
+              print('[AdminPaymentsTab] 🔍 AMOUNT EXTRACTION:');
+              print('[AdminPaymentsTab]   Raw amount: $amount');
+              print('[AdminPaymentsTab]   Type: ${amount.runtimeType}');
+              
               if (amount is int) {
                 amountInPaise = amount;
+                print('[AdminPaymentsTab]   Detected as int: $amountInPaise');
               } else if (amount is double) {
                 amountInPaise = (amount * 100).toInt();
+                print('[AdminPaymentsTab]   Detected as double: $amount → $amountInPaise paise');
               } else if (amount is String) {
                 amountInPaise = int.tryParse(amount) ?? 0;
+                print('[AdminPaymentsTab]   Detected as String: $amount → $amountInPaise paise');
               } else {
                 amountInPaise = (amount as num?)?.toInt() ?? 0;
+                print('[AdminPaymentsTab]   Detected as num: $amount → $amountInPaise paise');
               }
               
-              final amountInRupees = (amountInPaise / 100).round();
-              revenue += amountInRupees;
+              print('[AdminPaymentsTab] 🔄 CONVERSION CHECK:');
+              print('[AdminPaymentsTab]   amountInPaise: $amountInPaise');
+              print('[AdminPaymentsTab]   Is >= 100? ${amountInPaise >= 100}');
               
-              print('[AdminPaymentsTab] ✅ Added ₹$amountInRupees to revenue (total: ₹$revenue)');
+              // Convert paise to rupees
+              // If amount is less than 100, it's likely already in rupees
+              final amountInRupees = amountInPaise >= 100 
+                ? (amountInPaise / 100).round()  // Convert from paise to rupees
+                : amountInPaise;  // Already in rupees
+              
+              print('[AdminPaymentsTab] ✅ FINAL AMOUNT:');
+              print('[AdminPaymentsTab]   Amount in rupees: ₹$amountInRupees');
+              print('[AdminPaymentsTab]   Old revenue: ₹$revenue');
+              revenue += amountInRupees;
+              print('[AdminPaymentsTab]   New revenue: ₹$revenue');
+              print('[AdminPaymentsTab]   Added ₹$amountInRupees to revenue (total: ₹$revenue)');
 
               // Extract payment type - check multiple field names
               final type = (data['type'] ?? data['paymentType'] ?? data['productType'] ?? data['description'] ?? '').toString().toLowerCase();

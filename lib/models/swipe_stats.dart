@@ -67,9 +67,14 @@ class SwipeStats {
   }
 
   /// Check if weekly reset is needed (for premium users only)
+  /// PRODUCTION: Resets every 7 days
   bool needsWeeklyReset() {
     final now = DateTime.now();
     final daysSinceReset = now.difference(lastResetDate).inDays;
+    
+    // PRODUCTION: Reset every 7 days
+    // If enough time has passed, we need a reset (regardless of hasResetThisWeek flag)
+    // The hasResetThisWeek flag will be reset to false during the reset operation
     return daysSinceReset >= 7;
   }
   

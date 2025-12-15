@@ -8,6 +8,7 @@ import '../../models/rewards_model.dart';
 import '../../services/rewards_service.dart'; 
 import '../../models/monthly_winner_model.dart';
 import '../../services/monthly_winner_service.dart';
+import '../../widgets/leaderboard_optout_toggle.dart';
 import './rewards_history_screen.dart';
 import './rewards_rules_screen.dart';
 import './user_rewards_screen.dart';
@@ -30,21 +31,39 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
   bool _isLoading = true;
   late TabController _tabController;
   
-  // Real-time stats stream
-  Stream<UserRewardsStats?>? _userStatsStream;
-  // Real-time leaderboard stream
-  Stream<List<LeaderboardEntry>>? _leaderboardStream;
-  // Real-time rank among girls stream
-  Stream<int>? _rankAmongGirlsStream;
+  // Real-time stats stream - cached to prevent recreation
+  late final Stream<UserRewardsStats?> _userStatsStream;
+  // Real-time leaderboard stream - cached to prevent recreation
+  late final Stream<List<LeaderboardEntry>> _leaderboardStream;
+  // Real-time rank among girls stream - cached to prevent recreation
+  late final Stream<int> _rankAmongGirlsStream;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    
+    // Initialize streams ONCE with caching and distinct to prevent duplicate emissions
+    // This drastically reduces Firestore reads by only emitting when data actually changes
+    _userStatsStream = _rewardsService
+        .getUserStatsStream(currentUserId)
+        .distinct((prev, next) => 
+            prev?.monthlyScore == next?.monthlyScore &&
+            prev?.weeklyScore == next?.weeklyScore &&
+            prev?.totalScore == next?.totalScore)
+        .asBroadcastStream();
+    
+    _leaderboardStream = _rewardsService
+        .getMonthlyLeaderboardStream()
+        .distinct((prev, next) => prev.length == next.length)
+        .asBroadcastStream();
+    
+    _rankAmongGirlsStream = _rewardsService
+        .getUserRankAmongGirlsStream(currentUserId)
+        .distinct()
+        .asBroadcastStream();
+    
     _loadCachedStats(); // Load cached stats first for instant display
-    _userStatsStream = _rewardsService.getUserStatsStream(currentUserId);
-    _leaderboardStream = _rewardsService.getMonthlyLeaderboardStream();
-    _rankAmongGirlsStream = _rewardsService.getUserRankAmongGirlsStream(currentUserId);
     _loadData();
   }
 
@@ -314,14 +333,8 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
     return StreamBuilder<UserRewardsStats?>(
       stream: _userStatsStream,
       builder: (context, snapshot) {
-        debugPrint('📊 StreamBuilder rebuild - hasData: ${snapshot.hasData}, data: ${snapshot.data?.monthlyScore}');
-        
         // Show cached data immediately if available, or loading state
         final stats = snapshot.data ?? _userStats;
-        
-        if (stats != null) {
-          debugPrint('📊 Displaying stats - Monthly: ${stats.monthlyScore}, Total: ${stats.totalScore}');
-        }
         
         // If still no stats after 3 seconds, show default values
         if (stats == null) {
@@ -604,6 +617,7 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
   Widget _buildDashboardTab() {
     return ListView(
       padding: const EdgeInsets.all(16),
+      cacheExtent: 500, // Cache more content for smoother scrolling
       children: [
         _buildMyStats(),
         const SizedBox(height: 16),
@@ -616,10 +630,23 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
     return StreamBuilder<UserRewardsStats?>(
       stream: _userStatsStream,
       builder: (context, snapshot) {
-        // Show skeleton/placeholder while loading
-        final stats = snapshot.data;
+        // Show cached data immediately if available
+        final stats = snapshot.data ?? _userStats;
+        
         if (stats == null) {
           return _buildStatsPlaceholder();
+        }
+        
+        // Update cache when new data arrives
+        if (snapshot.hasData && snapshot.data != _userStats) {
+          Future.microtask(() {
+            if (mounted) {
+              setState(() {
+                _userStats = snapshot.data;
+              });
+              _saveCachedStats(snapshot.data!);
+            }
+          });
         }
         
         return FadeInUp(
@@ -1159,74 +1186,74 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
     return StreamBuilder(
       stream: _leaderboardStream,
       builder: (context, snapshot) {
-        if (snapshot.hasData) {
-          return ListView(
+        if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+          final leaderboardData = snapshot.data!;
+          return ListView.builder(
             padding: const EdgeInsets.all(16),
-            children: [
-              FadeInUp(
-                delay: const Duration(milliseconds: 200),
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: Colors.amber.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Icon(
-                                  Icons.leaderboard,
-                                  color: Colors.amber,
-                                  size: 24,
-                                ),
+            cacheExtent: 500, // Cache more content for smoother scrolling
+            itemCount: 1 + leaderboardData.length, // Header + entries
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                // Header
+                return FadeInUp(
+                  delay: const Duration(milliseconds: 200),
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                              const SizedBox(width: 12),
-                              const Text(
-                                'Top 20 This Month',
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                              child: const Icon(
+                                Icons.leaderboard,
+                                color: Colors.amber,
+                                size: 24,
                               ),
-                            ],
-                          ),
-                          // Refresh button
-                          IconButton(
-                            icon: const Icon(Icons.refresh, color: Colors.purple),
-                            onPressed: _forceRefreshLeaderboard,
-                            tooltip: 'Refresh leaderboard',
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      Column(
-                        children: snapshot.data!
-                            .map((entry) => _buildLeaderboardEntry(entry))
-                            .toList(),
-                      ),
-                    ],
+                            ),
+                            const SizedBox(width: 12),
+                            const Text(
+                              'Top 20 This Month',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        // Refresh button
+                        IconButton(
+                          icon: const Icon(Icons.refresh, color: Colors.purple),
+                          onPressed: _forceRefreshLeaderboard,
+                          tooltip: 'Refresh leaderboard',
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ),
-            ],
+                );
+              } else {
+                // Leaderboard entries
+                final entry = leaderboardData[index - 1];
+                return _buildLeaderboardEntry(entry);
+              }
+            },
           );
         } else {
           return const Center(

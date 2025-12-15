@@ -135,7 +135,7 @@ class _SplashScreenState extends State<SplashScreen>
                     ),
                   ),
                   child: const Text(
-                    '💕 Find Your Perfect Match 💕',
+                    '💕 Match Mile Dil Khile  💕',
                     style: TextStyle(
                       fontSize: 18,
                       color: Colors.white,
