@@ -413,6 +413,36 @@ service cloud.firestore {
     }
     
     // ========================================
+    // ICEBREAKER SYSTEM
+    // ========================================
+    
+    match /icebreaker_prompts/{promptId} {
+      // Allow all authenticated users to read icebreaker prompts
+      allow read: if isAuthenticated();
+      
+      // Allow authenticated users to create prompts (for initialization)
+      allow create: if isAuthenticated();
+      
+      // Allow updates for admin/maintenance
+      allow update: if isAuthenticated();
+      
+      // Allow deletion for cleanup
+      allow delete: if isAuthenticated();
+    }
+    
+    match /icebreaker_usage/{usageId} {
+      // Allow users to read their own usage
+      allow read: if isAuthenticated();
+      
+      // Allow users to create usage records
+      allow create: if isAuthenticated();
+      
+      // No updates or deletes needed
+      allow update: if false;
+      allow delete: if false;
+    }
+    
+    // ========================================
     // DEFAULT DENY
     // ========================================
     

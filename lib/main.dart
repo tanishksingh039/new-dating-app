@@ -11,6 +11,7 @@ import 'services/notification_service.dart';
 import 'services/screenshot_service.dart';
 import 'services/screenshot_protection_service.dart';
 import 'services/presence_service.dart';
+import 'services/icebreaker_service.dart';
 import 'constants/app_colors.dart';
 import 'providers/appearance_provider.dart';
 import 'providers/theme_provider.dart';
@@ -171,6 +172,15 @@ void main() async {
       debugPrint('✅ Firebase Analytics initialized');
     } catch (e) {
       debugPrint('⚠️ Firebase Analytics init failed: $e');
+    }
+    
+    // Initialize icebreaker prompts (runs once)
+    try {
+      final icebreakerService = IcebreakerService();
+      await icebreakerService.initializeDefaultPrompts();
+      debugPrint('✅ Icebreaker prompts initialized');
+    } catch (e) {
+      debugPrint('⚠️ Icebreaker init: $e');
     }
     
     // Start Firestore monitoring (debug mode only)

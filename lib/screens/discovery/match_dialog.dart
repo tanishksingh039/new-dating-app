@@ -5,6 +5,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/user_model.dart';
 import '../chat/chat_screen.dart';
 import 'package:confetti/confetti.dart';
+import '../../widgets/icebreaker_selection_widget.dart';
+import '../../firebase_services.dart';
 
 class MatchDialog extends StatefulWidget {
   final String currentUserId;
@@ -223,10 +225,36 @@ class _MatchDialogState extends State<MatchDialog>
 
                     const SizedBox(height: 20),
 
-                    // Send message button
+                    // Start with icebreaker button
                     SizedBox(
                       width: double.infinity,
-                      child: ElevatedButton(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _showIcebreakerSelection(context, currentUserId, matchedUserPhoto),
+                        icon: const Icon(Icons.chat_bubble_outline, size: 20),
+                        label: const Text(
+                          'Start with a Fun Question',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.pink,
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    // Send message button (secondary)
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
                         onPressed: () {
                           Navigator.pop(context); // Close dialog
                           Navigator.push(
@@ -241,19 +269,19 @@ class _MatchDialogState extends State<MatchDialog>
                             ),
                           );
                         },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.pink,
+                        style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 13),
+                          side: const BorderSide(color: Colors.pink, width: 2),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(30),
                           ),
                         ),
                         child: const Text(
-                          'Send Message',
+                          'Type My Own Message',
                           style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.pink,
                           ),
                         ),
                       ),
@@ -282,6 +310,76 @@ class _MatchDialogState extends State<MatchDialog>
         ],
       ),
     );
+  }
+
+  /// Show icebreaker selection bottom sheet
+  void _showIcebreakerSelection(BuildContext context, String currentUserId, String? matchedUserPhoto) {
+    final matchId = _generateMatchId(currentUserId, widget.matchedUser.uid);
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: IcebreakerSelectionWidget(
+          matchId: matchId,
+          currentUserId: currentUserId,
+          otherUserId: widget.matchedUser.uid,
+          otherUserName: widget.matchedUser.name,
+          onAnswerSubmitted: (question, answer) async {
+            // Close icebreaker sheet
+            Navigator.pop(context);
+            
+            // Send the icebreaker message
+            await _sendIcebreakerMessage(currentUserId, question, answer);
+            
+            // Close match dialog
+            Navigator.pop(context);
+            
+            // Navigate to chat
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ChatScreen(
+                  currentUserId: currentUserId,
+                  otherUserId: widget.matchedUser.uid,
+                  otherUserName: widget.matchedUser.name,
+                  otherUserPhoto: matchedUserPhoto,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  /// Send icebreaker message to chat
+  Future<void> _sendIcebreakerMessage(String currentUserId, String question, String? answer) async {
+    try {
+      // Format the message
+      final messageText = '🎯 $question\n\n💬 $answer';
+      
+      // Send message using FirebaseServices
+      await FirebaseServices.sendMessage(
+        currentUserId,
+        widget.matchedUser.uid,
+        messageText,
+      );
+      
+      debugPrint('✅ Icebreaker message sent successfully');
+    } catch (e) {
+      debugPrint('❌ Error sending icebreaker message: $e');
+    }
+  }
+
+  /// Generate match ID (same logic as MatchService)
+  String _generateMatchId(String user1Id, String user2Id) {
+    final ids = [user1Id, user2Id]..sort();
+    return '${ids[0]}_${ids[1]}';
   }
 
   Widget _buildProfileImage(String imageUrl, bool isCurrentUser) {

@@ -435,7 +435,8 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
     // Track swiped profile
     _swipedProfileIds.add(currentProfile.uid);
 
-    // Show verification popup on like (right swipe) if not verified AND non-premium
+    // Show verification popup on like (right swipe) ONLY if not verified (regardless of premium status)
+    // Once verified, popup should never show again
     final isPremium = Provider.of<PremiumProvider>(context, listen: false).isPremium;
     if (action == 'like' && !_isCurrentUserVerified && !isPremium) {
       Future.delayed(const Duration(milliseconds: 300), () {

@@ -20,6 +20,7 @@ import '../../utils/firestore_extensions.dart';
 import '../../mixins/screenshot_protection_mixin.dart';
 import '../../widgets/premium_lock_overlay.dart';
 import '../../widgets/recording_overlay_widget.dart';
+import '../../widgets/icebreaker_selection_widget.dart';
 import '../safety/report_user_screen.dart';
 import '../safety/block_user_screen.dart';
 import '../../services/user_safety_service.dart';
@@ -240,6 +241,64 @@ class _ChatScreenState extends State<ChatScreen>
     } catch (e) {
       debugPrint('Error marking messages as read: $e');
     }
+  }
+
+  /// Show icebreaker selection bottom sheet
+  void _showIcebreakerSelection() {
+    final matchId = _getChatId(widget.currentUserId, widget.otherUserId);
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: IcebreakerSelectionWidget(
+          matchId: matchId,
+          currentUserId: widget.currentUserId,
+          otherUserId: widget.otherUserId,
+          otherUserName: widget.otherUserName,
+          onAnswerSubmitted: (question, answer) async {
+            // Close icebreaker sheet
+            Navigator.pop(context);
+            
+            // Format and send the icebreaker message
+            final messageText = '🎯 $question\n\n💬 $answer';
+            
+            try {
+              await FirebaseServices.sendMessage(
+                widget.currentUserId,
+                widget.otherUserId,
+                messageText,
+              );
+              
+              // Scroll to bottom
+              Future.delayed(const Duration(milliseconds: 100), () {
+                if (_scrollController.hasClients && mounted) {
+                  _scrollController.animateTo(
+                    0,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut,
+                  );
+                }
+              });
+            } catch (e) {
+              debugPrint('❌ Error sending icebreaker message: $e');
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error sending message: $e'),
+                    backgroundColor: Colors.red.shade400,
+                  ),
+                );
+              }
+            }
+          },
+        ),
+      ),
+    );
   }
 
   Future<void> _sendMessage() async {
@@ -1454,6 +1513,16 @@ class _ChatScreenState extends State<ChatScreen>
                       ),
                       child: Row(
                         children: [
+                          // Icebreaker button
+                          IconButton(
+                            icon: const Icon(
+                              Icons.chat_bubble_outline,
+                              color: Color(0xFFFF6B9D),
+                              size: 22,
+                            ),
+                            onPressed: _showIcebreakerSelection,
+                            tooltip: 'Send icebreaker question',
+                          ),
                           Expanded(
                             child: TextField(
                               controller: _messageController,
