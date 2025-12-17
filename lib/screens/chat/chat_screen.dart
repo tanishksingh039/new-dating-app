@@ -92,7 +92,8 @@ class _ChatScreenState extends State<ChatScreen>
     _presenceSubscription = _presenceService
         .getUserLastActiveStream(widget.otherUserId)
         .listen((lastActive) {
-          if (mounted) {
+          if (mounted && _otherUserLastActive != lastActive) {
+            // Only update if value actually changed to prevent unnecessary rebuilds
             setState(() {
               _otherUserLastActive = lastActive;
             });
@@ -260,18 +261,16 @@ class _ChatScreenState extends State<ChatScreen>
           currentUserId: widget.currentUserId,
           otherUserId: widget.otherUserId,
           otherUserName: widget.otherUserName,
-          onAnswerSubmitted: (question, answer) async {
+          onQuestionSelected: (question) async {
             // Close icebreaker sheet
             Navigator.pop(context);
             
-            // Format and send the icebreaker message
-            final messageText = '🎯 $question\n\n💬 $answer';
-            
+            // Send question directly to chat
             try {
               await FirebaseServices.sendMessage(
                 widget.currentUserId,
                 widget.otherUserId,
-                messageText,
+                question,
               );
               
               // Scroll to bottom
@@ -285,11 +284,11 @@ class _ChatScreenState extends State<ChatScreen>
                 }
               });
             } catch (e) {
-              debugPrint('❌ Error sending icebreaker message: $e');
+              debugPrint('❌ Error sending icebreaker: $e');
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Error sending message: $e'),
+                    content: Text('Error sending question: $e'),
                     backgroundColor: Colors.red.shade400,
                   ),
                 );
@@ -555,16 +554,7 @@ class _ChatScreenState extends State<ChatScreen>
               await _rewardsService.trackDailyConversation(widget.currentUserId, widget.otherUserId);
               debugPrint('💰 Daily conversation tracked');
 
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Image sent! +${ScoringRules.imageSentPoints} points earned ✅'),
-                    backgroundColor: Colors.green,
-                    behavior: SnackBarBehavior.floating,
-                    duration: const Duration(seconds: 3),
-                  ),
-                );
-              }
+              // Points notification removed - points awarded silently
             } catch (e) {
               debugPrint('❌ Error awarding points: $e');
               if (mounted) {
@@ -889,7 +879,8 @@ class _ChatScreenState extends State<ChatScreen>
                     widget.otherUserId,
                   ),
                   builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
+                // Only show loading on first load, not on updates to prevent blinking
+                if (!snapshot.hasData && snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
                     child: CircularProgressIndicator(
                       color: Color(0xFFFF6B9D),

@@ -144,8 +144,6 @@ class IcebreakerUsage {
   final String matchId;
   final String promptId;
   final String question;
-  final String? selectedReply;
-  final String? customReply;
   final String senderId;
   final DateTime usedAt;
 
@@ -153,8 +151,6 @@ class IcebreakerUsage {
     required this.matchId,
     required this.promptId,
     required this.question,
-    this.selectedReply,
-    this.customReply,
     required this.senderId,
     required this.usedAt,
   });
@@ -166,8 +162,6 @@ class IcebreakerUsage {
       matchId: data['matchId'] ?? '',
       promptId: data['promptId'] ?? '',
       question: data['question'] ?? '',
-      selectedReply: data['selectedReply'],
-      customReply: data['customReply'],
       senderId: data['senderId'] ?? '',
       usedAt: (data['usedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
@@ -179,8 +173,6 @@ class IcebreakerUsage {
       'matchId': matchId,
       'promptId': promptId,
       'question': question,
-      'selectedReply': selectedReply,
-      'customReply': customReply,
       'senderId': senderId,
       'usedAt': Timestamp.fromDate(usedAt),
     };

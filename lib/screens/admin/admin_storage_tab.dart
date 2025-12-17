@@ -47,11 +47,12 @@ class _AdminStorageTabState extends State<AdminStorageTab> {
       // Estimate storage (assuming average 500KB per photo)
       final photosStorage = photoCount * 0.0005; // GB
 
-      // Calculate chat images (if collection exists)
+      // Calculate chat images from all chat subcollections
       int chatImageCount = 0;
       try {
-        print('[AdminStorageTab] 💬 Fetching messages...');
-        final messagesSnapshot = await _firestore.collection('messages').get();
+        print('[AdminStorageTab] 💬 Fetching messages from all chats...');
+        // Use collectionGroup to query all 'messages' subcollections across all chats
+        final messagesSnapshot = await _firestore.collectionGroup('messages').get();
         print('[AdminStorageTab] ✅ Got ${messagesSnapshot.docs.length} messages');
         
         for (var doc in messagesSnapshot.docs) {

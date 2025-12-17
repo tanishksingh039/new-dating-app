@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../../models/rewards_model.dart'; 
+import '../../models/user_model.dart';
 import '../../services/rewards_service.dart'; 
 import '../../models/monthly_winner_model.dart';
 import '../../services/monthly_winner_service.dart';
+import '../../services/reward_notification_service.dart';
 import '../../widgets/leaderboard_optout_toggle.dart';
 import './rewards_history_screen.dart';
 import './rewards_rules_screen.dart';
@@ -29,7 +32,11 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
   List<LeaderboardEntry> _leaderboard = [];
   List<RewardIncentive> _incentives = [];
   bool _isLoading = true;
+  bool _isCheckingAccess = true;
+  bool _hasAccess = false;
+  String? _userGender;
   late TabController _tabController;
+  bool _hasShownRewardPopup = false;
   
   // Real-time stats stream - cached to prevent recreation
   late final Stream<UserRewardsStats?> _userStatsStream;
@@ -41,7 +48,367 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
   @override
   void initState() {
     super.initState();
+    _checkLeaderboardAccess(); // Check if user is female before loading anything
+  }
+  
+  // Check for unread winner notifications and show popup
+  Future<void> _checkAndShowWinnerNotification() async {
+    try {
+      debugPrint('[RewardsLeaderboard] 🔔 Checking for winner notifications...');
+      
+      // Get unread winner notifications
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserId)
+          .collection('notifications')
+          .where('type', isEqualTo: 'winner_announcement')
+          .where('read', isEqualTo: false)
+          .get();
+      
+      debugPrint('[RewardsLeaderboard] 📊 Found ${snapshot.docs.length} unread winner notifications');
+      
+      if (snapshot.docs.isNotEmpty && mounted) {
+        // Get the first unread notification
+        final notification = snapshot.docs.first.data();
+        final title = notification['title'] ?? '🏆 Congratulations!';
+        final body = notification['body'] ?? 'You\'ve been announced as a winner!';
+        
+        debugPrint('[RewardsLeaderboard] 🎉 Showing winner popup: $title');
+        
+        // Show popup after a short delay
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            _showWinnerPopup(title, body);
+          }
+        });
+        
+        // Mark all winner notifications as read
+        await RewardNotificationService.markWinnerNotificationsAsRead();
+        debugPrint('[RewardsLeaderboard] ✅ Marked notifications as read');
+      } else {
+        debugPrint('[RewardsLeaderboard] ℹ️ No unread winner notifications');
+      }
+    } catch (e) {
+      debugPrint('[RewardsLeaderboard] ❌ Error checking winner notifications: $e');
+    }
+  }
+  
+  // Check for new rewards and show popup
+  Future<void> _checkAndShowRewardPopup() async {
+    if (currentUserId.isEmpty || _hasShownRewardPopup) return;
+    
+    try {
+      // Wait for rewards to load
+      await Future.delayed(const Duration(milliseconds: 1000));
+      
+      final prefs = await SharedPreferences.getInstance();
+      final lastShownKey = 'reward_popup_shown_$currentUserId';
+      final lastShown = prefs.getString(lastShownKey);
+      final now = DateTime.now();
+      
+      // Show popup once per day
+      if (lastShown != null) {
+        final lastShownDate = DateTime.parse(lastShown);
+        if (now.difference(lastShownDate).inHours < 24) {
+          debugPrint('[RewardsLeaderboard] ⏭️ Reward popup already shown today');
+          return;
+        }
+      }
+      
+      // Get rewards from Firestore
+      final rewardsSnapshot = await FirebaseFirestore.instance
+          .collection('rewards')
+          .where('userId', isEqualTo: currentUserId)
+          .where('status', isEqualTo: 'pending')
+          .get();
+      
+      final pendingRewards = rewardsSnapshot.docs.where((doc) {
+        final data = doc.data();
+        final expiryDate = data['expiryDate'] as Timestamp?;
+        if (expiryDate != null) {
+          return expiryDate.toDate().isAfter(DateTime.now());
+        }
+        return true;
+      }).toList();
+      
+      debugPrint('[RewardsLeaderboard] 🎁 Found ${pendingRewards.length} pending rewards');
+      
+      if (pendingRewards.isNotEmpty && mounted) {
+        _hasShownRewardPopup = true;
+        await prefs.setString(lastShownKey, now.toIso8601String());
+        
+        debugPrint('[RewardsLeaderboard] 🎉 Showing reward popup for ${pendingRewards.length} rewards');
+        
+        // Show popup after a short delay
+        Future.delayed(const Duration(milliseconds: 1500), () {
+          if (mounted) {
+            _showNewRewardsPopup(pendingRewards.length);
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('[RewardsLeaderboard] ❌ Error checking rewards: $e');
+    }
+  }
+
+  // Show new rewards popup
+  void _showNewRewardsPopup(int count) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.orange.shade400,
+                Colors.deepOrange.shade600,
+              ],
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Animated gift icon
+              TweenAnimationBuilder(
+                duration: const Duration(milliseconds: 600),
+                tween: Tween<double>(begin: 0, end: 1),
+                builder: (context, double value, child) {
+                  return Transform.scale(
+                    scale: value,
+                    child: Transform.rotate(
+                      angle: value * 0.2,
+                      child: const Icon(
+                        Icons.card_giftcard,
+                        size: 80,
+                        color: Colors.white,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              
+              // Title
+              const Text(
+                '🎉 You Have New Rewards!',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              
+              // Body
+              Text(
+                count == 1
+                    ? 'You have 1 new reward waiting for you!'
+                    : 'You have $count new rewards waiting for you!',
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.white,
+                  height: 1.4,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              
+              // Close button
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  // Navigate to user rewards screen
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const UserRewardsScreen(),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.deepOrange,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(25),
+                  ),
+                ),
+                child: const Text(
+                  'Claim Now! 🎁',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Show winner announcement popup
+  void _showWinnerPopup(String title, String body) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFFFFD700),
+                Color(0xFFFFA500),
+              ],
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Trophy icon with animation
+              TweenAnimationBuilder(
+                duration: const Duration(milliseconds: 600),
+                tween: Tween<double>(begin: 0, end: 1),
+                builder: (context, double value, child) {
+                  return Transform.scale(
+                    scale: value,
+                    child: Transform.rotate(
+                      angle: value * 0.1,
+                      child: const Icon(
+                        Icons.emoji_events,
+                        size: 80,
+                        color: Colors.white,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              
+              // Title
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              
+              // Body
+              Text(
+                body,
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.white,
+                  height: 1.4,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              
+              // Close button
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: const Color(0xFFFFA500),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(25),
+                  ),
+                ),
+                child: const Text(
+                  'Awesome! 🎉',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  
+  // CRITICAL: Check if user is female - leaderboard is GIRLS ONLY
+  Future<void> _checkLeaderboardAccess() async {
+    try {
+      print('[RewardsLeaderboard] 🔐 Checking leaderboard access for user: $currentUserId');
+      
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserId)
+          .get();
+      
+      if (userDoc.exists) {
+        final user = UserModel.fromMap(userDoc.data()!);
+        _userGender = user.gender;
+        
+        // LEADERBOARD IS GIRLS ONLY - only female users can access
+        _hasAccess = user.gender.toLowerCase() == 'female';
+        
+        print('[RewardsLeaderboard] 👤 User gender: ${user.gender}');
+        print('[RewardsLeaderboard] ${_hasAccess ? '✅ ACCESS GRANTED' : '🚫 ACCESS DENIED'} - Leaderboard is for FEMALE users only');
+        
+        if (_hasAccess) {
+          // Initialize leaderboard for female users
+          _initializeLeaderboard();
+        }
+      } else {
+        print('[RewardsLeaderboard] ❌ User document not found');
+        _hasAccess = false;
+      }
+      
+      setState(() {
+        _isCheckingAccess = false;
+      });
+      
+    } catch (e) {
+      print('[RewardsLeaderboard] ❌ Error checking access: $e');
+      setState(() {
+        _isCheckingAccess = false;
+        _hasAccess = false;
+      });
+    }
+  }
+  
+  // Initialize leaderboard (only called for female users)
+  void _initializeLeaderboard() {
     _tabController = TabController(length: 2, vsync: this);
+    
+    // Check for winner notifications and show popup
+    _checkAndShowWinnerNotification();
+    
+    // Check for new rewards and show popup
+    _checkAndShowRewardPopup();
     
     // Initialize streams ONCE with caching and distinct to prevent duplicate emissions
     // This drastically reduces Firestore reads by only emitting when data actually changes
@@ -210,6 +577,40 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Show loading while checking access
+    if (_isCheckingAccess) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: Colors.purple),
+              SizedBox(height: 16),
+              Text('Loading...'),
+            ],
+          ),
+        ),
+      );
+    }
+    
+    // Male users should never reach here (hidden in navigation)
+    // But if they do somehow, just show loading or redirect
+    if (!_hasAccess) {
+      // Immediately go back - this screen should not be accessible
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+      });
+      
+      return Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(color: Colors.purple),
+        ),
+      );
+    }
+    
+    // Show leaderboard for female users
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: () async {
@@ -1186,8 +1587,17 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
     return StreamBuilder(
       stream: _leaderboardStream,
       builder: (context, snapshot) {
-        if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-          final leaderboardData = snapshot.data!;
+        // Use cached data if stream hasn't emitted yet
+        final leaderboardData = snapshot.hasData ? snapshot.data! : _leaderboard;
+        
+        // Show loading only on first load when no cached data
+        if (!snapshot.hasData && _leaderboard.isEmpty && snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: Colors.purple),
+          );
+        }
+        
+        if (leaderboardData.isNotEmpty) {
           return ListView.builder(
             padding: const EdgeInsets.all(16),
             cacheExtent: 500, // Cache more content for smoother scrolling
@@ -1256,15 +1666,23 @@ class _RewardsLeaderboardScreenState extends State<RewardsLeaderboardScreen>
             },
           );
         } else {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(20),
-              child: Text(
-                'No leaderboard data yet',
-                style: TextStyle(color: Colors.grey),
+          // Only show 'No data' if we've actually loaded and there's nothing
+          if (snapshot.connectionState == ConnectionState.active || snapshot.connectionState == ConnectionState.done) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: Text(
+                  'No leaderboard data yet',
+                  style: TextStyle(color: Colors.grey),
+                ),
               ),
-            ),
-          );
+            );
+          } else {
+            // Still loading
+            return const Center(
+              child: CircularProgressIndicator(color: Colors.purple),
+            );
+          }
         }
       },
     );

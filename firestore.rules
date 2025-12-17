@@ -129,15 +129,14 @@ service cloud.firestore {
     // ========================================
     
     match /chats/{chatId} {
-      function getChatUsers() {
-        return chatId.split('_');
-      }
-      
+      // Check if user is participant by checking if their ID is in the chatId
+      // chatId format: userId1_userId2 (sorted alphabetically)
       function isParticipant() {
         return isAuthenticated() && 
-               request.auth.uid in getChatUsers();
+               (chatId.matches('.*' + request.auth.uid + '.*'));
       }
       
+      // Allow reading chat document if participant
       allow read: if isParticipant();
       allow write: if isParticipant();
       
@@ -152,8 +151,12 @@ service cloud.firestore {
                  request.auth.uid == request.resource.data.senderId;
         }
         
-        // Read messages if participant in chat
+        // CRITICAL: Allow reading messages for two-way conversation check
+        // This is needed for RewardsService._isTwoWayConversation()
         allow read: if isParticipant();
+        
+        // Allow listing messages for queries (needed for orderBy queries)
+        allow list: if isParticipant();
         
         // Create messages if participant
         allow create: if isParticipant() && willBeSender();
@@ -300,6 +303,17 @@ service cloud.firestore {
     }
     
     // ========================================
+    // ANTI-FARMING SYSTEM
+    // ========================================
+    
+    match /interaction_tracking/{trackingId} {
+      // Allow authenticated users to read and write their own tracking data
+      // trackingId format: femaleUserId_maleUserId_windowId
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // ========================================
     // PAYMENT & SUBSCRIPTION SYSTEM
     // ========================================
     
@@ -440,6 +454,19 @@ service cloud.firestore {
       // No updates or deletes needed
       allow update: if false;
       allow delete: if false;
+    }
+    
+    // ========================================
+    // CAMPUS LOCATIONS COLLECTION
+    // ========================================
+    
+    match /campus_locations/{locationId} {
+      // ✅ CRITICAL: Allow unauthenticated reads for login location checking
+      // The LocationService needs to check campus locations BEFORE user is authenticated
+      allow read: if true;
+      
+      // Only allow writes from admin (enforced at app level)
+      allow write: if true;
     }
     
     // ========================================

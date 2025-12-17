@@ -277,19 +277,39 @@ class _LivenessVerificationScreenState extends State<LivenessVerificationScreen>
       }
       
       final userData = userDoc.data();
-      final List<dynamic>? photos = userData?['photos'] as List<dynamic>?;
       
-      print('[LivenessVerification] 📸 Profile photos count: ${photos?.length ?? 0}');
+      // CRITICAL: If this is profile picture verification, use the PENDING photo
+      // Otherwise, use the current profile photo
+      String? profilePhotoUrl;
       
-      if (photos == null || photos.isEmpty) {
-        print('[LivenessVerification] ❌ No profile photos found');
-        _showError('Please upload a profile photo first before verification.');
-        return false;
+      if (widget.isProfilePictureVerification) {
+        // Get the pending profile picture URL (the NEW photo being verified)
+        profilePhotoUrl = userData?['pendingProfilePictureUrl'] as String?;
+        print('[LivenessVerification] 🔄 Profile picture verification mode');
+        print('[LivenessVerification] 📸 Using PENDING profile photo URL: $profilePhotoUrl');
+        
+        if (profilePhotoUrl == null || profilePhotoUrl.isEmpty) {
+          print('[LivenessVerification] ❌ No pending profile photo found');
+          _showError('No pending profile photo found. Please upload a photo first.');
+          return false;
+        }
+      } else {
+        // Regular verification - use current profile photo
+        final List<dynamic>? photos = userData?['photos'] as List<dynamic>?;
+        
+        print('[LivenessVerification] 📸 Regular verification mode');
+        print('[LivenessVerification] 📸 Profile photos count: ${photos?.length ?? 0}');
+        
+        if (photos == null || photos.isEmpty) {
+          print('[LivenessVerification] ❌ No profile photos found');
+          _showError('Please upload a profile photo first before verification.');
+          return false;
+        }
+        
+        // Get the first profile photo URL
+        profilePhotoUrl = photos.first as String;
+        print('[LivenessVerification] 🖼️ Using CURRENT profile photo URL: $profilePhotoUrl');
       }
-      
-      // Get the first profile photo URL
-      final profilePhotoUrl = photos.first as String;
-      print('[LivenessVerification] 🖼️ Profile photo URL: $profilePhotoUrl');
       
       // Download profile photo to temp file for comparison
       print('[LivenessVerification] ⬇️ Downloading profile photo...');

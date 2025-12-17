@@ -7,6 +7,7 @@ import '../../models/discovery_filters.dart';
 import '../../services/discovery_service.dart';
 import '../../services/match_service.dart';
 import '../../services/swipe_limit_service.dart';
+import '../../services/spotlight_discovery_service.dart';
 import '../../utils/firestore_extensions.dart';
 import '../../widgets/profile_card.dart';
 import '../../widgets/action_buttons.dart';
@@ -31,6 +32,7 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
   final DiscoveryService _discoveryService = DiscoveryService();
   final MatchService _matchService = MatchService();
   final SwipeLimitService _swipeLimitService = SwipeLimitService();
+  final SpotlightDiscoveryService _spotlightService = SpotlightDiscoveryService();
   
   List<UserModel> _profiles = [];
   List<UserModel> _allProfiles = []; // Store all loaded profiles for looping
@@ -40,6 +42,9 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
   DiscoveryFilters? _filters; // Start with null - no filters applied by default
   Set<String> _swipedProfileIds = {}; // Track swiped profiles in current session
   bool _isCurrentUserVerified = false;
+  int _swipeCount = 0; // Track swipes for spotlight rotation
+  Set<String> _shownSpotlightUserIds = {}; // Track shown spotlight users
+  Set<String> _spotlightProfileIds = {}; // Track which profiles are spotlight profiles
 
   @override
   void initState() {
@@ -47,6 +52,7 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
     _currentUserId = FirebaseAuth.instance.currentUser?.uid;
     _checkUserVerification();
     _loadProfiles();
+    _activateSpotlights(); // Activate pending spotlights for today
   }
 
   // Check if current user is verified and premium status
@@ -73,6 +79,7 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
       debugPrint('Error checking verification: $e');
     }
   }
+
 
   // Show verification required dialog
   void _showVerificationDialog() {
@@ -434,6 +441,10 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
     
     // Track swiped profile
     _swipedProfileIds.add(currentProfile.uid);
+    
+    // Increment swipe count for spotlight rotation (all users)
+    _swipeCount++;
+    debugPrint('🎯 [Spotlight] Swipe count: $_swipeCount');
 
     // Show verification popup on like (right swipe) ONLY if not verified (regardless of premium status)
     // Once verified, popup should never show again
@@ -446,6 +457,12 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
       });
     }
 
+    // Check if should show spotlight profile (every 5 swipes for all users)
+    if (_swipeCount % 5 == 0) {
+      debugPrint('🎯 [Spotlight] Triggering spotlight after 5 swipes...');
+      await _injectSpotlightProfile();
+    }
+    
     // Move to next profile IMMEDIATELY for smooth UX
     setState(() {
       _currentIndex++;
@@ -515,6 +532,59 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
   void _onSuperLike() {
     // Directly handle swipe for instant response
     _handleSwipe('superlike');
+  }
+
+  // Activate pending spotlights for today (background job)
+  Future<void> _activateSpotlights() async {
+    try {
+      debugPrint('🎯 [Spotlight] Activating pending spotlights for today...');
+      await _spotlightService.activateTodaySpotlights();
+      await _spotlightService.completeExpiredSpotlights();
+      debugPrint('🎯 [Spotlight] ✅ Spotlight activation complete');
+    } catch (e) {
+      debugPrint('🎯 [Spotlight] ⚠️ Error activating spotlights: $e');
+    }
+  }
+
+  // Inject spotlight profile into discovery flow
+  Future<void> _injectSpotlightProfile() async {
+    try {
+      debugPrint('🎯 [Spotlight] Fetching spotlight profile...');
+      
+      // Get all user IDs we've already shown (regular + spotlight)
+      final excludeIds = [
+        ..._swipedProfileIds,
+        ..._shownSpotlightUserIds,
+        if (_currentUserId != null) _currentUserId!,
+      ];
+      
+      // Get spotlight profile
+      final spotlightDoc = await _spotlightService.getSpotlightProfile(
+        excludeUserIds: excludeIds,
+      );
+      
+      if (spotlightDoc != null && spotlightDoc.exists) {
+        final spotlightUser = UserModel.fromMap(spotlightDoc.data() as Map<String, dynamic>);
+        
+        debugPrint('🎯 [Spotlight] Found spotlight user: ${spotlightUser.uid}');
+        debugPrint('🎯 [Spotlight] Name: ${spotlightUser.name}');
+        
+        // Track this spotlight user
+        _shownSpotlightUserIds.add(spotlightUser.uid);
+        _spotlightProfileIds.add(spotlightUser.uid);
+        
+        // Insert spotlight profile at current position
+        setState(() {
+          _profiles.insert(_currentIndex + 1, spotlightUser);
+        });
+        
+        debugPrint('🎯 [Spotlight] ✅ Spotlight profile injected at position ${_currentIndex + 1}');
+      } else {
+        debugPrint('🎯 [Spotlight] ⚠️ No spotlight profile available');
+      }
+    } catch (e) {
+      debugPrint('🎯 [Spotlight] ❌ Error injecting spotlight: $e');
+    }
   }
 
   @override
@@ -727,6 +797,7 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
                           child: ProfileCard(
                             user: _profiles[_currentIndex + 1],
                             enablePhotoCarousel: false, // Disable carousel for background card
+                            isSpotlight: _spotlightProfileIds.contains(_profiles[_currentIndex + 1].uid),
                           ),
                         ),
                       ),
@@ -756,6 +827,7 @@ class _SwipeableDiscoveryScreenState extends State<SwipeableDiscoveryScreen>
                         child: ProfileCard(
                           key: ValueKey(currentProfile.uid), // Unique key for ProfileCard
                           user: currentProfile,
+                          isSpotlight: _spotlightProfileIds.contains(currentProfile.uid),
                         ),
                       ),
                     ),

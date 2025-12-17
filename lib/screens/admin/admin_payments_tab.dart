@@ -407,15 +407,14 @@ class _AdminPaymentsTabState extends State<AdminPaymentsTab> {
       case 'week':
         try {
           final now = DateTime.now();
-          final weekAgo = now.subtract(const Duration(days: 7));
-          final endOfToday = now.add(const Duration(days: 1));
-          final isInRange = date.isAfter(weekAgo) && date.isBefore(endOfToday);
-          print('[AdminPaymentsTab] 🔍 Week filter: date=$date, weekAgo=$weekAgo, now=$now, inRange=$isInRange');
-          
-          // Fallback: if not in range, check if it's exactly on boundary
-          if (!isInRange && (date.isBefore(weekAgo) || date.isAfter(endOfToday))) {
-            print('[AdminPaymentsTab] ℹ️ Week filter fallback: date outside range');
-          }
+          // Start of 7 days ago (inclusive)
+          final weekAgo = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 7));
+          // End of today (inclusive)
+          final endOfToday = DateTime(now.year, now.month, now.day, 23, 59, 59);
+          // Use >= and <= for inclusive comparison
+          final isInRange = date.isAfter(weekAgo.subtract(const Duration(seconds: 1))) && 
+                           date.isBefore(endOfToday.add(const Duration(seconds: 1)));
+          print('[AdminPaymentsTab] 🔍 Week filter: date=$date, weekAgo=$weekAgo, endOfToday=$endOfToday, inRange=$isInRange');
           return isInRange;
         } catch (e) {
           print('[AdminPaymentsTab] ❌ Error in week filter: $e');
@@ -425,15 +424,14 @@ class _AdminPaymentsTabState extends State<AdminPaymentsTab> {
       case 'month':
         try {
           final now = DateTime.now();
-          final monthAgo = now.subtract(const Duration(days: 30));
-          final endOfToday = now.add(const Duration(days: 1));
-          final isInRange = date.isAfter(monthAgo) && date.isBefore(endOfToday);
-          print('[AdminPaymentsTab] 🔍 Month filter: date=$date, monthAgo=$monthAgo, now=$now, inRange=$isInRange');
-          
-          // Fallback: if not in range, check if it's exactly on boundary
-          if (!isInRange && (date.isBefore(monthAgo) || date.isAfter(endOfToday))) {
-            print('[AdminPaymentsTab] ℹ️ Month filter fallback: date outside range');
-          }
+          // Start of 30 days ago (inclusive)
+          final monthAgo = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 30));
+          // End of today (inclusive)
+          final endOfToday = DateTime(now.year, now.month, now.day, 23, 59, 59);
+          // Use >= and <= for inclusive comparison
+          final isInRange = date.isAfter(monthAgo.subtract(const Duration(seconds: 1))) && 
+                           date.isBefore(endOfToday.add(const Duration(seconds: 1)));
+          print('[AdminPaymentsTab] 🔍 Month filter: date=$date, monthAgo=$monthAgo, endOfToday=$endOfToday, inRange=$isInRange');
           return isInRange;
         } catch (e) {
           print('[AdminPaymentsTab] ❌ Error in month filter: $e');
@@ -446,18 +444,14 @@ class _AdminPaymentsTabState extends State<AdminPaymentsTab> {
             print('[AdminPaymentsTab] 🔍 Custom filter: No dates set, returning true (fallback)');
             return true;
           }
-          final endOfEndDate = _endDate!.add(const Duration(days: 1));
-          final isInRange = date.isAfter(_startDate!) && date.isBefore(endOfEndDate);
-          print('[AdminPaymentsTab] 🔍 Custom filter: date=$date, start=$_startDate, end=$_endDate, inRange=$isInRange');
-          
-          // Fallback: check boundary conditions
-          if (!isInRange) {
-            if (date.isBefore(_startDate!)) {
-              print('[AdminPaymentsTab] ℹ️ Custom filter fallback: date before start');
-            } else if (date.isAfter(endOfEndDate)) {
-              print('[AdminPaymentsTab] ℹ️ Custom filter fallback: date after end');
-            }
-          }
+          // Start of start date (inclusive)
+          final startOfStartDate = DateTime(_startDate!.year, _startDate!.month, _startDate!.day);
+          // End of end date (inclusive)
+          final endOfEndDate = DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59);
+          // Use >= and <= for inclusive comparison
+          final isInRange = date.isAfter(startOfStartDate.subtract(const Duration(seconds: 1))) && 
+                           date.isBefore(endOfEndDate.add(const Duration(seconds: 1)));
+          print('[AdminPaymentsTab] 🔍 Custom filter: date=$date, start=$startOfStartDate, end=$endOfEndDate, inRange=$isInRange');
           return isInRange;
         } catch (e) {
           print('[AdminPaymentsTab] ❌ Error in custom filter: $e');
@@ -861,14 +855,16 @@ class _AdminPaymentsTabState extends State<AdminPaymentsTab> {
           }
           
           print('[AdminPaymentsTab] ✅ State updated, rebuilding widget...');
-          print('[AdminPaymentsTab] 🔄 Filter changed - manually re-processing last snapshot');
-          print('[AdminPaymentsTab] Last snapshot available: ${_lastSnapshot != null}');
         });
         
-        // Re-process the last snapshot with new filter
+        // CRITICAL: Re-process AFTER setState completes so new filter is active
+        print('[AdminPaymentsTab] 🔄 Filter changed - manually re-processing last snapshot');
+        print('[AdminPaymentsTab] Last snapshot available: ${_lastSnapshot != null}');
+        
         if (_lastSnapshot != null) {
-          print('[AdminPaymentsTab] 🔄 Re-processing ${_lastSnapshot!.docs.length} payments with new filter');
-          _reprocessData();
+          print('[AdminPaymentsTab] 🔄 Re-processing ${_lastSnapshot!.docs.length} payments with new filter: $filter');
+          // Use Future.microtask to ensure setState completes first
+          Future.microtask(() => _reprocessData());
         } else {
           print('[AdminPaymentsTab] ⚠️ No snapshot available to re-process');
         }

@@ -329,12 +329,12 @@ class _MatchDialogState extends State<MatchDialog>
           currentUserId: currentUserId,
           otherUserId: widget.matchedUser.uid,
           otherUserName: widget.matchedUser.name,
-          onAnswerSubmitted: (question, answer) async {
+          onQuestionSelected: (question) async {
             // Close icebreaker sheet
             Navigator.pop(context);
             
-            // Send the icebreaker message
-            await _sendIcebreakerMessage(currentUserId, question, answer);
+            // Send the icebreaker question
+            await _sendIcebreakerMessage(currentUserId, question);
             
             // Close match dialog
             Navigator.pop(context);
@@ -357,22 +357,19 @@ class _MatchDialogState extends State<MatchDialog>
     );
   }
 
-  /// Send icebreaker message to chat
-  Future<void> _sendIcebreakerMessage(String currentUserId, String question, String? answer) async {
+  /// Send icebreaker question to chat
+  Future<void> _sendIcebreakerMessage(String currentUserId, String question) async {
     try {
-      // Format the message
-      final messageText = '🎯 $question\n\n💬 $answer';
-      
-      // Send message using FirebaseServices
+      // Send question directly to chat
       await FirebaseServices.sendMessage(
         currentUserId,
         widget.matchedUser.uid,
-        messageText,
+        question,
       );
       
-      debugPrint('✅ Icebreaker message sent successfully');
+      debugPrint('✅ Icebreaker question sent successfully');
     } catch (e) {
-      debugPrint('❌ Error sending icebreaker message: $e');
+      debugPrint('❌ Error sending icebreaker: $e');
     }
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/reward_model.dart';
 import '../../services/reward_service.dart';
 import '../../constants/app_colors.dart';
@@ -15,6 +16,7 @@ class UserRewardsScreen extends StatefulWidget {
 class _UserRewardsScreenState extends State<UserRewardsScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final String? _userId = FirebaseAuth.instance.currentUser?.uid;
+  bool _hasShownPopup = false;
 
   @override
   void initState() {
@@ -24,6 +26,153 @@ class _UserRewardsScreenState extends State<UserRewardsScreen> with SingleTicker
     debugPrint('[UserRewardsScreen] 🎁 Initializing User Rewards Screen');
     debugPrint('[UserRewardsScreen] User ID: $_userId');
     debugPrint('[UserRewardsScreen] ═══════════════════════════════════════');
+    
+    // Check and show popup for new rewards
+    _checkAndShowRewardPopup();
+  }
+
+  Future<void> _checkAndShowRewardPopup() async {
+    if (_userId == null || _hasShownPopup) return;
+    
+    try {
+      // Wait for rewards to load
+      await Future.delayed(const Duration(milliseconds: 800));
+      
+      final prefs = await SharedPreferences.getInstance();
+      final lastShownKey = 'reward_popup_shown_$_userId';
+      final lastShown = prefs.getString(lastShownKey);
+      final now = DateTime.now();
+      
+      // Show popup once per day
+      if (lastShown != null) {
+        final lastShownDate = DateTime.parse(lastShown);
+        if (now.difference(lastShownDate).inHours < 24) {
+          debugPrint('[UserRewardsScreen] ⏭️ Popup already shown today');
+          return;
+        }
+      }
+      
+      // Get rewards
+      final rewards = await RewardService.getUserRewards(_userId!).first;
+      final pendingRewards = rewards.where((r) => 
+        r.status == RewardStatus.pending && !r.isExpired
+      ).toList();
+      
+      if (pendingRewards.isNotEmpty && mounted) {
+        _hasShownPopup = true;
+        await prefs.setString(lastShownKey, now.toIso8601String());
+        
+        debugPrint('[UserRewardsScreen] 🎉 Showing popup for ${pendingRewards.length} rewards');
+        
+        // Show popup after a short delay
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            _showNewRewardsPopup(pendingRewards.length);
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('[UserRewardsScreen] ❌ Error checking rewards: $e');
+    }
+  }
+
+  void _showNewRewardsPopup(int count) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.orange.shade400,
+                Colors.deepOrange.shade600,
+              ],
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Animated gift icon
+              TweenAnimationBuilder(
+                duration: const Duration(milliseconds: 600),
+                tween: Tween<double>(begin: 0, end: 1),
+                builder: (context, double value, child) {
+                  return Transform.scale(
+                    scale: value,
+                    child: Transform.rotate(
+                      angle: value * 0.2,
+                      child: const Icon(
+                        Icons.card_giftcard,
+                        size: 80,
+                        color: Colors.white,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              
+              // Title
+              const Text(
+                '🎉 You Have New Rewards!',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              
+              // Body
+              Text(
+                count == 1
+                    ? 'You have 1 new reward waiting for you!'
+                    : 'You have $count new rewards waiting for you!',
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.white,
+                  height: 1.4,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              
+              // Close button
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.deepOrange,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(25),
+                  ),
+                ),
+                child: const Text(
+                  'Claim Now! 🎁',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override

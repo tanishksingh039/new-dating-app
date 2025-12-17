@@ -13,6 +13,7 @@ import '../../models/user_model.dart';
 import '../../services/navigation_service.dart';
 import '../../services/action_notification_service.dart';
 import '../../services/presence_service.dart';
+import '../../services/reward_notification_service.dart';
 import '../../widgets/admin_action_checker.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -27,6 +28,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _isFemale = false;
   bool _isLoading = true;
   final PresenceService _presenceService = PresenceService();
+  int _unreadRewardNotifications = 0;
 
   List<Widget> _screens = [];
 
@@ -34,6 +36,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     _checkUserGender();
+    _listenToRewardNotifications();
     
     // Listen to navigation service for tab changes
     NavigationService.selectedTabNotifier.addListener(_onTabChangeFromNotification);
@@ -78,7 +81,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       setState(() {
         _selectedIndex = newIndex;
       });
+      
+      // Mark notifications as read when user opens Rewards tab
+      if (_isFemale && newIndex == 4) {
+        RewardNotificationService.markWinnerNotificationsAsRead();
+      }
     }
+  }
+  
+  void _listenToRewardNotifications() {
+    debugPrint('[HomeScreen] 🔔 Setting up reward notification listener...');
+    RewardNotificationService.getUnreadWinnerNotificationsCount().listen((count) {
+      debugPrint('[HomeScreen] 🔔 Received notification count: $count');
+      if (mounted) {
+        setState(() {
+          _unreadRewardNotifications = count;
+          debugPrint('[HomeScreen] 🔔 Updated badge count to: $_unreadRewardNotifications');
+        });
+      }
+    }, onError: (error) {
+      debugPrint('[HomeScreen] ❌ Error in notification listener: $error');
+    });
   }
 
   Future<void> _checkUserGender() async {
@@ -132,10 +155,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _onItemTapped(int index) async {
+  void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
     });
+    
+    // Mark notifications as read when user taps Rewards tab
+    if (_isFemale && index == 4) {
+      RewardNotificationService.markWinnerNotificationsAsRead();
+    }
     
     // Check for pending warnings when user changes tabs
     _checkForWarnings();
@@ -247,33 +275,33 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 fontSize: 12,
               ),
               items: _isFemale
-                  ? const [
-                      BottomNavigationBarItem(
+                  ? [
+                      const BottomNavigationBarItem(
                         icon: Icon(Icons.explore_outlined),
                         activeIcon: Icon(Icons.explore),
                         label: 'Discover',
                       ),
-                      BottomNavigationBarItem(
+                      const BottomNavigationBarItem(
                         icon: Icon(Icons.favorite_border),
                         activeIcon: Icon(Icons.favorite),
                         label: 'Likes',
                       ),
-                      BottomNavigationBarItem(
+                      const BottomNavigationBarItem(
                         icon: Icon(Icons.people_outline),
                         activeIcon: Icon(Icons.people),
                         label: 'Matches',
                       ),
-                      BottomNavigationBarItem(
+                      const BottomNavigationBarItem(
                         icon: Icon(Icons.chat_bubble_outline),
                         activeIcon: Icon(Icons.chat_bubble),
                         label: 'Chat',
                       ),
                       BottomNavigationBarItem(
-                        icon: Icon(Icons.emoji_events_outlined),
-                        activeIcon: Icon(Icons.emoji_events),
+                        icon: _buildRewardsIconWithBadge(false),
+                        activeIcon: _buildRewardsIconWithBadge(true),
                         label: 'Rewards',
                       ),
-                      BottomNavigationBarItem(
+                      const BottomNavigationBarItem(
                         icon: Icon(Icons.person_outline),
                         activeIcon: Icon(Icons.person),
                         label: 'Profile',
@@ -308,6 +336,58 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ],
         ),
       ),
+    );
+  }
+  
+  Widget _buildRewardsIconWithBadge(bool isActive) {
+    debugPrint('[HomeScreen] 🎨 Building rewards icon with badge. Count: $_unreadRewardNotifications, Active: $isActive');
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Icon(
+          isActive ? Icons.emoji_events : Icons.emoji_events_outlined,
+          size: 24,
+        ),
+        if (_unreadRewardNotifications > 0)
+          Positioned(
+            right: -8,
+            top: -6,
+            child: Container(
+              padding: const EdgeInsets.all(5),
+              decoration: BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.white,
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              constraints: const BoxConstraints(
+                minWidth: 20,
+                minHeight: 20,
+              ),
+              child: Center(
+                child: Text(
+                  _unreadRewardNotifications > 9 ? '9+' : '$_unreadRewardNotifications',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    height: 1.0,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

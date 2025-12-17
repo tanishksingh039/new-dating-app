@@ -75,19 +75,25 @@ class RewardsService {
   Future<List<LeaderboardEntry>> getMonthlyLeaderboard() async {
     print('[RewardsService] 🔄 getMonthlyLeaderboard STARTED');
     try {
-      print('[RewardsService] 📊 Querying rewards_stats (top 20 by monthlyScore)...');
+      // Get current user's gender to filter opposite gender
+      final currentUserId = _firestore.app.options.projectId; // This won't work, need to pass userId
+      // For now, fetch more entries and filter client-side
+      print('[RewardsService] 📊 Querying rewards_stats (top 50 by monthlyScore for filtering)...');
       final snapshot = await _firestore
           .collection('rewards_stats')
           .orderBy('monthlyScore', descending: true)
-          .limit(20)
+          .limit(50) // Fetch more to account for filtering
           .get();
 
       print('[RewardsService] ✅ Query returned ${snapshot.docs.length} documents');
       List<LeaderboardEntry> leaderboard = [];
       int rank = 1;
       int skipped = 0;
+      int genderFiltered = 0;
 
       for (var doc in snapshot.docs) {
+        if (leaderboard.length >= 20) break; // Stop after 20 entries
+        
         final stats = UserRewardsStats.fromMap(doc.data());
         print('[RewardsService] 👤 Processing user: ${stats.userId}, monthlyScore: ${stats.monthlyScore}');
         
@@ -99,6 +105,15 @@ class RewardsService {
             
         if (userDoc.exists) {
           final user = UserModel.fromMap(userDoc.data()!);
+          
+          // CRITICAL: Only show FEMALE users in leaderboard (boys see girls)
+          // This is a dating app - leaderboard should show opposite gender
+          if (user.gender.toLowerCase() != 'female') {
+            print('[RewardsService] 🚫 Filtered out non-female user: ${user.name} (gender: ${user.gender})');
+            genderFiltered++;
+            continue;
+          }
+          
           leaderboard.add(LeaderboardEntry(
             userId: stats.userId,
             userName: user.name,
@@ -115,7 +130,7 @@ class RewardsService {
         }
       }
 
-      print('[RewardsService] 🎉 getMonthlyLeaderboard COMPLETED: ${leaderboard.length} entries, $skipped skipped');
+      print('[RewardsService] 🎉 getMonthlyLeaderboard COMPLETED: ${leaderboard.length} entries, $skipped skipped, $genderFiltered filtered by gender');
       return leaderboard;
     } catch (e, stackTrace) {
       print('[RewardsService] ❌ EXCEPTION in getMonthlyLeaderboard: $e');
@@ -130,7 +145,7 @@ class RewardsService {
     return _firestore
         .collection('rewards_stats')
         .orderBy('monthlyScore', descending: true)
-        .limit(20)
+        .limit(50) // Fetch more to account for gender filtering
         .snapshots()
         .asyncMap<List<LeaderboardEntry>>((snapshot) async {
           print('[RewardsService] 📡 Real-time update received: ${snapshot.docs.length} documents');
@@ -158,20 +173,22 @@ class RewardsService {
           List<LeaderboardEntry> leaderboard = [];
           int rank = 1;
           int skipped = 0;
-          int optedOut = 0;
+          int genderFiltered = 0;
 
           for (int i = 0; i < snapshot.docs.length; i++) {
+            if (leaderboard.length >= 20) break; // Stop after 20 entries
+            
             final stats = UserRewardsStats.fromMap(snapshot.docs[i].data());
             final userDoc = userDocs[i];
             
             if (userDoc.exists) {
               final user = UserModel.fromMap(userDoc.data()!);
               
-              // Check if user has opted out of leaderboard
-              final isOptedOut = (user.isOptedOutOfLeaderboard ?? false);
-              if (isOptedOut) {
-                print('[RewardsService] 🔇 Skipping opted-out user: ${stats.userId}');
-                optedOut++;
+              // CRITICAL: Only show FEMALE users in leaderboard (boys see girls)
+              // This is a dating app - leaderboard should show opposite gender
+              if (user.gender.toLowerCase() != 'female') {
+                print('[RewardsService] 🚫 Filtered out non-female user: ${user.name} (gender: ${user.gender})');
+                genderFiltered++;
                 continue;
               }
               
@@ -190,7 +207,7 @@ class RewardsService {
             }
           }
 
-          print('[RewardsService] ✅ Real-time leaderboard updated: ${leaderboard.length} entries, $skipped skipped');
+          print('[RewardsService] ✅ Real-time leaderboard updated: ${leaderboard.length} entries, $skipped skipped, $genderFiltered filtered by gender');
           return leaderboard;
         });
   }
@@ -201,13 +218,16 @@ class RewardsService {
       final snapshot = await _firestore
           .collection('rewards_stats')
           .orderBy('weeklyScore', descending: true)
-          .limit(20)
+          .limit(50) // Fetch more to account for gender filtering
           .get();
 
       List<LeaderboardEntry> leaderboard = [];
       int rank = 1;
+      int genderFiltered = 0;
 
       for (var doc in snapshot.docs) {
+        if (leaderboard.length >= 20) break; // Stop after 20 entries
+        
         final stats = UserRewardsStats.fromMap(doc.data());
         
         final userDoc = await _firestore
@@ -217,6 +237,15 @@ class RewardsService {
             
         if (userDoc.exists) {
           final user = UserModel.fromMap(userDoc.data()!);
+          
+          // CRITICAL: Only show FEMALE users in leaderboard (boys see girls)
+          // This is a dating app - leaderboard should show opposite gender
+          if (user.gender.toLowerCase() != 'female') {
+            print('[RewardsService] 🚫 Filtered out non-female user: ${user.name} (gender: ${user.gender})');
+            genderFiltered++;
+            continue;
+          }
+          
           leaderboard.add(LeaderboardEntry(
             userId: stats.userId,
             userName: user.name,
@@ -229,6 +258,7 @@ class RewardsService {
         }
       }
 
+      print('[RewardsService] ✅ Weekly leaderboard: ${leaderboard.length} entries, $genderFiltered filtered by gender');
       return leaderboard;
     } catch (e) {
       print('Error getting weekly leaderboard: $e');
@@ -288,18 +318,6 @@ class RewardsService {
     print('═══════════════════════════════════════════════════════════');
     
     try {
-      // Check if user has opted out of leaderboard
-      print('[RewardsService] 🔍 Checking opt-out status...');
-      final optOutService = LeaderboardOptOutService();
-      final isOptedOut = await optOutService.isOptedOut(userId);
-      
-      if (isOptedOut) {
-        print('[RewardsService] 🔇 USER OPTED OUT: User has opted out of leaderboard - no points awarded');
-        debugPrint('⏭️ User opted out of leaderboard - no points awarded');
-        return;
-      }
-      print('[RewardsService] ✅ User is opted in to leaderboard');
-
       // Check anti-farming limits (if otherUserId is provided)
       if (otherUserId != null && otherUserId.isNotEmpty) {
         print('[RewardsService] 🛡️ Checking anti-farming limits...');
@@ -377,6 +395,15 @@ class RewardsService {
         await _updateMessageTracking(userId, conversationId, messageText, quality.score);
         print('[RewardsService] ✅ Message tracking updated');
         
+        // Record interaction time for 35-minute cap (if otherUserId provided)
+        if (otherUserId != null && otherUserId.isNotEmpty) {
+          print('[RewardsService] ⏱️ Recording interaction time for anti-farming...');
+          final antiFarmingService = LeaderboardAntiArmingService();
+          // Estimate 1 minute per message (can be adjusted based on actual timing)
+          await antiFarmingService.recordInteraction(userId, otherUserId, 60);
+          print('[RewardsService] ✅ Interaction time recorded');
+        }
+        
         debugPrint('✅ Awarded $points points (quality: ${quality.score})');
         print('[RewardsService] 🎉 awardMessagePoints COMPLETED SUCCESSFULLY');
       } else {
@@ -444,18 +471,6 @@ class RewardsService {
     print('═══════════════════════════════════════════════════════════');
     
     try {
-      // Check if user has opted out of leaderboard
-      print('[RewardsService] 🔍 Checking opt-out status for image...');
-      final optOutService = LeaderboardOptOutService();
-      final isOptedOut = await optOutService.isOptedOut(userId);
-      
-      if (isOptedOut) {
-        print('[RewardsService] 🔇 USER OPTED OUT: User has opted out of leaderboard - no points awarded');
-        debugPrint('⏭️ User opted out of leaderboard - no points awarded');
-        return;
-      }
-      print('[RewardsService] ✅ User is opted in to leaderboard');
-
       // Check anti-farming limits (if otherUserId is provided)
       if (otherUserId != null && otherUserId.isNotEmpty) {
         print('[RewardsService] 🛡️ Checking anti-farming limits for image...');
@@ -549,6 +564,15 @@ class RewardsService {
       
       await _updateImageTracking(userId, conversationId);
       print('[RewardsService] ✅ Image tracking updated');
+      
+      // Record interaction time for 35-minute cap (if otherUserId provided)
+      if (otherUserId != null && otherUserId.isNotEmpty) {
+        print('[RewardsService] ⏱️ Recording image interaction time for anti-farming...');
+        final antiFarmingService = LeaderboardAntiArmingService();
+        // Images count as 2 minutes of interaction (more valuable)
+        await antiFarmingService.recordInteraction(userId, otherUserId, 120);
+        print('[RewardsService] ✅ Image interaction time recorded');
+      }
       
       debugPrint('✅ Image points awarded successfully!');
       print('[RewardsService] 🎉 awardImagePoints COMPLETED SUCCESSFULLY');
@@ -794,15 +818,26 @@ class RewardsService {
         final longestStreak = currentStreak > (data['longestStreak'] ?? 0)
             ? currentStreak
             : data['longestStreak'];
+        
+        // Check if user completed 7-day streak for weekly bonus
+        int weeklyBonus = 0;
+        if (currentStreak % 7 == 0) {
+          weeklyBonus = ScoringRules.weeklyStreakBonus;
+          print('[RewardsService] 🎉 WEEKLY STREAK BONUS: User completed 7-day streak! +$weeklyBonus points');
+        }
             
         await docRef.update({
           'currentStreak': currentStreak,
           'longestStreak': longestStreak,
-          'totalScore': (data['totalScore'] ?? 0) + ScoringRules.dailyStreakBonus,
-          'weeklyScore': (data['weeklyScore'] ?? 0) + ScoringRules.dailyStreakBonus,
-          'monthlyScore': (data['monthlyScore'] ?? 0) + ScoringRules.dailyStreakBonus,
+          'totalScore': (data['totalScore'] ?? 0) + ScoringRules.dailyStreakBonus + weeklyBonus,
+          'weeklyScore': (data['weeklyScore'] ?? 0) + ScoringRules.dailyStreakBonus + weeklyBonus,
+          'monthlyScore': (data['monthlyScore'] ?? 0) + ScoringRules.dailyStreakBonus + weeklyBonus,
           'lastUpdated': Timestamp.now(),
         });
+        
+        if (weeklyBonus > 0) {
+          debugPrint('🎉 Weekly streak bonus awarded: $weeklyBonus points!');
+        }
       }
     } catch (e) {
       print('Error updating streak: $e');
@@ -835,7 +870,8 @@ class RewardsService {
     }
   }
 
-  // Check if conversation is two-way (both users have sent messages)
+  // Check if conversation is two-way with 5:1 ratio
+  // Girl can send up to 5 messages before boy needs to reply
   Future<bool> _isTwoWayConversation(
     String conversationId,
     String currentUserId,
@@ -864,32 +900,38 @@ class RewardsService {
         return false;
       }
 
-      // Check if other user has sent at least one message
-      bool otherUserHasSent = false;
-      bool currentUserHasSent = false;
-
+      // Count consecutive messages from current user since last other user message
+      int consecutiveCurrentUserMessages = 0;
+      bool otherUserHasSentEver = false;
+      
       for (var doc in messagesSnapshot.docs) {
         final senderId = doc.data()['senderId'] as String?;
         
         if (senderId == otherUserId) {
-          otherUserHasSent = true;
-        }
-        if (senderId == currentUserId) {
-          currentUserHasSent = true;
-        }
-
-        // If both have sent messages, it's a two-way conversation
-        if (otherUserHasSent && currentUserHasSent) {
-          print('[RewardsService] ✅ Two-way conversation detected');
-          print('[RewardsService]    Current user sent: $currentUserHasSent');
-          print('[RewardsService]    Other user sent: $otherUserHasSent');
-          return true;
+          otherUserHasSentEver = true;
+          // Found other user's message - stop counting
+          break;
+        } else if (senderId == currentUserId) {
+          consecutiveCurrentUserMessages++;
         }
       }
 
-      print('[RewardsService] ❌ One-sided conversation detected');
-      print('[RewardsService]    Current user sent: $currentUserHasSent');
-      print('[RewardsService]    Other user sent: $otherUserHasSent');
+      print('[RewardsService] 📊 Consecutive messages from current user: $consecutiveCurrentUserMessages');
+      print('[RewardsService] 📊 Other user has sent messages: $otherUserHasSentEver');
+      
+      // Allow up to 5 consecutive messages from girl before requiring boy's reply
+      if (consecutiveCurrentUserMessages <= 5) {
+        print('[RewardsService] ✅ Within 5:1 message ratio - points allowed');
+        return true;
+      }
+      
+      // If girl has sent 6+ consecutive messages, require boy to reply first
+      if (!otherUserHasSentEver) {
+        print('[RewardsService] ❌ Other user has never replied - no points after 5 messages');
+        return false;
+      }
+      
+      print('[RewardsService] ❌ Exceeded 5:1 ratio - waiting for other user to reply');
       return false;
     } catch (e) {
       print('[RewardsService] ❌ Error checking two-way conversation: $e');

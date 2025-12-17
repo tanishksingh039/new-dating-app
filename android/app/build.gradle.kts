@@ -57,7 +57,7 @@ android {
 
     defaultConfig {
         applicationId = "com.campusbound.app"
-        minSdk = flutter.minSdkVersion
+        minSdk = 26  // Required for tflite_flutter (face detection)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

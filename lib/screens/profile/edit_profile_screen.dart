@@ -599,22 +599,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           ),
           const SizedBox(height: 16),
           DropdownButtonFormField<String>(
-            value: _normalizePreference('interestedIn', _preferences['interestedIn'] as String?),
-            decoration: InputDecoration(
-              labelText: 'Interested in',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            items: ['Male', 'Female'].map((option) {
-              return DropdownMenuItem(value: option, child: Text(option));
-            }).toList(),
-            onChanged: (value) {
-              setState(() {
-                _preferences['interestedIn'] = value;
-              });
-            },
-          ),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
             value: _normalizePreference('lookingFor', _preferences['lookingFor'] as String?),
             decoration: InputDecoration(
               labelText: 'Looking for',

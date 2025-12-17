@@ -54,16 +54,11 @@ class MessageTracking {
 
   /// Check if user has exceeded hourly message limit
   bool hasExceededMessageLimit() {
-    final now = DateTime.now();
-    final hoursSinceLastMessage = now.difference(lastMessageTime).inHours;
-    
-    // Reset counter if more than 1 hour has passed
-    if (hoursSinceLastMessage >= 1) {
-      return false;
-    }
-    
-    // Max 20 messages per hour per conversation
-    return hourlyMessageCount >= 20;
+    // REMOVED: This was blocking points after ~5 minutes
+    // The 35-minute anti-farming cap handles rate limiting properly
+    // 20 messages per hour = 1 message every 3 minutes
+    // Users were hitting this limit in 5-6 minutes, blocking the 35-minute window
+    return false;
   }
 
   /// Check if user has exceeded hourly image limit
@@ -92,7 +87,8 @@ class MessageTracking {
 
 /// Rate limit configuration
 class RateLimitConfig {
-  static const int maxMessagesPerHour = 20;
+  // REMOVED: maxMessagesPerHour - was conflicting with 35-minute anti-farming cap
+  // The anti-farming service handles rate limiting with 35 minutes per 6-hour window
   static const int maxImagesPerHour = 5;
   static const int minSecondsBetweenMessages = 3;
   static const int maxConversationsPerDay = 10;

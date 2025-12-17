@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/icebreaker_model.dart';
 import '../services/icebreaker_service.dart';
+import '../models/icebreaker_model.dart';
 
-/// Widget for selecting and answering icebreaker prompts
+/// Simplified icebreaker widget - shows questions only, sends directly to chat
 class IcebreakerSelectionWidget extends StatefulWidget {
   final String matchId;
   final String currentUserId;
   final String otherUserId;
   final String otherUserName;
-  final Function(String question, String? answer) onAnswerSubmitted;
+  final Function(String question) onQuestionSelected;
 
   const IcebreakerSelectionWidget({
     Key? key,
@@ -17,7 +17,7 @@ class IcebreakerSelectionWidget extends StatefulWidget {
     required this.currentUserId,
     required this.otherUserId,
     required this.otherUserName,
-    required this.onAnswerSubmitted,
+    required this.onQuestionSelected,
   }) : super(key: key);
 
   @override
@@ -28,12 +28,9 @@ class IcebreakerSelectionWidget extends StatefulWidget {
 class _IcebreakerSelectionWidgetState
     extends State<IcebreakerSelectionWidget> {
   final IcebreakerService _icebreakerService = IcebreakerService();
-  final TextEditingController _customAnswerController = TextEditingController();
   
   IcebreakerPrompt? _currentPrompt;
   bool _isLoading = true;
-  bool _showCustomAnswer = false;
-  String? _selectedQuickReply;
   List<String> _userInterests = [];
 
   @override
@@ -66,7 +63,6 @@ class _IcebreakerSelectionWidgetState
 
   @override
   void dispose() {
-    _customAnswerController.dispose();
     super.dispose();
   }
 
@@ -84,46 +80,19 @@ class _IcebreakerSelectionWidgetState
     });
   }
 
-  Future<void> _submitAnswer() async {
+  void _sendQuestion() {
     if (_currentPrompt == null) return;
-
-    String? answer;
-    if (_showCustomAnswer) {
-      answer = _customAnswerController.text.trim();
-      if (answer.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please enter your answer'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-    } else {
-      answer = _selectedQuickReply;
-      if (answer == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please select an answer'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-    }
-
+    
     // Record usage
-    await _icebreakerService.recordUsage(
+    _icebreakerService.recordUsage(
       matchId: widget.matchId,
       promptId: _currentPrompt!.id,
       question: _currentPrompt!.question,
-      selectedReply: _showCustomAnswer ? null : answer,
-      customReply: _showCustomAnswer ? answer : null,
       senderId: widget.currentUserId,
     );
-
-    // Call callback with question and answer
-    widget.onAnswerSubmitted(_currentPrompt!.question, answer);
+    
+    // Send question directly to chat
+    widget.onQuestionSelected(_currentPrompt!.question);
   }
 
   @override
@@ -228,7 +197,7 @@ class _IcebreakerSelectionWidgetState
                 Expanded(
                   flex: 2,
                   child: ElevatedButton(
-                    onPressed: _submitAnswer,
+                    onPressed: _sendQuestion,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.pink,
                       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -237,7 +206,7 @@ class _IcebreakerSelectionWidgetState
                       ),
                     ),
                     child: const Text(
-                      'Send Answer',
+                      'Send Question',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
@@ -254,10 +223,8 @@ class _IcebreakerSelectionWidgetState
   }
 
   Widget _buildQuestionCard() {
-    final hasQuickReplies = _currentPrompt!.quickReplies?.isNotEmpty ?? false;
-
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
@@ -274,137 +241,57 @@ class _IcebreakerSelectionWidgetState
         ),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // Category badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              '${IcebreakerCategory.getEmoji(_currentPrompt!.category)} ${IcebreakerCategory.getDisplayName(_currentPrompt!.category)}',
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Colors.pink,
+          if (_currentPrompt!.relatedInterest != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
               ),
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          // Question
-          Text(
-            _currentPrompt!.question,
-            style: const TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
-              height: 1.4,
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Quick replies or custom answer
-          if (hasQuickReplies && !_showCustomAnswer)
-            _buildQuickReplies()
-          else
-            _buildCustomAnswerField(),
-
-          // Toggle custom answer
-          if (hasQuickReplies)
-            TextButton.icon(
-              onPressed: () {
-                setState(() {
-                  _showCustomAnswer = !_showCustomAnswer;
-                  _selectedQuickReply = null;
-                  _customAnswerController.clear();
-                });
-              },
-              icon: Icon(
-                _showCustomAnswer ? Icons.list : Icons.edit,
-                size: 16,
-                color: Colors.pink,
-              ),
-              label: Text(
-                _showCustomAnswer ? 'Choose from options' : 'Write custom answer',
+              child: Text(
+                '${_currentPrompt!.relatedInterest} 💕',
                 style: const TextStyle(
                   fontSize: 13,
+                  fontWeight: FontWeight.w600,
                   color: Colors.pink,
                 ),
               ),
             ),
+
+          const SizedBox(height: 16),
+
+          // Question - centered and prominent
+          Text(
+            _currentPrompt!.question,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+              height: 1.5,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          
+          const SizedBox(height: 12),
+          
+          // Hint text
+          Text(
+            'This question will be sent to ${widget.otherUserName}',
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey[600],
+              fontStyle: FontStyle.italic,
+            ),
+            textAlign: TextAlign.center,
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildQuickReplies() {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: _currentPrompt!.quickReplies!.map((reply) {
-        final isSelected = _selectedQuickReply == reply;
-        return InkWell(
-          onTap: () {
-            setState(() {
-              _selectedQuickReply = reply;
-            });
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: isSelected ? Colors.pink : Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: isSelected ? Colors.pink : Colors.grey.shade300,
-                width: 1.5,
-              ),
-            ),
-            child: Text(
-              reply,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                color: isSelected ? Colors.white : Colors.black87,
-              ),
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildCustomAnswerField() {
-    return TextField(
-      controller: _customAnswerController,
-      maxLines: 3,
-      maxLength: 200,
-      decoration: InputDecoration(
-        hintText: 'Type your answer here...',
-        hintStyle: TextStyle(color: Colors.grey[400]),
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.pink, width: 2),
-        ),
-        contentPadding: const EdgeInsets.all(12),
-      ),
-      style: const TextStyle(fontSize: 14),
-    );
-  }
 
   Widget _buildNoPromptsMessage() {
     return Container(

@@ -15,15 +15,49 @@ class BulkLeaderboardControlScreen extends StatefulWidget {
 
 class _BulkLeaderboardControlScreenState extends State<BulkLeaderboardControlScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final TextEditingController _searchController = TextEditingController();
   
   List<Map<String, dynamic>> _profiles = [];
+  List<Map<String, dynamic>> _filteredProfiles = [];
   bool _isLoading = false;
   String _selectedGender = 'All';
+  String _searchQuery = '';
   
   @override
   void initState() {
     super.initState();
     _loadProfiles();
+    _searchController.addListener(_onSearchChanged);
+  }
+  
+  @override
+  void dispose() {
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+    super.dispose();
+  }
+  
+  void _onSearchChanged() {
+    setState(() {
+      _searchQuery = _searchController.text.toLowerCase();
+      _filterProfiles();
+    });
+  }
+  
+  void _filterProfiles() {
+    if (_searchQuery.isEmpty) {
+      _filteredProfiles = List.from(_profiles);
+    } else {
+      _filteredProfiles = _profiles.where((profile) {
+        final name = (profile['name'] ?? '').toString().toLowerCase();
+        final email = (profile['email'] ?? '').toString().toLowerCase();
+        final uid = (profile['uid'] ?? '').toString().toLowerCase();
+        
+        return name.contains(_searchQuery) || 
+               email.contains(_searchQuery) || 
+               uid.contains(_searchQuery);
+      }).toList();
+    }
   }
 
   Future<void> _loadProfiles() async {
@@ -44,6 +78,7 @@ class _BulkLeaderboardControlScreenState extends State<BulkLeaderboardControlScr
           data['uid'] = doc.id;
           return data;
         }).toList();
+        _filterProfiles();
       });
       
       debugPrint('[BulkLeaderboardControl] Loaded ${_profiles.length} profiles');
@@ -454,6 +489,37 @@ class _BulkLeaderboardControlScreenState extends State<BulkLeaderboardControlScr
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Search Bar
+                TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search by name, email, or user ID...',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              _searchController.clear();
+                            },
+                          )
+                        : null,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.purple.shade200),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.purple.shade200),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.purple.shade700, width: 2),
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 16),
                 const Text(
                   'Filter by Gender',
                   style: TextStyle(fontWeight: FontWeight.w600),
@@ -475,7 +541,7 @@ class _BulkLeaderboardControlScreenState extends State<BulkLeaderboardControlScr
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Total Profiles: ${_profiles.length}',
+                  'Total Profiles: ${_profiles.length}${_searchQuery.isNotEmpty ? ' (Filtered: ${_filteredProfiles.length})' : ''}',
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ],
@@ -549,18 +615,20 @@ class _BulkLeaderboardControlScreenState extends State<BulkLeaderboardControlScr
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : _profiles.isEmpty
+                : _filteredProfiles.isEmpty
                     ? Center(
                         child: Text(
-                          'No profiles found for $_selectedGender',
+                          _searchQuery.isNotEmpty 
+                              ? 'No profiles found matching "$_searchQuery"'
+                              : 'No profiles found for $_selectedGender',
                           style: TextStyle(color: Colors.grey[600]),
                         ),
                       )
                     : ListView.builder(
                         padding: const EdgeInsets.all(16),
-                        itemCount: _profiles.length,
+                        itemCount: _filteredProfiles.length,
                         itemBuilder: (context, index) {
-                          final profile = _profiles[index];
+                          final profile = _filteredProfiles[index];
                           return _buildProfileCard(profile, index);
                         },
                       ),

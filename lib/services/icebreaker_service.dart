@@ -134,8 +134,6 @@ class IcebreakerService {
     required String matchId,
     required String promptId,
     required String question,
-    String? selectedReply,
-    String? customReply,
     required String senderId,
   }) async {
     try {
@@ -143,8 +141,6 @@ class IcebreakerService {
         matchId: matchId,
         promptId: promptId,
         question: question,
-        selectedReply: selectedReply,
-        customReply: customReply,
         senderId: senderId,
         usedAt: DateTime.now(),
       );

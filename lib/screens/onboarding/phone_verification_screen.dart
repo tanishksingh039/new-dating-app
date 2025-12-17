@@ -119,9 +119,18 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
       return;
     }
 
+    if (_verificationId == null) {
+      _showSnackBar('Verification session expired. Please resend OTP.', Colors.red);
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
+      debugPrint('[PhoneVerification] 🔐 Creating credential with:');
+      debugPrint('[PhoneVerification] Verification ID: $_verificationId');
+      debugPrint('[PhoneVerification] OTP Code: ${_otpController.text.trim()}');
+      
       final credential = PhoneAuthProvider.credential(
         verificationId: _verificationId!,
         smsCode: _otpController.text.trim(),
@@ -152,7 +161,14 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
           debugPrint('[PhoneVerification] ✅ Phone saved to Firestore');
         } catch (linkError) {
           debugPrint('[PhoneVerification] ⚠️ Error linking phone: $linkError');
-          // If already linked, just continue
+          // Only continue if phone is already linked, otherwise rethrow
+          if (linkError is FirebaseAuthException && 
+              linkError.code == 'credential-already-in-use') {
+            debugPrint('[PhoneVerification] ℹ️ Phone already linked, continuing...');
+          } else {
+            // Invalid OTP or other error - rethrow to show error to user
+            rethrow;
+          }
         }
         debugPrint('[PhoneVerification] ═══════════════════════════════════════');
       } else {
@@ -166,9 +182,42 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
         Navigator.pushReplacementNamed(context, '/onboarding/terms');
         debugPrint('[PhoneVerification] ✅ Navigation called');
       }
+    } on FirebaseAuthException catch (e) {
+      debugPrint('[PhoneVerification] ❌ FirebaseAuthException: ${e.code} - ${e.message}');
+      
+      String errorMessage = 'Invalid OTP. Please try again.';
+      
+      if (e.code == 'invalid-verification-code') {
+        errorMessage = 'Invalid OTP code. Please check and try again.';
+      } else if (e.code == 'session-expired') {
+        errorMessage = 'OTP expired. Please request a new one.';
+        setState(() {
+          _otpSent = false;
+          _verificationId = null;
+        });
+      } else if (e.code == 'invalid-verification-id') {
+        errorMessage = 'Verification session invalid. Please resend OTP.';
+        setState(() {
+          _otpSent = false;
+          _verificationId = null;
+        });
+      } else if (e.code == 'credential-already-in-use') {
+        errorMessage = 'This phone number is already linked to another account.';
+      } else if (e.code == 'provider-already-linked') {
+        errorMessage = 'Phone number already linked. Proceeding...';
+        // This is actually success, navigate
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/onboarding/terms');
+          return;
+        }
+      } else {
+        errorMessage = 'Error: ${e.message ?? e.code}';
+      }
+      
+      _showSnackBar(errorMessage, Colors.red);
     } catch (e) {
-      debugPrint('[PhoneVerification] ❌ Error: $e');
-      _showSnackBar('Invalid OTP. Please try again.', Colors.red);
+      debugPrint('[PhoneVerification] ❌ Unknown Error: $e');
+      _showSnackBar('Something went wrong. Please try again.', Colors.red);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);

@@ -6,11 +6,13 @@ import '../models/user_model.dart';
 class ProfileCard extends StatefulWidget {
   final UserModel user;
   final bool enablePhotoCarousel;
+  final bool isSpotlight;
 
   const ProfileCard({
     Key? key,
     required this.user,
     this.enablePhotoCarousel = true,
+    this.isSpotlight = false,
   }) : super(key: key);
 
   @override
@@ -150,6 +152,14 @@ class _ProfileCardState extends State<ProfileCard> {
                       ),
                     ),
                   ),
+
+                  // Spotlight badge at top left
+                  if (widget.isSpotlight)
+                    Positioned(
+                      top: 16,
+                      left: 16,
+                      child: _buildSpotlightBadge(),
+                    ),
 
                   // Photo indicators at top
                   if (widget.user.photos.length > 1)
@@ -420,6 +430,48 @@ class _ProfileCardState extends State<ProfileCard> {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Build spotlight badge (top left corner)
+  Widget _buildSpotlightBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFFFD700).withOpacity(0.5),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          Icon(
+            Icons.star,
+            color: Colors.white,
+            size: 16,
+          ),
+          SizedBox(width: 6),
+          Text(
+            'SPOTLIGHT',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
+            ),
           ),
         ],
       ),

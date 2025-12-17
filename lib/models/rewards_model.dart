@@ -307,7 +307,7 @@ class ScoringRules {
   static const int top10Reward = 250;
   
   // Rate limits (enforced by MessageTracking)
-  static const int maxMessagesPerHour = 20;
+  // REMOVED: maxMessagesPerHour - was conflicting with 35-minute anti-farming cap
   static const int maxImagesPerHour = 5;
   static const int minSecondsBetweenMessages = 3;
   static const int maxConversationsPerDayForPoints = 10;

@@ -284,38 +284,62 @@ class FaceDetectionService {
   }
 
   // Calculate face similarity using multiple facial features
+  // CRITICAL: This must verify SAME PERSON, not just similar angles
   double _calculateFaceSimilarity(Face face1, Face face2) {
-    double similarity = 0.0;
-    int featureCount = 0;
-
-    // 1. Compare head angles (Euler angles)
-    final angleY1 = face1.headEulerAngleY ?? 0;
-    final angleY2 = face2.headEulerAngleY ?? 0;
-    final angleZ1 = face1.headEulerAngleZ ?? 0;
-    final angleZ2 = face2.headEulerAngleZ ?? 0;
-    final angleX1 = face1.headEulerAngleX ?? 0;
-    final angleX2 = face2.headEulerAngleX ?? 0;
-
-    final angleDiffY = (angleY1 - angleY2).abs();
-    final angleDiffZ = (angleZ1 - angleZ2).abs();
-    final angleDiffX = (angleX1 - angleX2).abs();
-
-    // Angle similarity (lower diff = higher similarity)
-    double angleSimilarity = 1.0 - ((angleDiffY + angleDiffZ + angleDiffX) / 300);
-    similarity += angleSimilarity;
-    featureCount++;
-
-    // 2. Compare bounding box dimensions (FIXED: scale-invariant)
-    // Don't compare absolute sizes - photos can be different resolutions
-    // Instead, we'll rely on aspect ratio which is scale-invariant
-    // This prevents negative similarity when one photo is compressed
+    print('[FaceDetection] 🧮 _calculateFaceSimilarity STARTED');
+    print('[FaceDetection] ═══════════════════════════════════════════════════════════');
     
-    // REMOVED: Size comparison is unreliable for different image resolutions
-    // Profile photos are often compressed (WebP, smaller resolution)
-    // Liveness photos are high-res from camera
-    // Comparing absolute sizes would penalize legitimate matches
-
-    // 3. Compare bounding box aspect ratio (scale-invariant)
+    double totalScore = 0.0;
+    int criticalChecks = 0;
+    
+    // CRITICAL CHECK 1: Landmark-based identity verification (MOST IMPORTANT)
+    // Landmarks are unique to each person's facial structure
+    if (face1.landmarks.isNotEmpty && face2.landmarks.isNotEmpty) {
+      print('[FaceDetection] ✅ CHECK 1: Comparing facial landmarks (CRITICAL)');
+      double landmarkSimilarity = _compareLandmarksStrict(face1, face2);
+      print('[FaceDetection]    Landmark similarity: ${(landmarkSimilarity * 100).toStringAsFixed(2)}%');
+      
+      // Landmarks are the PRIMARY identity check - weight heavily
+      totalScore += landmarkSimilarity * 3.0; // Triple weight
+      criticalChecks += 3;
+      
+      // If landmarks don't match well, it's likely different people
+      if (landmarkSimilarity < 0.5) {
+        print('[FaceDetection] ❌ LANDMARK MISMATCH: ${(landmarkSimilarity * 100).toStringAsFixed(2)}% < 50%');
+        print('[FaceDetection]    This indicates DIFFERENT PEOPLE');
+        print('[FaceDetection] ═══════════════════════════════════════════════════════════');
+        return 0.0; // Immediate fail - different people
+      }
+    } else {
+      print('[FaceDetection] ⚠️ WARNING: No landmarks available - cannot verify identity properly');
+      print('[FaceDetection]    This is a security risk - verification may be unreliable');
+      // Without landmarks, we cannot reliably verify identity
+      // Return low score to fail verification
+      return 0.3; // Not enough data to verify same person
+    }
+    
+    // CRITICAL CHECK 2: Eye distance ratio (unique to facial structure)
+    print('[FaceDetection] ✅ CHECK 2: Comparing eye distance ratio');
+    double eyeDistanceScore = _compareEyeDistance(face1, face2);
+    print('[FaceDetection]    Eye distance similarity: ${(eyeDistanceScore * 100).toStringAsFixed(2)}%');
+    
+    if (eyeDistanceScore > 0) {
+      totalScore += eyeDistanceScore * 2.0; // Double weight
+      criticalChecks += 2;
+    }
+    
+    // CRITICAL CHECK 3: Nose-to-mouth ratio (unique to facial structure)
+    print('[FaceDetection] ✅ CHECK 3: Comparing nose-to-mouth ratio');
+    double noseToMouthScore = _compareNoseToMouth(face1, face2);
+    print('[FaceDetection]    Nose-to-mouth similarity: ${(noseToMouthScore * 100).toStringAsFixed(2)}%');
+    
+    if (noseToMouthScore > 0) {
+      totalScore += noseToMouthScore * 2.0; // Double weight
+      criticalChecks += 2;
+    }
+    
+    // SUPPLEMENTARY CHECK 4: Face aspect ratio
+    print('[FaceDetection] ✅ CHECK 4: Comparing face aspect ratio');
     final width1 = face1.boundingBox.width;
     final width2 = face2.boundingBox.width;
     final height1 = face1.boundingBox.height;
@@ -324,80 +348,121 @@ class FaceDetectionService {
     final ratio1 = width1 / height1;
     final ratio2 = width2 / height2;
     final ratioDiff = (ratio1 - ratio2).abs();
-
-    // Aspect ratio similarity (clamped to prevent negative values)
-    double ratioSimilarity = (1.0 - (ratioDiff * 0.5)).clamp(0.0, 1.0);
-    similarity += ratioSimilarity;
-    featureCount++;
-
-    // 4. Compare face landmarks if available
-    if (face1.landmarks.isNotEmpty && face2.landmarks.isNotEmpty) {
-      double landmarkSimilarity = _compareLandmarks(face1, face2);
-      similarity += landmarkSimilarity;
-      featureCount++;
-    }
-
-    // 5. Compare smiling probability
-    final smilingProb1 = face1.smilingProbability ?? 0.5;
-    final smilingProb2 = face2.smilingProbability ?? 0.5;
-    final smilingDiff = (smilingProb1 - smilingProb2).abs();
-
-    double smilingSimilarity = 1.0 - smilingDiff;
-    similarity += smilingSimilarity;
-    featureCount++;
-
-    // Calculate average similarity
-    final averageSimilarity = similarity / featureCount;
     
-    debugPrint('[FaceDetectionService] Face Similarity Breakdown:');
-    debugPrint('  Angle Similarity: ${(angleSimilarity * 100).toStringAsFixed(1)}%');
-    debugPrint('  Ratio Similarity: ${(ratioSimilarity * 100).toStringAsFixed(1)}%');
-    if (face1.landmarks.isNotEmpty && face2.landmarks.isNotEmpty) {
-      final landmarkSim = _compareLandmarks(face1, face2);
-      debugPrint('  Landmark Similarity: ${(landmarkSim * 100).toStringAsFixed(1)}%');
-    }
-    debugPrint('  Smiling Similarity: ${(smilingSimilarity * 100).toStringAsFixed(1)}%');
-    debugPrint('  Average Similarity: ${(averageSimilarity * 100).toStringAsFixed(1)}%');
-    debugPrint('  Feature Count: $featureCount');
-
-    return averageSimilarity.clamp(0.0, 1.0);
+    double ratioSimilarity = (1.0 - (ratioDiff * 2.0)).clamp(0.0, 1.0);
+    print('[FaceDetection]    Aspect ratio similarity: ${(ratioSimilarity * 100).toStringAsFixed(2)}%');
+    
+    totalScore += ratioSimilarity;
+    criticalChecks += 1;
+    
+    // Calculate weighted average
+    final finalScore = criticalChecks > 0 ? (totalScore / criticalChecks) : 0.0;
+    
+    print('[FaceDetection] 📊 FINAL SIMILARITY BREAKDOWN:');
+    print('[FaceDetection]    Total score: ${totalScore.toStringAsFixed(3)}');
+    print('[FaceDetection]    Critical checks: $criticalChecks');
+    print('[FaceDetection]    Final similarity: ${(finalScore * 100).toStringAsFixed(2)}%');
+    print('[FaceDetection]    Threshold: 80% (HIGH strictness)');
+    print('[FaceDetection]    Result: ${finalScore > 0.8 ? 'MATCH ✅' : 'NO MATCH ❌'}');
+    print('[FaceDetection] ═══════════════════════════════════════════════════════════');
+    
+    return finalScore.clamp(0.0, 1.0);
   }
-
-  // Compare face landmarks
-  double _compareLandmarks(Face face1, Face face2) {
+  
+  // Strict landmark comparison for identity verification
+  double _compareLandmarksStrict(Face face1, Face face2) {
     if (face1.landmarks.isEmpty || face2.landmarks.isEmpty) {
-      return 0.5; // Neutral if landmarks not available
+      return 0.0; // Cannot verify without landmarks
     }
-
-    double totalDiff = 0.0;
-    int comparedLandmarks = 0;
-
-    // Iterate over landmarks map entries
-    for (var entry1 in face1.landmarks.entries) {
-      final landmark1 = entry1.value;
-      if (landmark1 == null) continue;
-
-      // Find corresponding landmark in face2
-      final landmark2 = face2.landmarks[entry1.key];
-      if (landmark2 == null) continue;
-
-      final dx = (landmark1.position.x - landmark2.position.x).abs();
-      final dy = (landmark1.position.y - landmark2.position.y).abs();
+    
+    // Key landmarks for identity: eyes, nose, mouth
+    final keyLandmarkTypes = [
+      FaceLandmarkType.leftEye,
+      FaceLandmarkType.rightEye,
+      FaceLandmarkType.noseBase,
+      FaceLandmarkType.leftMouth,
+      FaceLandmarkType.rightMouth,
+      FaceLandmarkType.bottomMouth,
+    ];
+    
+    double totalSimilarity = 0.0;
+    int matchedLandmarks = 0;
+    
+    for (final landmarkType in keyLandmarkTypes) {
+      final landmark1 = face1.landmarks[landmarkType];
+      final landmark2 = face2.landmarks[landmarkType];
+      
+      if (landmark1 == null || landmark2 == null) continue;
+      
+      // Calculate relative position (normalized by face size)
+      final relX1 = (landmark1.position.x - face1.boundingBox.left) / face1.boundingBox.width;
+      final relY1 = (landmark1.position.y - face1.boundingBox.top) / face1.boundingBox.height;
+      
+      final relX2 = (landmark2.position.x - face2.boundingBox.left) / face2.boundingBox.width;
+      final relY2 = (landmark2.position.y - face2.boundingBox.top) / face2.boundingBox.height;
+      
+      // Calculate normalized distance
+      final dx = (relX1 - relX2).abs();
+      final dy = (relY1 - relY2).abs();
       final distance = sqrt(dx * dx + dy * dy);
-      totalDiff += distance;
-      comparedLandmarks++;
+      
+      // Convert distance to similarity (closer = more similar)
+      // Use MEDIUM threshold: 0.1 normalized distance = 0% similarity
+      final similarity = (1.0 - (distance / 0.1)).clamp(0.0, 1.0);
+      
+      totalSimilarity += similarity;
+      matchedLandmarks++;
+      
+      print('[FaceDetection]      ${landmarkType.toString().split('.').last}: ${(similarity * 100).toStringAsFixed(1)}%');
     }
-
-    if (comparedLandmarks == 0) return 0.5;
-
-    final avgDiff = totalDiff / comparedLandmarks;
-    // Normalize distance difference (lower is better)
-    double landmarkSimilarity = 1.0 - (avgDiff / 200).clamp(0.0, 1.0);
     
-    debugPrint('  Landmark Similarity: ${(landmarkSimilarity * 100).toStringAsFixed(1)}%');
+    if (matchedLandmarks == 0) return 0.0;
     
-    return landmarkSimilarity;
+    return totalSimilarity / matchedLandmarks;
   }
+  
+  // Compare eye distance (unique to facial structure)
+  double _compareEyeDistance(Face face1, Face face2) {
+    final leftEye1 = face1.landmarks[FaceLandmarkType.leftEye];
+    final rightEye1 = face1.landmarks[FaceLandmarkType.rightEye];
+    final leftEye2 = face2.landmarks[FaceLandmarkType.leftEye];
+    final rightEye2 = face2.landmarks[FaceLandmarkType.rightEye];
+    
+    if (leftEye1 == null || rightEye1 == null || leftEye2 == null || rightEye2 == null) {
+      return 0.0;
+    }
+    
+    // Calculate eye distance normalized by face width
+    final eyeDist1 = (rightEye1.position.x - leftEye1.position.x) / face1.boundingBox.width;
+    final eyeDist2 = (rightEye2.position.x - leftEye2.position.x) / face2.boundingBox.width;
+    
+    final diff = (eyeDist1 - eyeDist2).abs();
+    
+    // Stricter threshold: 5% difference = 0% similarity
+    return (1.0 - (diff / 0.05)).clamp(0.0, 1.0);
+  }
+  
+  // Compare nose-to-mouth distance (unique to facial structure)
+  double _compareNoseToMouth(Face face1, Face face2) {
+    final nose1 = face1.landmarks[FaceLandmarkType.noseBase];
+    final mouth1 = face1.landmarks[FaceLandmarkType.bottomMouth];
+    final nose2 = face2.landmarks[FaceLandmarkType.noseBase];
+    final mouth2 = face2.landmarks[FaceLandmarkType.bottomMouth];
+    
+    if (nose1 == null || mouth1 == null || nose2 == null || mouth2 == null) {
+      return 0.0;
+    }
+    
+    // Calculate nose-to-mouth distance normalized by face height
+    final noseMouthDist1 = (mouth1.position.y - nose1.position.y) / face1.boundingBox.height;
+    final noseMouthDist2 = (mouth2.position.y - nose2.position.y) / face2.boundingBox.height;
+    
+    final diff = (noseMouthDist1 - noseMouthDist2).abs();
+    
+    // Stricter threshold: 5% difference = 0% similarity
+    return (1.0 - (diff / 0.05)).clamp(0.0, 1.0);
+  }
+
 
   String _getResultMessage(int faceCount) {
     if (faceCount == 0) return 'No faces detected';
