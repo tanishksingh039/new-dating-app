@@ -68,8 +68,10 @@ android {
             if (hasValidKeystore) {
                 signingConfig = signingConfigs.getByName("release")
             }
-            // Optional: enable minification
-            // isMinifyEnabled = true
+            // Disable minification temporarily due to TensorFlow Lite GPU missing classes
+            // Re-enable later after fixing GPU delegate dependencies
+            isMinifyEnabled = false
+            isShrinkResources = false
             // proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

@@ -426,47 +426,6 @@ class RewardsRulesScreen extends StatelessWidget {
             'How We Use Your Data',
             'We use your engagement to recognize your presence and improve this community. Your data is never sold or exploited.',
           ),
-          _buildPrivacyItem(
-            'Step Back Anytime',
-            'Participation is always optional. You can pause or leave the program whenever you want through settings.',
-          ),
-          _buildPrivacyItem(
-            'Your Right to Silence',
-            'You can opt out of the leaderboard completely. When you do, your chats continue normally, but nothing is counted toward visibility or scores. It\'s like stepping into a quiet space where you can just be.',
-          ),
-          _buildPrivacyItem(
-            'What Happens When You Opt Out',
-            'Your name, photo, and rank disappear from the leaderboard. No activity is analyzed for leaderboard purposes. No scores are calculated. You\'re completely invisible to the ranking system—and that\'s perfectly okay.',
-          ),
-          _buildPrivacyItem(
-            'Your Presence, Your Choice',
-            'Choosing privacy is choosing peace. There\'s no judgment, no pressure, and no consequences. You can opt back in whenever you\'re ready, or stay silent forever. It\'s entirely up to you.',
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.purple.shade50,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.purple.shade200),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.favorite, color: Colors.purple.shade700, size: 20),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Your comfort matters more than any leaderboard. Choose what feels right for you.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.purple.shade900,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(12),

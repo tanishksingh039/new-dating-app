@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:razorpay_flutter/razorpay_flutter.dart';
 import '../services/swipe_limit_service.dart';
-import '../services/payment_service.dart';
+import '../services/google_play_billing_service.dart';
 import '../config/swipe_config.dart';
 
 /// Dialog to purchase additional swipes
@@ -19,61 +18,54 @@ class PurchaseSwipesDialog extends StatefulWidget {
 
 class _PurchaseSwipesDialogState extends State<PurchaseSwipesDialog> {
   final SwipeLimitService _swipeLimitService = SwipeLimitService();
-  final PaymentService _paymentService = PaymentService();
+  final GooglePlayBillingService _billingService = GooglePlayBillingService();
   bool _isProcessing = false;
-  int _swipesCount = 0;
 
   @override
   void initState() {
     super.initState();
-    _initializePayment();
+    _initializeBilling();
   }
 
-  void _initializePayment() {
-    _paymentService.init(
-      onSuccess: _handlePaymentSuccess,
-      onError: _handlePaymentError,
-      onExternalWallet: _handleExternalWallet,
-    );
-  }
-
-  void _handlePaymentSuccess(PaymentSuccessResponse response) async {
-    // Add swipes to user account
-    await _swipeLimitService.addPurchasedSwipesAfterPayment(_swipesCount);
+  Future<void> _initializeBilling() async {
+    await _billingService.initialize();
     
-    if (mounted) {
-      setState(() => _isProcessing = false);
-      Navigator.of(context).pop();
-      _showSuccessDialog();
-    }
-  }
-
-  void _handlePaymentError(PaymentFailureResponse response) {
-    if (mounted) {
-      setState(() => _isProcessing = false);
-      _showErrorDialog(response.message ?? 'Payment failed');
-    }
-  }
-
-  void _handleExternalWallet(ExternalWalletResponse response) {
-    if (mounted) {
-      setState(() => _isProcessing = false);
-    }
+    _billingService.onPurchaseSuccess = (purchaseId) {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        Navigator.of(context).pop();
+        _showSuccessDialog();
+      }
+    };
+    
+    _billingService.onPurchaseError = (error) {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        _showErrorDialog(error);
+      }
+    };
+    
+    _billingService.onPurchasePending = () {
+      if (mounted) {
+        setState(() => _isProcessing = true);
+      }
+    };
   }
 
   void _purchaseSwipes() async {
+    if (_isProcessing || !_billingService.isAvailable) {
+      _showErrorDialog('Google Play Billing is not available');
+      return;
+    }
+
     setState(() => _isProcessing = true);
 
     try {
-      // Get swipe count first
-      _swipesCount = SwipeConfig.getAdditionalSwipesCount(widget.isPremium);
-      final description = SwipeConfig.getSwipePackageDescription(widget.isPremium);
-      
-      // Use the initialized payment service from this dialog
-      await _paymentService.startPayment(
-        amountInPaise: SwipeConfig.additionalSwipesPriceInPaise,
-        description: description,
-      );
+      final success = await _billingService.purchaseSwipes();
+      if (!success && mounted) {
+        setState(() => _isProcessing = false);
+        _showErrorDialog('Failed to start purchase. Please try again.');
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _isProcessing = false);
@@ -84,7 +76,7 @@ class _PurchaseSwipesDialogState extends State<PurchaseSwipesDialog> {
 
   @override
   void dispose() {
-    _paymentService.dispose();
+    _billingService.dispose();
     super.dispose();
   }
 

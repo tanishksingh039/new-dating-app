@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:razorpay_flutter/razorpay_flutter.dart';
-import '../services/payment_service.dart';
+import '../services/google_play_billing_service.dart';
 import '../services/swipe_limit_service.dart';
 import '../services/verification_check_service.dart';
 import '../config/swipe_config.dart';
@@ -25,89 +24,54 @@ class PremiumOptionsDialog extends StatefulWidget {
 }
 
 class _PremiumOptionsDialogState extends State<PremiumOptionsDialog> {
-  final PaymentService _paymentService = PaymentService();
-  final SwipeLimitService _swipeLimitService = SwipeLimitService();
+  final GooglePlayBillingService _billingService = GooglePlayBillingService();
   bool _isProcessing = false;
-  int _swipesCount = 0;
 
   @override
   void initState() {
     super.initState();
-    _initializePayment();
+    _initializeBilling();
   }
 
-  void _initializePayment() {
-    _paymentService.init(
-      onSuccess: _handlePaymentSuccess,
-      onError: _handlePaymentError,
-      onExternalWallet: _handleExternalWallet,
-    );
-  }
-
-  void _handlePaymentSuccess(PaymentSuccessResponse response) async {
-    if (!mounted) return;
-
-    try {
-      // Check if this was a swipe pack purchase or premium subscription
-      // We'll determine this based on the amount or description
-      // For now, we'll check if _swipesCount was set (swipe pack purchase)
-      if (_swipesCount > 0) {
-        // Swipe pack purchase
-        await _swipeLimitService.addPurchasedSwipesAfterPayment(_swipesCount);
-        
-        if (mounted) {
-          setState(() => _isProcessing = false);
-          Navigator.of(context).pop();
-          _showSwipePackSuccessDialog();
-        }
-      } else {
-        // Premium subscription
-        await _paymentService.handlePaymentSuccess(
-          paymentId: response.paymentId ?? '',
-          orderId: response.orderId,
-          signature: response.signature,
-        );
-        
-        if (mounted) {
-          setState(() => _isProcessing = false);
-          Navigator.of(context).pop();
-          _showPremiumSuccessDialog();
-        }
-      }
-    } catch (e) {
+  Future<void> _initializeBilling() async {
+    await _billingService.initialize();
+    
+    _billingService.onPurchaseSuccess = (purchaseId) {
       if (mounted) {
         setState(() => _isProcessing = false);
-        _showErrorDialog(e.toString());
+        Navigator.of(context).pop();
+        _showPremiumSuccessDialog();
       }
-    }
-  }
-
-  void _handlePaymentError(PaymentFailureResponse response) {
-    if (mounted) {
-      setState(() => _isProcessing = false);
-      _showErrorDialog(response.message ?? 'Payment failed');
-    }
-  }
-
-  void _handleExternalWallet(ExternalWalletResponse response) {
-    if (mounted) {
-      setState(() => _isProcessing = false);
-    }
+    };
+    
+    _billingService.onPurchaseError = (error) {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        _showErrorDialog(error);
+      }
+    };
+    
+    _billingService.onPurchasePending = () {
+      if (mounted) {
+        setState(() => _isProcessing = true);
+      }
+    };
   }
 
   void _purchaseSwipePack() async {
+    if (_isProcessing || !_billingService.isAvailable) {
+      _showErrorDialog('Google Play Billing is not available');
+      return;
+    }
+
     setState(() => _isProcessing = true);
 
     try {
-      // Get swipe count first
-      _swipesCount = SwipeConfig.getAdditionalSwipesCount(widget.isPremium);
-      final description = SwipeConfig.getSwipePackageDescription(widget.isPremium);
-      
-      // Use the initialized payment service from this dialog
-      await _paymentService.startPayment(
-        amountInPaise: SwipeConfig.additionalSwipesPriceInPaise,
-        description: description,
-      );
+      final success = await _billingService.purchaseSwipes();
+      if (!success && mounted) {
+        setState(() => _isProcessing = false);
+        _showErrorDialog('Failed to start purchase. Please try again.');
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _isProcessing = false);
@@ -119,14 +83,12 @@ class _PremiumOptionsDialogState extends State<PremiumOptionsDialog> {
   void _purchasePremium() async {
     print('🔍 Premium purchase - checking verification...');
     
-    // Check if user is verified before proceeding
     final isVerified = await VerificationCheckService.isUserVerified();
     
     print('🔍 Verification result: $isVerified');
     
     if (!isVerified) {
       print('❌ User not verified - showing dialog');
-      // Show verification required dialog
       if (mounted) {
         showDialog(
           context: context,
@@ -134,7 +96,6 @@ class _PremiumOptionsDialogState extends State<PremiumOptionsDialog> {
           builder: (context) => VerificationRequiredDialog(
             onVerificationComplete: () {
               print('✅ Verification complete - proceeding with premium payment');
-              // User verified, now proceed with payment
               _proceedWithPremiumPayment();
             },
           ),
@@ -144,18 +105,20 @@ class _PremiumOptionsDialogState extends State<PremiumOptionsDialog> {
     }
 
     print('✅ User verified - proceeding with premium payment');
-    // User is verified, proceed with payment
     _proceedWithPremiumPayment();
   }
 
   void _proceedWithPremiumPayment() async {
-    setState(() {
-      _isProcessing = true;
-      _swipesCount = 0; // Reset to indicate premium purchase
-    });
+    if (_isProcessing || !_billingService.isAvailable) return;
+
+    setState(() => _isProcessing = true);
 
     try {
-      await _paymentService.startPremiumPayment();
+      final success = await _billingService.purchasePremium();
+      if (!success && mounted) {
+        setState(() => _isProcessing = false);
+        _showErrorDialog('Failed to start payment. Please try again.');
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _isProcessing = false);
@@ -166,36 +129,8 @@ class _PremiumOptionsDialogState extends State<PremiumOptionsDialog> {
 
   @override
   void dispose() {
-    _paymentService.dispose();
+    _billingService.dispose();
     super.dispose();
-  }
-
-  void _showSwipePackSuccessDialog() {
-    final swipesCount = SwipeConfig.getAdditionalSwipesCount(widget.isPremium);
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.green, size: 28),
-            SizedBox(width: 12),
-            Text('Success!'),
-          ],
-        ),
-        content: Text(
-          'You\'ve successfully purchased $swipesCount swipes!\nHappy swiping! 🎉',
-          style: const TextStyle(fontSize: 16),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Great!'),
-          ),
-        ],
-      ),
-    );
   }
 
   void _showPremiumSuccessDialog() {

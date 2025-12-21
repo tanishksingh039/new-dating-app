@@ -25,7 +25,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   
   late List<String> _photos;
   late List<String> _selectedInterests;
-  late String _selectedGender;
   late DateTime _selectedDate;
   late Map<String, dynamic> _preferences;
   
@@ -40,7 +39,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _bioController.text = widget.user.bio;
     _photos = List.from(widget.user.photos);
     _selectedInterests = List.from(widget.user.interests);
-    _selectedGender = _normalizeGender(widget.user.gender);
     _selectedDate = widget.user.dateOfBirth ?? DateTime.now();
     _preferences = Map.from(widget.user.preferences);
     
@@ -48,15 +46,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _originalMainPhoto = _photos.isNotEmpty ? _photos.first : null;
   }
 
-  String _normalizeGender(String gender) {
-    if (gender.isEmpty) return 'Male';
-    final normalized = gender.toLowerCase();
-    if (normalized == 'male') return 'Male';
-    if (normalized == 'female') return 'Female';
-    if (normalized == 'other') return 'Other';
-    return 'Male'; // Default fallback
-  }
-  
   // Helper to normalize preference values
   String _normalizePreference(String key, String? value) {
     if (value == null || value.isEmpty) {
@@ -206,7 +195,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             'bio': _bioController.text.trim(),
             'photos': reorderedPhotos,
             'interests': _selectedInterests,
-            'gender': _selectedGender,
             'dateOfBirth': _selectedDate.toIso8601String(),
             'preferences': _preferences,
           });
@@ -251,7 +239,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           'bio': _bioController.text.trim(),
           'photos': allPhotos,
           'interests': _selectedInterests,
-          'gender': _selectedGender,
           'dateOfBirth': _selectedDate.toIso8601String(),
           'preferences': _preferences,
         });
@@ -490,21 +477,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
               hintText: 'Tell people about yourself...',
             ),
-          ),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
-            value: _selectedGender,
-            decoration: InputDecoration(
-              labelText: 'Gender',
-              prefixIcon: const Icon(Icons.person_outline),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            items: ['Male', 'Female', 'Other'].map((gender) {
-              return DropdownMenuItem(value: gender, child: Text(gender));
-            }).toList(),
-            onChanged: (value) {
-              setState(() => _selectedGender = value!);
-            },
           ),
         ],
       ),

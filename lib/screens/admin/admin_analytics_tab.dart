@@ -28,7 +28,6 @@ class _AdminAnalyticsTabState extends State<AdminAnalyticsTab>
   int _activeSpotlightBookings = 0;
   int _completedSpotlightBookings = 0;
   int _pendingSpotlightBookings = 0;
-  int _totalSpotlightRevenue = 0;
   int _uniqueSpotlightUsers = 0;
   int _totalSpotlightAppearances = 0;
   List<FlSpot> _spotlightBookingsTrend = [];
@@ -120,7 +119,6 @@ class _AdminAnalyticsTabState extends State<AdminAnalyticsTab>
       int activeBookings = 0;
       int completedBookings = 0;
       int pendingBookings = 0;
-      int totalRevenue = 0;
       Set<String> uniqueUsers = {};
       int totalAppearances = 0;
       Map<int, int> dailyBookings = {};
@@ -131,7 +129,6 @@ class _AdminAnalyticsTabState extends State<AdminAnalyticsTab>
           totalBookings++;
 
           final status = data['status'] as String? ?? 'pending';
-          final amount = data['amount'] as int? ?? 0;
           final userId = data['userId'] as String? ?? '';
           final appearances = data['appearanceCount'] as int? ?? 0;
           final bookingDate = (data['date'] as Timestamp?)?.toDate();
@@ -141,10 +138,7 @@ class _AdminAnalyticsTabState extends State<AdminAnalyticsTab>
           if (status == 'completed') completedBookings++;
           if (status == 'pending') pendingBookings++;
 
-          // Revenue and users
-          if (status == 'completed' || status == 'active') {
-            totalRevenue += amount;
-          }
+          // Track users
           if (userId.isNotEmpty) {
             uniqueUsers.add(userId);
           }
@@ -175,7 +169,6 @@ class _AdminAnalyticsTabState extends State<AdminAnalyticsTab>
         _activeSpotlightBookings = activeBookings;
         _completedSpotlightBookings = completedBookings;
         _pendingSpotlightBookings = pendingBookings;
-        _totalSpotlightRevenue = totalRevenue;
         _uniqueSpotlightUsers = uniqueUsers.length;
         _totalSpotlightAppearances = totalAppearances;
         _spotlightBookingsTrend = trendSpots;
@@ -425,13 +418,6 @@ class _AdminAnalyticsTabState extends State<AdminAnalyticsTab>
                 'Awaiting activation',
                 Icons.schedule,
                 Colors.orange,
-              ),
-              _buildAnalyticsCard(
-                'Total Revenue',
-                '₹${(_totalSpotlightRevenue / 100).toStringAsFixed(0)}',
-                'From spotlight bookings',
-                Icons.currency_rupee,
-                Colors.amber,
               ),
               _buildAnalyticsCard(
                 'Unique Users',

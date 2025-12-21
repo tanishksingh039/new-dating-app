@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
-import '../../services/payment_service.dart';
+import '../../services/google_play_billing_service.dart';
 import '../../services/swipe_limit_service.dart';
 import '../../services/verification_check_service.dart';
 import '../../widgets/premium_options_dialog.dart';
@@ -18,75 +17,38 @@ class PremiumSubscriptionScreen extends StatefulWidget {
 }
 
 class _PremiumSubscriptionScreenState extends State<PremiumSubscriptionScreen> {
-  final PaymentService _paymentService = PaymentService();
+  final GooglePlayBillingService _billingService = GooglePlayBillingService();
   bool _isProcessing = false;
 
   @override
   void initState() {
     super.initState();
-    _initializeRazorpay();
+    _initializeBilling();
   }
 
-  void _initializeRazorpay() {
-    _paymentService.init(
-      onSuccess: _handlePaymentSuccess,
-      onError: _handlePaymentError,
-      onExternalWallet: _handleExternalWallet,
-    );
-  }
-
-  void _handlePaymentSuccess(PaymentSuccessResponse response) async {
-    setState(() => _isProcessing = true);
+  Future<void> _initializeBilling() async {
+    await _billingService.initialize();
     
-    try {
-      print('Payment Success Response: ${response.paymentId}');
-      print('Order ID: ${response.orderId}');
-      
-      // Update user premium status
-      await _paymentService.handlePaymentSuccess(
-        paymentId: response.paymentId ?? '',
-        orderId: response.orderId,
-        signature: response.signature,
-      );
-
+    _billingService.onPurchaseSuccess = (purchaseId) {
       if (mounted) {
         setState(() => _isProcessing = false);
-        
-        // Immediately refresh premium status for real-time update
-        await Provider.of<PremiumProvider>(context, listen: false).refreshPremiumStatus();
-        
-        print('✅ Premium status refreshed - all features should unlock now');
-        
-        // Show success dialog
+        Provider.of<PremiumProvider>(context, listen: false).refreshPremiumStatus();
         _showSuccessDialog();
       }
-    } catch (e) {
-      print('Error in _handlePaymentSuccess: $e');
-      print('Stack trace: ${StackTrace.current}');
-      
+    };
+    
+    _billingService.onPurchaseError = (error) {
       if (mounted) {
         setState(() => _isProcessing = false);
-        _showErrorDialog('Failed to activate premium: ${e.toString()}\n\nPlease contact support.');
+        _showErrorDialog(error);
       }
-    }
-  }
-
-  void _handlePaymentError(PaymentFailureResponse response) {
-    setState(() => _isProcessing = false);
+    };
     
-    final errorMessage = response.message ?? 'Payment failed';
-    _showErrorDialog(errorMessage);
-  }
-
-  void _handleExternalWallet(ExternalWalletResponse response) {
-    setState(() => _isProcessing = false);
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('External wallet: ${response.walletName}'),
-        backgroundColor: const Color(0xFFFF6B9D),
-      ),
-    );
+    _billingService.onPurchasePending = () {
+      if (mounted) {
+        setState(() => _isProcessing = true);
+      }
+    };
   }
 
   void _showSuccessDialog() {
@@ -190,15 +152,21 @@ class _PremiumSubscriptionScreenState extends State<PremiumSubscriptionScreen> {
   }
 
   Future<void> _proceedWithPayment() async {
-    if (_isProcessing) return;
+    if (_isProcessing || !_billingService.isAvailable) return;
 
     setState(() => _isProcessing = true);
 
     try {
-      await _paymentService.startPremiumPayment();
+      final success = await _billingService.purchasePremium();
+      if (!success && mounted) {
+        setState(() => _isProcessing = false);
+        _showErrorDialog('Failed to start payment. Please try again.');
+      }
     } catch (e) {
-      setState(() => _isProcessing = false);
-      _showErrorDialog('Failed to start payment. Please try again.');
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        _showErrorDialog('Failed to start payment. Please try again.');
+      }
     }
   }
 
@@ -220,7 +188,7 @@ class _PremiumSubscriptionScreenState extends State<PremiumSubscriptionScreen> {
 
   @override
   void dispose() {
-    _paymentService.dispose();
+    _billingService.dispose();
     super.dispose();
   }
 
@@ -459,7 +427,7 @@ class _PremiumSubscriptionScreenState extends State<PremiumSubscriptionScreen> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'Secure payment powered by Razorpay',
+                      'Secure payment powered by Google Play',
                       style: TextStyle(
                         color: Colors.grey.shade600,
                         fontSize: 12,

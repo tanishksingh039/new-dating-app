@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../../services/spotlight_service.dart';
+import '../../services/google_play_billing_service.dart';
 import '../../models/spotlight_booking.dart';
 import '../../config/spotlight_config.dart';
 
@@ -14,6 +14,7 @@ class SpotlightBookingScreen extends StatefulWidget {
 
 class _SpotlightBookingScreenState extends State<SpotlightBookingScreen> {
   final SpotlightService _spotlightService = SpotlightService();
+  final GooglePlayBillingService _billingService = GooglePlayBillingService();
   bool _isProcessing = false;
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
@@ -23,7 +24,7 @@ class _SpotlightBookingScreenState extends State<SpotlightBookingScreen> {
   @override
   void initState() {
     super.initState();
-    _initializeRazorpay();
+    _initializeBilling();
     _loadCalendarData();
     
     // Debug: Print calendar date range
@@ -36,12 +37,46 @@ class _SpotlightBookingScreenState extends State<SpotlightBookingScreen> {
     print('====================================\n');
   }
 
-  void _initializeRazorpay() {
-    _spotlightService.init(
-      onSuccess: _handlePaymentSuccess,
-      onError: _handlePaymentError,
-      onExternalWallet: _handleExternalWallet,
-    );
+  Future<void> _initializeBilling() async {
+    await _billingService.initialize();
+    
+    _billingService.onPurchaseSuccess = (purchaseId) async {
+      if (mounted && _selectedDay != null) {
+        setState(() => _isProcessing = true);
+        
+        try {
+          // Create spotlight booking after successful purchase
+          await _spotlightService.createSpotlightBooking(
+            selectedDate: _selectedDay!,
+            purchaseId: purchaseId,
+          );
+          
+          if (mounted) {
+            setState(() => _isProcessing = false);
+            await _loadCalendarData();
+            _showSuccessDialog();
+          }
+        } catch (e) {
+          if (mounted) {
+            setState(() => _isProcessing = false);
+            _showErrorDialog('Failed to create booking: $e');
+          }
+        }
+      }
+    };
+    
+    _billingService.onPurchaseError = (error) {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        _showErrorDialog(error);
+      }
+    };
+    
+    _billingService.onPurchasePending = () {
+      if (mounted) {
+        setState(() => _isProcessing = true);
+      }
+    };
   }
 
   Future<void> _loadCalendarData() async {
@@ -93,69 +128,28 @@ class _SpotlightBookingScreenState extends State<SpotlightBookingScreen> {
     }
   }
 
-  void _handlePaymentSuccess(PaymentSuccessResponse response) async {
-    if (_selectedDay == null) {
-      print('❌ Payment success but no date selected!');
+  void _handleSpotlightPurchase() async {
+    if (_selectedDay == null) return;
+    
+    if (!_billingService.isAvailable) {
+      _showErrorDialog('Google Play Billing is not available');
       return;
     }
-
-    print('\n🎉 ===== PAYMENT SUCCESS CALLBACK =====');
-    print('📅 Selected date: ${_selectedDay!.day}/${_selectedDay!.month}/${_selectedDay!.year}');
-    print('💳 Payment ID: ${response.paymentId}');
-    print('📝 Order ID: ${response.orderId}');
 
     setState(() => _isProcessing = true);
 
     try {
-      print('\n📞 Calling spotlight service...');
-      await _spotlightService.handleSpotlightPaymentSuccess(
-        paymentId: response.paymentId ?? '',
-        spotlightDate: _selectedDay!,
-        orderId: response.orderId,
-        signature: response.signature,
-      );
-      print('✅ Spotlight service completed');
-
-      if (mounted) {
+      final success = await _billingService.purchaseSpotlight();
+      if (!success && mounted) {
         setState(() => _isProcessing = false);
-        
-        print('\n🔄 Refreshing calendar data...');
-        await _loadCalendarData(); // Refresh calendar
-        print('✅ Calendar refreshed');
-        
-        // Fallback: Force refresh after 2 seconds if data not loaded
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) {
-            print('🔄 Fallback refresh triggered');
-            _loadCalendarData();
-          }
-        });
-        
-        _showSuccessDialog();
+        _showErrorDialog('Failed to start purchase. Please try again.');
       }
-    } catch (e, stackTrace) {
-      print('\n❌ Error handling payment success: $e');
-      print('Stack trace: $stackTrace');
+    } catch (e) {
       if (mounted) {
         setState(() => _isProcessing = false);
-        _showErrorDialog('Failed to book spotlight: ${e.toString()}');
+        _showErrorDialog(e.toString());
       }
     }
-  }
-
-  void _handlePaymentError(PaymentFailureResponse response) {
-    setState(() => _isProcessing = false);
-    _showErrorDialog(response.message ?? 'Payment failed');
-  }
-
-  void _handleExternalWallet(ExternalWalletResponse response) {
-    setState(() => _isProcessing = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('External wallet: ${response.walletName}'),
-        backgroundColor: const Color(0xFFFF6B9D),
-      ),
-    );
   }
 
   Future<void> _bookSpotlight() async {
@@ -181,14 +175,8 @@ class _SpotlightBookingScreenState extends State<SpotlightBookingScreen> {
       return;
     }
 
-    setState(() => _isProcessing = true);
-
-    try {
-      await _spotlightService.startSpotlightPayment(_selectedDay!);
-    } catch (e) {
-      setState(() => _isProcessing = false);
-      _showErrorDialog('Failed to start payment: ${e.toString()}');
-    }
+    // Call the placeholder handler
+    _handleSpotlightPurchase();
   }
 
   void _showSuccessDialog() {
@@ -259,7 +247,7 @@ class _SpotlightBookingScreenState extends State<SpotlightBookingScreen> {
 
   @override
   void dispose() {
-    _spotlightService.dispose();
+    _billingService.dispose();
     super.dispose();
   }
 

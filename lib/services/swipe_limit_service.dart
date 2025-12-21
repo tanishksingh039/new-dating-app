@@ -2,13 +2,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../config/swipe_config.dart';
 import '../models/swipe_stats.dart';
-import 'payment_service.dart';
 
 /// Service to manage swipe limits and purchases
 class SwipeLimitService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final PaymentService _paymentService = PaymentService();
 
   /// Get current user's swipe stats
   Future<SwipeStats?> getSwipeStats() async {
@@ -214,7 +212,8 @@ class SwipeLimitService {
   }
 
   /// Purchase additional swipes
-  /// Returns the number of swipes that will be added on successful payment
+  /// Note: Payment is now handled by Google Play Billing
+  /// This method is kept for compatibility but swipe packs need Google Play products
   Future<int> purchaseSwipes() async {
     final user = _auth.currentUser;
     if (user == null) {
@@ -226,16 +225,9 @@ class SwipeLimitService {
     final isPremium = userDoc.data()?['isPremium'] ?? false;
 
     final swipesCount = SwipeConfig.getAdditionalSwipesCount(isPremium);
-    final description = SwipeConfig.getSwipePackageDescription(isPremium);
 
-    print('🛒 Purchasing swipes: $description');
-
-    // Start payment - callbacks are handled by PaymentService.init()
-    await _paymentService.startPayment(
-      amountInPaise: SwipeConfig.additionalSwipesPriceInPaise,
-      description: description,
-    );
-
+    // Payment should be handled by Google Play Billing dialogs
+    // This method just returns the count for reference
     return swipesCount;
   }
 

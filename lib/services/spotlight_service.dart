@@ -1,28 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
-import 'package:razorpay_flutter/razorpay_flutter.dart';
 import '../models/spotlight_booking.dart';
 import '../config/spotlight_config.dart';
-import '../config/razorpay_config.dart';
 
 /// Service to manage spotlight bookings and payments
 class SpotlightService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  late Razorpay _razorpay;
-
-  /// Initialize Razorpay for spotlight payments
-  void init({
-    required void Function(PaymentSuccessResponse) onSuccess,
-    required void Function(PaymentFailureResponse) onError,
-    required void Function(ExternalWalletResponse) onExternalWallet,
-  }) {
-    _razorpay = Razorpay();
-    _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, onSuccess);
-    _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, onError);
-    _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, onExternalWallet);
-  }
 
   /// Check if a date is already booked
   Future<bool> isDateBooked(DateTime date) async {
@@ -165,8 +150,12 @@ class SpotlightService {
     }
   }
 
-  /// Start spotlight payment for a specific date
-  Future<void> startSpotlightPayment(DateTime selectedDate) async {
+  /// Create spotlight booking record (payment handled by Google Play Billing)
+  /// Call this after successful Google Play purchase
+  Future<String> createSpotlightBooking({
+    required DateTime selectedDate,
+    required String purchaseId,
+  }) async {
     try {
       final user = _auth.currentUser;
       if (user == null) {
@@ -179,60 +168,43 @@ class SpotlightService {
         throw Exception('This date is already booked');
       }
 
-      // Fetch user details
-      final userDoc = await _firestore.collection('users').doc(user.uid).get();
-      final userData = userDoc.data();
-      final userName = userData?['name'] ?? 'User';
-      final userContact = userData?['phoneNumber'] ?? '';
-
-      // Generate unique receipt ID
-      final receipt = 'spotlight_${DateTime.now().millisecondsSinceEpoch}';
-
-      // Format date for description
-      final dateStr =
-          '${selectedDate.day}/${selectedDate.month}/${selectedDate.year}';
-
-      // Create payment order record
-      final paymentRef = _firestore.collection('payment_orders').doc();
-      await paymentRef.set({
+      // Create spotlight booking
+      final bookingRef = _firestore.collection('spotlight_bookings').doc();
+      final startOfDay = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+      
+      final bookingData = {
         'userId': user.uid,
+        'date': Timestamp.fromDate(startOfDay),
+        'status': 'pending',
+        'paymentId': purchaseId,
         'amount': SpotlightConfig.spotlightPriceInPaise,
-        'currency': 'INR',
-        'receipt': receipt,
-        'description': 'Spotlight Booking - $dateStr',
-        'type': 'spotlight',
-        'spotlightDate': Timestamp.fromDate(selectedDate),
-        'status': 'initiated',
         'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      // Open Razorpay checkout
-      final options = {
-        'key': RazorpayConfig.keyId,
-        'amount': SpotlightConfig.spotlightPriceInPaise,
-        'currency': 'INR',
-        'name': SpotlightConfig.appName,
-        'description': 'Spotlight Booking - $dateStr',
-        'receipt': receipt,
-        'prefill': {
-          'contact': userContact,
-          'name': userName,
-        },
-        'theme': {
-          'color': SpotlightConfig.themeColor,
-        },
-        'notes': {
-          'userId': user.uid,
-          'paymentRefId': paymentRef.id,
-          'type': 'spotlight',
-          'spotlightDate': dateStr,
-        }
+        'appearanceCount': 0,
       };
 
-      _razorpay.open(options);
+      await bookingRef.set(bookingData);
+      
+      // Log payment
+      await _firestore.collection('payment_orders').add({
+        'userId': user.uid,
+        'purchaseId': purchaseId,
+        'amount': SpotlightConfig.spotlightPriceInPaise,
+        'type': 'spotlight',
+        'spotlightDate': Timestamp.fromDate(startOfDay),
+        'spotlightBookingId': bookingRef.id,
+        'status': 'success',
+        'platform': 'google_play',
+        'completedAt': FieldValue.serverTimestamp(),
+      });
+
+      if (kDebugMode) {
+        print('✅ Spotlight booking created: ${bookingRef.id}');
+      }
+      
+      return bookingRef.id;
     } catch (e) {
       if (kDebugMode) {
-        print('Error starting spotlight payment: $e');
+        print('Error creating spotlight booking: $e');
       }
       rethrow;
     }
@@ -369,8 +341,4 @@ class SpotlightService {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 
-  /// Dispose Razorpay instance
-  void dispose() {
-    _razorpay.clear();
-  }
 }

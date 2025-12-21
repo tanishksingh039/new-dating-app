@@ -379,6 +379,72 @@ class _BulkLeaderboardControlScreenState extends State<BulkLeaderboardControlScr
     );
   }
 
+  Future<void> _removeWinner(String userId, String userName) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove Winner'),
+        content: Text(
+          'Are you sure you want to remove $userName from winner announcements?\n\nThis will delete all winner announcements for this user.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Remove', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      debugPrint('[BulkLeaderboardControl] Removing winner announcements for $userName ($userId)');
+      
+      // Get all winner announcements for this user
+      final snapshot = await _firestore
+          .collection('monthly_winners')
+          .where('userId', isEqualTo: userId)
+          .get();
+      
+      if (snapshot.docs.isEmpty) {
+        _showError('No winner announcements found for $userName');
+        return;
+      }
+      
+      debugPrint('[BulkLeaderboardControl] Found ${snapshot.docs.length} winner announcement(s) to remove');
+      
+      // Delete all winner announcements for this user
+      int deletedCount = 0;
+      for (final doc in snapshot.docs) {
+        try {
+          await _firestore.collection('monthly_winners').doc(doc.id).delete();
+          deletedCount++;
+          debugPrint('[BulkLeaderboardControl] ✅ Deleted winner announcement: ${doc.id}');
+        } catch (e) {
+          debugPrint('[BulkLeaderboardControl] ❌ Error deleting announcement ${doc.id}: $e');
+        }
+      }
+      
+      debugPrint('[BulkLeaderboardControl] ✅ Removed $deletedCount winner announcement(s) for $userName');
+      _showSuccess('Removed $deletedCount winner announcement(s) for $userName');
+      await _loadProfiles();
+    } catch (e, stackTrace) {
+      debugPrint('[BulkLeaderboardControl] ❌ Error removing winner: $e');
+      debugPrint('[BulkLeaderboardControl] Stack trace: $stackTrace');
+      _showError('Error removing winner: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
   Future<void> _uploadUserPhoto(String userId, String userName) async {
     try {
       final ImagePicker picker = ImagePicker();
@@ -874,6 +940,20 @@ class _BulkLeaderboardControlScreenState extends State<BulkLeaderboardControlScr
                   label: const Text('Announce Winner'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.amber,
+                    minimumSize: const Size(double.infinity, 40),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                
+                // Remove Winner Button
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    await _removeWinner(uid, name);
+                  },
+                  icon: const Icon(Icons.remove_circle_outline, size: 18),
+                  label: const Text('Remove Winner'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade600,
                     minimumSize: const Size(double.infinity, 40),
                   ),
                 ),

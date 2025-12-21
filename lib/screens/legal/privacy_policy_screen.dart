@@ -71,7 +71,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                   '• App interactions (swipes, matches, messages)\n'
                   '• Device information (model, OS version)\n'
                   '• Log data and analytics\n'
-                  '• Payment transaction data (via Razorpay)',
+                  '• Payment transaction data (via Google Play)',
                 ),
                 _buildSubSection(
                   'User-Generated Content',
@@ -111,7 +111,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                 _buildSubSection(
                   'Service Providers',
                   '• Firebase (Google) - Database and authentication\n'
-                  '• Razorpay - Payment processing\n'
+                  '• Google Play - Payment processing\n'
                   '• Cloud storage providers - Photo storage\n'
                   '• Analytics providers - App improvement',
                 ),
@@ -202,9 +202,9 @@ class PrivacyPolicyScreen extends StatelessWidget {
                   'Privacy Policy: https://firebase.google.com/support/privacy',
                 ),
                 _buildSubSection(
-                  'Razorpay',
+                  'Google Play',
                   'Payment processing\n'
-                  'Privacy Policy: https://razorpay.com/privacy',
+                  'Privacy Policy: https://policies.google.com/privacy',
                 ),
               ],
             ),

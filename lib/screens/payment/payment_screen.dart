@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:razorpay_flutter/razorpay_flutter.dart';
-import '../../services/payment_service.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
+import '../../services/google_play_billing_service.dart';
 import '../../constants/app_colors.dart';
 
 class PaymentScreen extends StatefulWidget {
@@ -11,117 +11,108 @@ class PaymentScreen extends StatefulWidget {
 }
 
 class _PaymentScreenState extends State<PaymentScreen> {
-  final PaymentService _paymentService = PaymentService();
+  final GooglePlayBillingService _billingService = GooglePlayBillingService();
   bool _isProcessing = false;
-  int _selectedPlanIndex = -1;
+  bool _isLoading = true;
+  ProductDetails? _premiumProduct;
 
-  // Payment plans
-  final List<Map<String, dynamic>> _plans = [
-    {
-      'name': 'Premium 1 Month',
-      'description': 'Unlock all premium features',
-      'amount': 9900, // ₹99.00 in paise
-      'displayAmount': '₹99',
-      'features': [
-        '50 free swipes weekly',
-        'Unlimited likes',
-        'See who liked you',
-        'Advanced filters',
-        'No verification after swipes',
-        'Better swipe packages (₹20 for 10 swipes)',
-        'Priority support',
-        'Ad-free experience',
-      ],
-      'popular': true,
-    },
+  final List<String> _features = [
+    '50 free swipes weekly',
+    'Unlimited likes',
+    'See who liked you',
+    'Advanced filters',
+    'No verification after swipes',
+    'Better swipe packages (₹20 for 10 swipes)',
+    'Priority support',
+    'Ad-free experience',
   ];
 
   @override
   void initState() {
     super.initState();
-    _paymentService.init(
-      onSuccess: _handlePaymentSuccess,
-      onError: _handlePaymentError,
-      onExternalWallet: _handleExternalWallet,
-    );
+    _initializeBilling();
+  }
+
+  Future<void> _initializeBilling() async {
+    setState(() => _isLoading = true);
+    
+    await _billingService.initialize();
+    
+    _billingService.onPurchaseSuccess = (purchaseId) {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        _showSuccessDialog();
+      }
+    };
+    
+    _billingService.onPurchaseError = (error) {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        _showErrorDialog(error);
+      }
+    };
+    
+    _billingService.onPurchasePending = () {
+      if (mounted) {
+        setState(() => _isProcessing = true);
+      }
+    };
+    
+    _premiumProduct = _billingService.getPremiumProduct();
+    
+    setState(() => _isLoading = false);
   }
 
   @override
   void dispose() {
-    _paymentService.dispose();
+    _billingService.dispose();
     super.dispose();
   }
 
-  void _handlePaymentSuccess(PaymentSuccessResponse response) async {
-    if (!mounted) return;
-    
+  Future<void> _initiatePurchase() async {
+    if (_isProcessing || !_billingService.isAvailable) return;
+
     setState(() => _isProcessing = true);
 
     try {
-      // Small delay to ensure Razorpay UI is dismissed
-      await Future.delayed(const Duration(milliseconds: 500));
+      final success = await _billingService.purchasePremium();
       
-      if (!mounted) return;
-
-      // Verify payment on backend
-      final isValid = await _paymentService.verifyPayment(
-        orderId: response.orderId ?? '',
-        paymentId: response.paymentId ?? '',
-        signature: response.signature ?? '',
-      );
-
-      if (!mounted) return;
-      
-      setState(() => _isProcessing = false);
-
-      if (isValid) {
-        // Update user premium status immediately
-        await _paymentService.handlePaymentSuccess(
-          paymentId: response.paymentId ?? '',
-          orderId: response.orderId,
-          signature: response.signature,
-        );
-        
-        if (mounted) {
-          _showSuccessDialog();
-        }
-      } else {
-        if (mounted) {
-          _showErrorDialog('Payment verification failed. Please contact support.');
-        }
+      if (!success && mounted) {
+        setState(() => _isProcessing = false);
+        _showErrorDialog('Failed to initiate purchase. Please try again.');
       }
     } catch (e) {
       if (!mounted) return;
       
       setState(() => _isProcessing = false);
-      _showErrorDialog('Error verifying payment: $e');
+      _showErrorDialog('Error initiating purchase: $e');
     }
   }
 
-  void _handlePaymentError(PaymentFailureResponse response) {
-    if (!mounted) return;
-    
-    // Small delay to ensure Razorpay UI is dismissed
-    Future.delayed(const Duration(milliseconds: 300), () {
-      if (!mounted) return;
-      
-      setState(() => _isProcessing = false);
-      
-      _showErrorDialog(
-        'Payment failed: ${response.message ?? "Unknown error"}\n'
-        'Code: ${response.code ?? "N/A"}',
-      );
-    });
-  }
+  Future<void> _restorePurchases() async {
+    if (_isProcessing) return;
 
-  void _handleExternalWallet(ExternalWalletResponse response) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('External wallet selected: ${response.walletName}'),
-          backgroundColor: AppColors.primary,
-        ),
-      );
+    setState(() => _isProcessing = true);
+
+    try {
+      await _billingService.restorePurchases();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Checking for previous purchases...'),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        _showErrorDialog('Error restoring purchases: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      }
     }
   }
 
@@ -189,34 +180,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
-  Future<void> _initiatePayment(int planIndex) async {
-    if (_isProcessing) return;
-
-    setState(() {
-      _selectedPlanIndex = planIndex;
-      _isProcessing = true;
-    });
-
-    try {
-      final plan = _plans[planIndex];
-      await _paymentService.startPayment(
-        amountInPaise: plan['amount'],
-        description: plan['name'],
-      );
-      
-      // Reset processing state after a delay if Razorpay doesn't trigger callbacks
-      Future.delayed(const Duration(seconds: 2), () {
-        if (mounted && _isProcessing) {
-          setState(() => _isProcessing = false);
-        }
-      });
-    } catch (e) {
-      if (!mounted) return;
-      
-      setState(() => _isProcessing = false);
-      _showErrorDialog('Error initiating payment: $e');
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -227,277 +190,285 @@ class _PaymentScreenState extends State<PaymentScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
       ),
-      body: Stack(
-        children: [
-          // Gradient background
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  AppColors.primary.withOpacity(0.1),
-                  Colors.white,
-                ],
-              ),
-            ),
-          ),
-          // Content
-          SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header
-                  const Text(
-                    'Choose Your Plan',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Unlock premium features and find your perfect match faster',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-
-                  // Plans
-                  ..._plans.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final plan = entry.value;
-                    final isPopular = plan['popular'] as bool;
-                    final isSelected = _selectedPlanIndex == index;
-
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: _buildPlanCard(
-                        plan: plan,
-                        isPopular: isPopular,
-                        isSelected: isSelected,
-                        onTap: () => _initiatePayment(index),
-                      ),
-                    );
-                  }),
-
-                  const SizedBox(height: 24),
-
-                  // Security info
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.blue.shade200),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.security, color: Colors.blue.shade700),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'Secure payment powered by Razorpay. Your data is safe with us.',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.blue.shade900,
-                            ),
-                          ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : !_billingService.isAvailable
+              ? _buildUnavailableView()
+              : Stack(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            AppColors.primary.withOpacity(0.1),
+                            Colors.white,
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Processing overlay
-          if (_isProcessing)
-            Container(
-              color: Colors.black54,
-              child: const Center(
-                child: Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 16),
-                        Text('Processing payment...'),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPlanCard({
-    required Map<String, dynamic> plan,
-    required bool isPopular,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: _isProcessing ? null : onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isSelected
-                ? AppColors.primary
-                : isPopular
-                    ? AppColors.primary.withOpacity(0.3)
-                    : Colors.grey.shade300,
-            width: isSelected ? 2 : 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: isSelected
-                  ? AppColors.primary.withOpacity(0.3)
-                  : Colors.black.withOpacity(0.05),
-              blurRadius: isSelected ? 12 : 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            // Popular badge
-            if (isPopular)
-              Positioned(
-                top: 0,
-                right: 20,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: const BorderRadius.only(
-                      bottomLeft: Radius.circular(8),
-                      bottomRight: Radius.circular(8),
-                    ),
-                  ),
-                  child: const Text(
-                    'POPULAR',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Plan name and price
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
+                    SafeArea(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(20),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              plan['name'],
-                              style: const TextStyle(
-                                fontSize: 20,
+                            const Text(
+                              'Upgrade to Premium',
+                              style: TextStyle(
+                                fontSize: 28,
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.textPrimary,
                               ),
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 8),
                             Text(
-                              plan['description'],
+                              'Unlock premium features and find your perfect match faster',
                               style: TextStyle(
-                                fontSize: 14,
+                                fontSize: 16,
                                 color: AppColors.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+                            _buildPremiumCard(),
+                            const SizedBox(height: 16),
+                            _buildRestoreButton(),
+                            const SizedBox(height: 24),
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade50,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.blue.shade200),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.security, color: Colors.blue.shade700),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      'Secure payment powered by Google Play. Your data is safe.',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.blue.shade900,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
                       ),
-                      Text(
-                        plan['displayAmount'],
-                        style: const TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primary,
+                    ),
+                    if (_isProcessing)
+                      Container(
+                        color: Colors.black54,
+                        child: const Center(
+                          child: Card(
+                            child: Padding(
+                              padding: EdgeInsets.all(24),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  CircularProgressIndicator(),
+                                  SizedBox(height: 16),
+                                  Text('Processing payment...'),
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
+                  ],
+                ),
+    );
+  }
 
-                  // Features
-                  ...((plan['features'] as List<String>).map((feature) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
+  Widget _buildPremiumCard() {
+    final price = _premiumProduct?.price ?? '₹99';
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppColors.primary.withOpacity(0.3),
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withOpacity(0.1),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            top: 0,
+            right: 20,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(8),
+                  bottomRight: Radius.circular(8),
+                ),
+              ),
+              child: const Text(
+                'POPULAR',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(
-                            Icons.check_circle,
-                            color: AppColors.primary,
-                            size: 20,
+                          Text(
+                            'Premium Monthly',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              feature,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: AppColors.textPrimary,
-                              ),
+                          SizedBox(height: 4),
+                          Text(
+                            'Unlock all premium features',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: AppColors.textSecondary,
                             ),
                           ),
                         ],
                       ),
-                    );
-                  })),
-
-                  const SizedBox(height: 16),
-
-                  // Buy button
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _isProcessing ? null : onTap,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 0,
+                    ),
+                    Text(
+                      price,
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
                       ),
-                      child: Text(
-                        _isProcessing && isSelected
-                            ? 'Processing...'
-                            : 'Choose Plan',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                ..._features.map((feature) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.check_circle,
+                          color: AppColors.primary,
+                          size: 20,
                         ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            feature,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _isProcessing ? null : _initiatePurchase,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      _isProcessing ? 'Processing...' : 'Subscribe Now',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
-                ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRestoreButton() {
+    return Center(
+      child: TextButton.icon(
+        onPressed: _isProcessing ? null : _restorePurchases,
+        icon: const Icon(Icons.restore),
+        label: const Text('Restore Purchases'),
+        style: TextButton.styleFrom(
+          foregroundColor: AppColors.primary,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUnavailableView() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: Colors.grey.shade400,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'In-app purchases unavailable',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey.shade700,
               ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Please make sure you have a valid Google Play account and try again.',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade600,
+              ),
+              textAlign: TextAlign.center,
             ),
           ],
         ),

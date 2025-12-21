@@ -133,7 +133,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                   '• Swipe packs and Spotlight bookings are one-time purchases\n'
                   '• Purchases are non-refundable except as required by law\n'
                   '• Prices may change with notice\n'
-                  '• All payments processed securely via Razorpay',
+                  '• All payments processed securely via Google Play'
                 ),
                 _buildSubSection(
                   'Refund Policy',
@@ -215,7 +215,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                 _buildBulletPoint('We are not liable for indirect or consequential damages'),
                 _buildBulletPoint('Our total liability is limited to the amount you paid us'),
                 _buildBulletPoint('We are not responsible for user interactions or relationships'),
-                _buildBulletPoint('We are not liable for third-party services (e.g., Razorpay)'),
+                _buildBulletPoint('We are not liable for third-party services (e.g., Google Play)'),
               ],
             ),
 
@@ -260,7 +260,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                 ),
                 _buildSubSection(
                   'Arbitration',
-                  'For disputes under ₹1,00,000, we encourage informal resolution. Contact us at legal@shooluv.com to resolve disputes.',
+                  'For disputes under ₹1,00,000, we encourage informal resolution. Contact us at shooluvbusiness07@gmail.com to resolve disputes.',
                 ),
               ],
             ),
@@ -275,7 +275,7 @@ class TermsOfServiceScreen extends StatelessWidget {
               'For questions about these Terms:',
               children: [
                 const SizedBox(height: 8),
-                _buildContactInfo('Email', 'legal@shooluv.com'),
+                _buildContactInfo('Email', 'shooluvbusiness07@gmail.com'),
                 _buildContactInfo('Support', 'shooluvbusiness07@gmail.com'),
                 _buildContactInfo('Address', 'Shoolini University, Solan, Himachal Pradesh, India'),
               ],

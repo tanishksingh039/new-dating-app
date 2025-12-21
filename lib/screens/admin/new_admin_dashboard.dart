@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'admin_users_tab.dart';
 import 'admin_analytics_tab.dart';
-import 'admin_payments_tab.dart';
 import 'admin_storage_tab.dart';
 import 'admin_profile_manager_screen.dart';
 import 'admin_leaderboard_control_screen.dart';
@@ -28,10 +27,8 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
   int _totalUsers = 0;
   int _activeToday = 0;
   int _premiumUsers = 0;
-  int _totalRevenue = 0;
   int _spotlightBookings = 0;
   int _userActivityCount = 0;
-  int _successfulPayments = 0;
   double _storageUsed = 0.0;
 
   String _currentAdminUserId = 'admin_user'; // Default admin ID
@@ -39,10 +36,10 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 10, vsync: this);
+    _tabController = TabController(length: 9, vsync: this);
     _setupRealTimeListeners();
     _getCurrentAdminId();
-    debugPrint('[AdminDashboard] TabController initialized with length: 10');
+    debugPrint('[AdminDashboard] TabController initialized with length: 9');
   }
 
   void _getCurrentAdminId() {
@@ -95,53 +92,6 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
         _activeToday = activeToday;
         _premiumUsers = premium;
         _userActivityCount = activeToday;
-      });
-    });
-
-    // Listen to payment_orders collection
-    _firestore.collection('payment_orders').snapshots().listen((snapshot) {
-      if (!mounted) return;
-      
-      int revenue = 0;
-      int successful = 0;
-
-      for (var doc in snapshot.docs) {
-        try {
-          final data = doc.data();
-          debugPrint('═══════════════════════════════════════');
-          debugPrint('[Dashboard] 📋 Processing payment document: ${doc.id}');
-          debugPrint('[Dashboard] Status: ${data['status']}');
-          debugPrint('[Dashboard] Amount raw: ${data['amount']} (type: ${data['amount'].runtimeType})');
-          debugPrint('[Dashboard] All keys: ${data.keys.toList()}');
-          
-          if (data['status'] == 'success' || data['status'] == 'completed') {
-            successful++;
-            // Convert paise to rupees
-            final amountInPaise = (data['amount'] as num?)?.toInt() ?? 0;
-            debugPrint('[Dashboard] Amount in paise: $amountInPaise');
-            
-            // If amount is less than 100, it's likely already in rupees
-            final amountInRupees = amountInPaise >= 100 
-              ? (amountInPaise / 100).round()  // Convert from paise to rupees
-              : amountInPaise;  // Already in rupees
-            
-            debugPrint('[Dashboard] Amount in rupees: ₹$amountInRupees');
-            debugPrint('[Dashboard] Old revenue: ₹$revenue');
-            revenue += amountInRupees;
-            debugPrint('[Dashboard] New revenue: ₹$revenue');
-            debugPrint('[Dashboard] ✅ Added ₹$amountInRupees to revenue');
-          } else {
-            debugPrint('[Dashboard] ⚠️ Payment not successful - Status: ${data['status']}');
-          }
-          debugPrint('═══════════════════════════════════════');
-        } catch (e) {
-          debugPrint('[Dashboard] ❌ Error processing payment: $e');
-        }
-      }
-
-      setState(() {
-        _totalRevenue = revenue;
-        _successfulPayments = successful;
       });
     });
 
@@ -287,10 +237,6 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
               text: 'Analytics',
             ),
             Tab(
-              icon: Icon(Icons.payment, size: 20),
-              text: 'Payments',
-            ),
-            Tab(
               icon: Icon(Icons.storage, size: 20),
               text: 'Storage',
             ),
@@ -323,7 +269,6 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
           _buildDashboardTab(username),
           const AdminUsersTab(),
           const AdminAnalyticsTab(),
-          const AdminPaymentsTab(),
           const AdminStorageTab(),
           AdminProfileManagerScreen(adminUserId: _currentAdminUserId),
           AdminLeaderboardControlScreen(adminUserId: _currentAdminUserId),
@@ -414,13 +359,6 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
                 Colors.amber,
               ),
               _buildStatCard(
-                'Total Revenue',
-                '₹${_totalRevenue}',
-                '${_successfulPayments} transactions',
-                Icons.currency_rupee,
-                Colors.green,
-              ),
-              _buildStatCard(
                 'Spotlight Bookings',
                 _spotlightBookings.toString(),
                 '0 active',
@@ -444,11 +382,6 @@ class _NewAdminDashboardState extends State<NewAdminDashboard>
           _buildHealthItem(
             'User Activity',
             '$_userActivityCount users active today',
-            Colors.green,
-          ),
-          _buildHealthItem(
-            'Payment System',
-            '$_successfulPayments successful payments',
             Colors.green,
           ),
           _buildHealthItem(
